@@ -151,7 +151,10 @@ drops a table or deletes rows.
 1. **Back up first.** On a paid plan, Supabase takes daily backups under **Database →
    Backups**. On the free plan, export a **Backup (JSON)** from /admin (posts only), or take
    a full dump (§6).
-2. Run the whole file: `npm run setup` → step 6, or paste it into **SQL Editor** and click **Run**.
+2. Run the whole file: `npm run deploy` does it when needed (tables missing or out of date, or
+   `schema.sql` changed since it was last run), or `npm run setup` → step 6, or paste it into
+   **SQL Editor** and click **Run**. With `SUPABASE_DB_URL` set to the database connection
+   string and `psql` installed, `npm run deploy` runs it without asking.
 3. Check with `npm run deploy:check`. It looks for the newest columns and for the `media`
    bucket.
 4. Deploy the matching app version.

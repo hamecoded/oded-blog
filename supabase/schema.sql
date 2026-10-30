@@ -474,5 +474,15 @@ begin
             'email', now(), now(), now());
     -- The profile was created by on_auth_user_created; promote it.
     update public.profiles set role = 'admin', display_name = 'Admin', must_change_password = true where id = uid;
+  else
+    -- The account already existed (e.g. signed up before this file was run, so it may have no profile).
+    -- Make it the manager and confirm its email; its password is left as it is.
+    update auth.users set email_confirmed_at = coalesce(email_confirmed_at, now()) where id = uid;
+    insert into public.profiles (id, display_name, username, role)
+    values (uid, 'Admin',
+            case when exists (select 1 from public.profiles where username = 'admin')
+                 then 'admin' || left(replace(uid::text, '-', ''), 6) else 'admin' end,
+            'admin')
+    on conflict (id) do update set role = 'admin';
   end if;
 end $$;

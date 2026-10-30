@@ -1,3 +1,6 @@
+# oded.me
+admin password= odedron01
+
 # Supabase
 database password= pWNdbUe0xJbuKoVL
 
@@ -10,4 +13,9 @@ supabase login
 supabase init
 supabase link --project-ref tbwskzgkmoztdejeiyhz
 
+  export SUPABASE_DB_URL='postgresql://postgres.tbwskzgkmoztdejeiyhz:0ZGwjd6fSwOSiaW9@aws-0-eu-central-1.pooler.supabase.com:5432/postgres'
+  npm run deploy
 
+# Google Cloud
+OAuth client ID= 691512246509-0ufn69ki4k0iejfq9m82ul98o1lqu1le.apps.googleusercontent.com
+name= oded-me

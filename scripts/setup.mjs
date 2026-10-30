@@ -9,6 +9,7 @@
 // Add --dry-run to print every command and file write instead of doing it.
 // See DEPLOYMENT.md for what each step does and how to do it by hand.
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -229,8 +230,8 @@ async function checkDatabase(url, key) {
   const base = url.replace(/\/$/, '');
   const results = [];
   const probe = await http(`${base}/rest/v1/profiles?select=id&limit=1`, { headers });
-  if (probe.status === 0) return [{ ok: false, msg: `Can't reach ${base} (${probe.text}). Is the project paused? Restore it in the dashboard.` }];
-  if (probe.status === 401) return [{ ok: false, msg: 'The key was rejected (401). Copy the publishable/anon key again.' }];
+  if (probe.status === 0) return [{ ok: false, connection: true, msg: `Can't reach ${base} (${probe.text}). Is the project paused? Restore it in the dashboard.` }];
+  if (probe.status === 401) return [{ ok: false, connection: true, msg: 'The key was rejected (401). Copy the publishable/anon key again.' }];
   if (probe.status !== 200) {
     return [{ ok: false, msg: `The tables are missing (HTTP ${probe.status}). Run supabase/schema.sql.` }];
   }
@@ -467,35 +468,105 @@ function pgEnv(uri) {
   };
 }
 
-async function setupDatabase(env) {
-  step('Database: run supabase/schema.sql');
-  if (!env.VITE_SUPABASE_URL) return info('Demo mode — no database to set up.');
-  const before = await checkDatabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
-  if (before.every((r) => r.ok)) {
-    report(before);
-    if (!(await confirm('The schema is already up to date. Run it again anyway?', false))) return;
-  } else report(before);
+/** Fingerprint of schema.sql, saved once it has been run, so a changed file is noticed on the next deploy. */
+const schemaHash = () => createHash('sha256').update(readFileSync(SCHEMA_FILE)).digest('hex').slice(0, 16);
+
+/**
+ * Runs schema.sql on the database: with psql when SUPABASE_DB_URL is set (no questions), otherwise the person
+ * picks the SQL editor (clipboard) or psql. Returns true when the database checks pass afterwards.
+ */
+async function applySchema(env, state) {
   say('schema.sql creates the tables, security rules, the "media" bucket and the prebuilt manager. It is safe to re-run.');
   const ref = projectRef(env.VITE_SUPABASE_URL);
-  const how = await choose('How do you want to run it?', [
-    'Copy it to the clipboard and open the Supabase SQL editor (paste, then Run)',
-    'Run it from here with psql (needs the database connection string)',
-    'Skip — I’ll do it later',
-  ]);
+  const dbUrl = process.env.SUPABASE_DB_URL;
+  let how;
+  if (dbUrl && have('psql')) {
+    info('Running it with psql, using SUPABASE_DB_URL.');
+    how = 1;
+  } else {
+    how = await choose('How do you want to run it?', [
+      'Copy it to the clipboard and open the Supabase SQL editor (paste, then Run)',
+      'Run it from here with psql (needs the database connection string)',
+      'Skip — I’ll do it later',
+    ]);
+  }
   if (how === 0) {
     if (copyToClipboard(readFileSync(SCHEMA_FILE, 'utf8'))) ok('schema.sql copied to the clipboard');
     else warn('Could not copy automatically. Open supabase/schema.sql and copy all of it.');
     openUrl(`https://supabase.com/dashboard/project/${ref}/sql/new`);
     await ask('Paste it into the editor, click Run, then press Enter here');
   } else if (how === 1) {
-    if (!have('psql')) return fail('psql is not installed (macOS: brew install libpq && brew link --force libpq).');
-    say(`Connection string: dashboard → Connect → "Session pooler" URI, with your database password filled in.`);
-    const uri = await askSecret('postgres:// connection string');
-    if (!uri.startsWith('postgres')) return fail('That is not a postgres:// connection string.');
+    if (!have('psql')) {
+      fail('psql is not installed (macOS: brew install libpq && brew link --force libpq).');
+      return false;
+    }
+    let uri = dbUrl;
+    if (!uri) {
+      say(`Connection string: dashboard → Connect → "Session pooler" URI, with your database password filled in.`);
+      say(dim('Tip: export SUPABASE_DB_URL=<that string> before `npm run deploy` and this step runs without asking.'));
+      uri = await askSecret('postgres:// connection string');
+    }
+    if (!uri.startsWith('postgres')) {
+      fail('That is not a postgres:// connection string.');
+      return false;
+    }
     const res = run('psql', ['--single-transaction', '--variable', 'ON_ERROR_STOP=1', '--quiet', '--file', SCHEMA_FILE], { env: pgEnv(uri) });
-    if (res.status !== 0) return fail('psql reported an error (see above). Nothing was changed, because it runs in one transaction.');
-  } else return warn('Skipped. The site will not work until schema.sql has been run.');
-  if (!DRY) report(await checkDatabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY));
+    if (res.status !== 0) {
+      fail('psql reported an error (see above). Nothing was changed, because it runs in one transaction.');
+      return false;
+    }
+  } else {
+    warn('Skipped. The site will not work until schema.sql has been run.');
+    return false;
+  }
+  if (DRY) return true;
+  const good = report(await checkDatabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY));
+  if (good) {
+    state.schemaHash = schemaHash();
+    saveState(state);
+  } else warn('Still failing. If the SQL editor showed an error, fix it and run `npm run deploy` again.');
+  return good;
+}
+
+async function setupDatabase(env, state) {
+  step('Database: run supabase/schema.sql');
+  if (!env.VITE_SUPABASE_URL) return info('Demo mode — no database to set up.');
+  const before = await checkDatabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
+  if (before.every((r) => r.ok)) {
+    report(before);
+    if (!(await confirm('The schema is already up to date. Run it again anyway?', false))) {
+      state.schemaHash ??= schemaHash();
+      return saveState(state);
+    }
+  } else {
+    report(before);
+    if (before[0].connection) return warn('Fix the connection first, then run `npm run setup` again.');
+  }
+  await applySchema(env, state);
+}
+
+/**
+ * Before a deploy: runs schema.sql when the database is missing tables or is out of date, or when schema.sql
+ * changed since it was last run. Returns false to stop the deploy.
+ */
+async function ensureDatabase(env, state) {
+  step('Checking Supabase');
+  const results = await checkDatabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
+  const healthy = report(results);
+  if (results[0].connection) return confirm('Deploy anyway?', false);
+  const current = schemaHash();
+  if (healthy && !state.schemaHash) {
+    // Run before this script tracked it; the checks show it is the latest version.
+    state.schemaHash = current;
+    saveState(state);
+    return true;
+  }
+  const changed = state.schemaHash !== current;
+  if (healthy && !changed) return true;
+  if (healthy) info('supabase/schema.sql has changed since it was last run on the database.');
+  else warn('The database needs supabase/schema.sql before the site can work.');
+  if (await applySchema(env, state)) return true;
+  return confirm('Deploy anyway?', healthy);
 }
 
 async function authSettings(env, state) {
@@ -923,7 +994,7 @@ async function cmdSetup() {
   env = await configureAdmin(env);
   env = await configureYouTube(env, state);
   saveEnv(env);
-  await setupDatabase(env);
+  await setupDatabase(env, state);
   await authSettings(env, state);
   if (state.host === 'github') {
     step('Test build');
@@ -945,10 +1016,7 @@ async function cmdDeploy() {
     process.exitCode = 1;
     return;
   }
-  if (env.VITE_SUPABASE_URL) {
-    step('Checking Supabase');
-    if (!report(await checkDatabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)) && !(await confirm('Deploy anyway?', false))) return;
-  }
+  if (env.VITE_SUPABASE_URL && !(await ensureDatabase(env, state))) return;
   if (await deploy(env, state)) {
     step('Checking the live site');
     if (!DRY) await smokeTest(state.siteUrl, env.VITE_SUPABASE_URL);
@@ -978,6 +1046,7 @@ async function cmdCheck() {
   if (env.VITE_SUPABASE_URL && env.VITE_SUPABASE_ANON_KEY) {
     step('Supabase project');
     good = report(await checkDatabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY)) && good;
+    if (state.schemaHash && state.schemaHash !== schemaHash()) warn('supabase/schema.sql changed since it was last run; `npm run deploy` will offer to run it.');
   }
   step('Build');
   good = build(env, state) && good;
