@@ -233,7 +233,7 @@ export function createLocalApi(): Api {
         pw: await sha256(`${e}:${password}`),
         display_name: displayName.trim() || username,
         username,
-        role: 'reader',
+        role: 'commenter',
         created_at: new Date().toISOString(),
         last_sign_in_at: new Date().toISOString(),
       };

@@ -513,6 +513,10 @@ async function applySchema(env, state) {
     const res = run('psql', ['--single-transaction', '--variable', 'ON_ERROR_STOP=1', '--quiet', '--file', SCHEMA_FILE], { env: pgEnv(uri) });
     if (res.status !== 0) {
       fail('psql reported an error (see above). Nothing was changed, because it runs in one transaction.');
+      info('"tenant/user … not found" means the pooler host or region is wrong: copy the whole string from');
+      info(`https://supabase.com/dashboard/project/${ref}?showConnect=true → "Session pooler" instead of typing it.`);
+      info('"password authentication failed": reset it in Project Settings → Database.');
+      if (dbUrl) info('The string came from SUPABASE_DB_URL: fix it there, or `unset SUPABASE_DB_URL` to be asked.');
       return false;
     }
   } else {

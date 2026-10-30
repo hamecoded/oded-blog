@@ -5,10 +5,10 @@
 --   admin     manager: everything, incl. user roles
 --   editor    write / publish / edit own posts, upload media
 --   reviewer  read drafts, comment, resolve comments
---   commenter comment on published posts, like
---   reader    (default for new sign-ups) read and like; can request any other role
+--   commenter (default for new sign-ups) comment on published posts, like; can request any other role
+--   reader    read and like
 -- A prebuilt admin is created at the end of this file: sign in as "admin" / "admin"
--- (email admin@oded.me) and change the password right away.
+-- (email odedsme@gmail.com) and change the password right away.
 
 create extension if not exists pg_trgm;
 
@@ -17,7 +17,7 @@ create table if not exists public.profiles (
   id           uuid primary key references auth.users (id) on delete cascade,
   display_name text not null default '',
   username     text not null unique,
-  role         text not null default 'reader'
+  role         text not null default 'commenter'
                check (role in ('admin', 'editor', 'reviewer', 'commenter', 'reader')),
   created_at   timestamptz not null default now()
 );
@@ -25,7 +25,7 @@ create table if not exists public.profiles (
 -- Upgrades for projects created with an earlier version of this file.
 alter table public.profiles add column if not exists must_change_password boolean not null default false;
 alter table public.profiles add column if not exists suspended boolean not null default false;
-alter table public.profiles alter column role set default 'reader';
+alter table public.profiles alter column role set default 'commenter';
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles add constraint profiles_role_check
   check (role in ('admin', 'editor', 'reviewer', 'commenter', 'reader'));
@@ -53,7 +53,7 @@ begin
     new.id,
     coalesce(nullif(new.raw_user_meta_data ->> 'display_name', ''), base),
     uname,
-    'reader'
+    'commenter'
   );
   return new;
 end $$;
@@ -445,14 +445,14 @@ create policy "media admin delete" on storage.objects for delete
   using (bucket_id = 'media' and public.current_role_name() = 'admin');
 
 -- ───────────────────────── Prebuilt admin ─────────────────────────
--- Creates admin@oded.me with password "admin" (sign in with just "admin").
+-- Creates odedsme@gmail.com with password "admin" (sign in with just "admin").
 -- The app keeps nagging until the password is changed. Change the email here
 -- (and VITE_ADMIN_EMAIL in the app) if you prefer another address.
 create extension if not exists pgcrypto with schema extensions;
 
 do $$
 declare
-  admin_email text := 'hamecoded@gmail.com';
+  admin_email text := 'odedsme@gmail.com';
   uid uuid;
 begin
   select id into uid from auth.users where email = admin_email;

@@ -39,8 +39,8 @@ Without Supabase keys, the app runs in **demo mode**. Everything is stored in yo
 so you can try every feature before deploying anything.
 
 Sign in with **`admin` / `admin`**. This is the prebuilt manager account, and its email is
-`admin@oded.me`. A warning bar stays up until you change that password on **/account**.
-Everyone who signs up starts as a **reader** and can ask the manager for any other role.
+`odedsme@gmail.com`. A warning bar stays up until you change that password on **/account**.
+Everyone who signs up starts as a **commenter** and can ask the manager for any other role.
 
 ---
 
@@ -56,7 +56,7 @@ Everyone who signs up starts as a **reader** and can ask the manager for any oth
 | Math | Inline or display LaTeX equations with a live KaTeX preview. |
 | Fonts | Twelve Google Fonts that support Hebrew, including the handwriting fonts **Playpen Sans Hebrew**, **Amatic SC** and Karantina. Readers choose font, size, line spacing and theme. |
 | Audience | When creating or editing a post, **Who can see this** sets it to **Public**, **Private** (only you and the manager) or **specific people and/or groups**. Each author has **their own groups**: create one right from that sheet (**+ New group**) or in **/admin → Groups**. The manager sees and manages everyone's groups. |
-| Roles | `admin` (manager), `editor` (author), `reviewer`, `commenter`, `reader`. New sign-ups are readers. Users request other roles on **/account**, and the manager approves them in **/admin → Role requests**. |
+| Roles | `admin` (manager), `editor` (author), `reviewer`, `commenter`, `reader`. New sign-ups are commenters. Users request other roles on **/account**, and the manager approves them in **/admin → Role requests**. |
 | User management | In **/admin → Users** the manager can search and filter by role, **add a user** (email, name, role and a temporary password to pass on privately), edit a name or username, change a role, **reset a password**, **suspend** an account (it can't sign in until access is restored) or **delete** it. Deleting removes the person's comments, likes and role requests, and moves their posts to the manager. Anyone given a temporary password is asked to change it at their next sign-in. The manager can't suspend, delete or demote their own account. |
 | Review | Select any text, tap **Comment**, and the comment is pinned to that text. Supports replies and resolve/reopen. Reviewers can read and comment on drafts. |
 | Social | Likes. Share to Facebook, WhatsApp, X, Telegram, LinkedIn, Reddit, Gmail and email, plus the phone's share sheet (TikTok, Instagram, Messages…). |
@@ -285,7 +285,7 @@ Node.js 20+ for local builds.
    [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. This creates:
    - the tables, row-level security policies and search functions;
    - the public storage bucket **`media`** (50 MB per-file limit);
-   - the prebuilt manager **`admin@oded.me` / `admin`**.
+   - the prebuilt manager **`odedsme@gmail.com` / `admin`**.
 
    The file is safe to re-run after updates. To use a different admin email, change
    `admin_email` at the bottom of the file and set `VITE_ADMIN_EMAIL` to the same value.
@@ -424,7 +424,7 @@ the browser and is inserted into the post.
    ```sql
    update profiles set role = 'admin' where username = 'theirname';
    ```
-4. New users sign up as **readers**. Approve their role requests in **/admin → Role requests**, or add people yourself in **/admin → Users**.
+4. New users sign up as **commenters**. Approve their role requests in **/admin → Role requests**, or add people yourself in **/admin → Users**.
 
 ### 8.7 Checklist
 

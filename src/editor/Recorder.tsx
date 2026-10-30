@@ -166,6 +166,8 @@ export function RecorderSheet({
       const b = new Blob(chunks.current, { type: rec.mimeType || mimeType || (kind === 'video' ? 'video/webm' : 'audio/webm') });
       setBlob(b);
       setBlobUrl(URL.createObjectURL(b));
+      // Done with the camera/mic: release them (the light goes off). "Record again" reopens them.
+      stopStream();
     };
     rec.start(1000);
     recorder.current = rec;
@@ -185,6 +187,7 @@ export function RecorderSheet({
     if (!f) return;
     setBlob(f);
     setBlobUrl(URL.createObjectURL(f));
+    stopStream();
   }
 
   async function upload() {
@@ -217,9 +220,11 @@ export function RecorderSheet({
         {kind === 'video' ? (
           <div className="rec-stage">
             {blob ? (
-              <video src={blobUrl} controls playsInline className="rec-video" />
+              // Separate keys so React swaps the element: reusing the live one would keep its camera
+              // srcObject, which takes priority over src, and keep showing the webcam.
+              <video key="preview" src={blobUrl} controls playsInline className="rec-video" />
             ) : (
-              <video ref={live} autoPlay muted playsInline className={`rec-video${facing === 'user' ? ' mirror' : ''}`} />
+              <video key="live" ref={live} autoPlay muted playsInline className={`rec-video${facing === 'user' ? ' mirror' : ''}`} />
             )}
             {recording && (
               <span className="rec-badge">

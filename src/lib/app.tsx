@@ -14,6 +14,10 @@ export interface Prefs {
 
 const PREFS_KEY = 'blog.prefs';
 
+// Read before Supabase consumes it: the email-confirmation link lands with its result in the URL hash
+// (#access_token=…&type=signup, or #error=…&error_code=otp_expired).
+const AUTH_HASH = new URLSearchParams(location.hash.slice(1));
+
 const DEFAULT_PREFS: Prefs = {
   uiLang: 'he',
   font: DEFAULT_FONT,
@@ -87,6 +91,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.setTimeout(() => setToastMsg((m) => (m === msg ? null : m)), 2600);
   }, []);
 
+  useEffect(() => {
+    if (AUTH_HASH.get('type') === 'signup' && AUTH_HASH.has('access_token')) toast(DICTS[prefs.uiLang].emailConfirmed);
+    else if (AUTH_HASH.has('error_code') || AUTH_HASH.has('error_description')) {
+      toast(DICTS[prefs.uiLang].linkExpired);
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const refreshUser = useCallback(async () => setUser(await api.currentUser()), []);
 
   const value = useMemo(
@@ -115,5 +128,8 @@ export function errorText(e: unknown, t: AppCtx['t']): string {
   if (/user\/self/.test(m)) return t('notOnYourself');
   if (m === 'user/username-taken') return t('usernameTaken');
   if (m === 'user/username-invalid') return t('usernameInvalid');
+  if (/youtubeSignupRequired/.test(m)) return t('yt_noChannel');
+  if (/^(youtube\/(denied|popup_closed)|access_denied)$/.test(m)) return t('yt_denied');
+  if (/quotaExceeded|uploadLimitExceeded/.test(m)) return t('yt_quota');
   return `${t('error')}: ${m}`;
 }
