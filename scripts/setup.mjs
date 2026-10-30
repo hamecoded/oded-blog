@@ -644,6 +644,14 @@ async function deployGitHub(env, state) {
   }
   const branch = capture('git', ['branch', '--show-current']).stdout;
   if (branch && branch !== 'main') warn(`You are on "${branch}". The workflow deploys pushes to main.`);
+  // Files listed in .gitignore but committed before that (e.g. credentials.md) keep being committed; stop tracking them.
+  const ignoredTracked = DRY && isNew ? '' : capture('git', ['ls-files', '-ci', '--exclude-standard']).stdout;
+  if (ignoredTracked) {
+    warn(`These files are in .gitignore but still tracked by git, so they would be pushed:\n${ignoredTracked}`);
+    if (await confirm('Stop tracking them? (They stay on this computer.)', true)) {
+      run('git', ['rm', '--cached', '--quiet', '--', ...ignoredTracked.split('\n')]);
+    }
+  }
   // In a dry run the repo was not really created, so git can't list the changes: every file would be new.
   const changes = DRY && isNew ? '(every file in the folder — first commit)' : capture('git', ['status', '--short']).stdout;
   if (changes) {
@@ -696,7 +704,12 @@ async function deployGitHub(env, state) {
     }
   }
   const before = capture('git', ['rev-parse', 'origin/main']).stdout;
-  if (run('git', ['push', '-u', 'origin', 'main']).status !== 0) return null;
+  if (run('git', ['push', '-u', 'origin', 'main']).status !== 0) {
+    info('If GitHub blocked it for containing a secret: take that file out of the unpushed commits');
+    info('(git reset --soft origin/main, git rm --cached <file>, commit again), then `npm run deploy`.');
+    info('Don’t use the "allow the secret" link: the repository is public.');
+    return null;
+  }
   // Nothing new to push means no push event, so start the workflow by hand (settings like VITE_BASE may have changed).
   const pushedNothing = !DRY && before && before === capture('git', ['rev-parse', 'origin/main']).stdout;
   if (pagesOn && pushedNothing) {
