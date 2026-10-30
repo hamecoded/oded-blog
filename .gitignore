@@ -30,3 +30,6 @@ dist-ssr
 
 # Transfer bundle made for moving to another Mac
 oded-blog-transfer.zip
+
+# Private notes with passwords and keys
+credentials.md

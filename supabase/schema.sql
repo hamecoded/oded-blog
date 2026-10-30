@@ -452,7 +452,7 @@ create extension if not exists pgcrypto with schema extensions;
 
 do $$
 declare
-  admin_email text := 'admin@oded.me';
+  admin_email text := 'hamecoded@gmail.com';
   uid uuid;
 begin
   select id into uid from auth.users where email = admin_email;

@@ -15,11 +15,11 @@ export interface Prefs {
 const PREFS_KEY = 'blog.prefs';
 
 const DEFAULT_PREFS: Prefs = {
-  uiLang: navigator.language?.startsWith('en') ? 'en' : 'he',
+  uiLang: 'he',
   font: DEFAULT_FONT,
   fontSize: 18,
   lineHeight: 1.75,
-  theme: 'auto',
+  theme: 'dark',
 };
 
 function loadPrefs(): Prefs {
