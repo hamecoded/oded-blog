@@ -1,8 +1,9 @@
 {
   "host": "github",
-  "domain": "",
+  "domain": "oded.me",
   "repo": "oded-blog",
   "owner": "hamecoded",
-  "base": "/oded-blog/",
-  "siteUrl": "https://hamecoded.github.io/oded-blog/"
+  "base": "/",
+  "siteUrl": "https://oded.me/",
+  "lastDeploy": "2026-10-30T20:22:45.964Z"
 }

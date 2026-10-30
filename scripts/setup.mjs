@@ -609,7 +609,25 @@ async function deployGitHub(env, state) {
   let pagesOn = enablePages();
 
   if (!(await confirm('Push to main now? This starts the deploy workflow.', true))) return null;
+  // GitHub itself commits to main (e.g. a CNAME file when a domain is set in Settings → Pages); take those first.
+  if (!DRY && capture('git', ['ls-remote', '--exit-code', 'origin', 'main']).status === 0) {
+    run('git', ['fetch', 'origin', 'main']);
+    if (capture('git', ['rev-list', '--count', 'HEAD..origin/main']).stdout !== '0') {
+      info('GitHub has commits you don’t have yet; bringing them in first.');
+      if (run('git', ['pull', '--rebase', 'origin', 'main']).status !== 0) {
+        fail('Could not merge the changes from GitHub. Resolve them (git status), then run `npm run deploy`.');
+        return null;
+      }
+    }
+  }
+  const before = capture('git', ['rev-parse', 'origin/main']).stdout;
   if (run('git', ['push', '-u', 'origin', 'main']).status !== 0) return null;
+  // Nothing new to push means no push event, so start the workflow by hand (settings like VITE_BASE may have changed).
+  const pushedNothing = !DRY && before && before === capture('git', ['rev-parse', 'origin/main']).stdout;
+  if (pagesOn && pushedNothing) {
+    info('Nothing new to push; starting the deploy workflow to rebuild with the current settings.');
+    run('gh', ['workflow', 'run', 'deploy.yml', '--repo', full, '--ref', 'main']);
+  }
   if (!pagesOn) {
     pagesOn = enablePages();
     if (!pagesOn) {
