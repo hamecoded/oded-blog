@@ -1,0 +1,373 @@
+import { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Ban, Check, FileJson, KeyRound, PenSquare, Pencil, Plus, Search, Trash2, Upload, UserCheck, UserPlus, Users, X } from 'lucide-react';
+import { api } from '../lib/api';
+import { errorText, useApp } from '../lib/app';
+import { downloadJsonBackup } from '../lib/export';
+import type { Group, Post, Profile, Role, RoleRequest } from '../lib/types';
+import { GroupSheet, VIS_ICON } from '../components/Audience';
+import { PasswordSheet, UserSheet } from '../components/UserSheets';
+import { can, formatDate, normalizeSearch, postPath, ROLES } from '../lib/util';
+import { usePageTitle } from './usePageTitle';
+
+/** /admin — posts (incl. drafts) for writers and reviewers, users & roles for the manager. */
+export function AdminPage() {
+  const { t, user, authReady, prefs, toast } = useApp();
+  const [posts, setPosts] = useState<Post[] | null>(null);
+  const [users, setUsers] = useState<Profile[] | null>(null);
+  const [requests, setRequests] = useState<RoleRequest[]>([]);
+  type Tab = 'posts' | 'users' | 'requests' | 'groups';
+  const [params, setParams] = useSearchParams();
+  const tab = (params.get('tab') as Tab) || 'posts';
+  const setTab = (next: Tab) => setParams(next === 'posts' ? {} : { tab: next }, { replace: true });
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [editingGroup, setEditingGroup] = useState<Group | null | undefined>(undefined);
+  const [userQuery, setUserQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<Role | ''>('');
+  const [editingUser, setEditingUser] = useState<Profile | null | undefined>(undefined);
+  const [pwUser, setPwUser] = useState<Profile | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  usePageTitle(t('admin'));
+
+  const load = () => {
+    api.listPosts({ status: 'all', limit: 1000 }).then(setPosts);
+    if (can.manageGroups(user)) api.listGroups().then(setGroups).catch(() => {});
+    if (can.manageUsers(user)) {
+      api.listUsers().then(setUsers).catch((e) => toast(errorText(e, t)));
+      api.listRoleRequests().then(setRequests).catch(() => {});
+    }
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(load, [user]);
+
+  if (!authReady) return <p className="loading">{t('loading')}</p>;
+  if (!can.seeDrafts(user)) {
+    return (
+      <div className="empty">
+        <p>{t('forbidden')}</p>
+        {!user && (
+          <Link className="btn primary" to="/login" state={{ from: '/admin' }}>
+            {t('login')}
+          </Link>
+        )}
+      </div>
+    );
+  }
+
+  const pendingCount = requests.filter((r) => r.status === 'pending').length;
+
+  async function decide(id: string, approve: boolean) {
+    try {
+      await api.decideRoleRequest(id, approve);
+      load();
+    } catch (e) {
+      toast(errorText(e, t));
+    }
+  }
+
+  /** Run a user action, then reload; errors become toasts. */
+  async function userAction(fn: () => Promise<void>, done?: string) {
+    try {
+      await fn();
+      if (done) toast(done);
+      load();
+    } catch (e) {
+      toast(errorText(e, t));
+    }
+  }
+
+  const shownUsers = (users ?? []).filter((u) => {
+    if (roleFilter && u.role !== roleFilter) return false;
+    const q = normalizeSearch(userQuery).replace(/^@/, '');
+    return !q || normalizeSearch(`${u.display_name} ${u.email ?? ''} ${u.username}`).includes(q);
+  });
+
+  async function importBackup(file: File) {
+    try {
+      const data = JSON.parse(await file.text()) as { posts?: Post[] };
+      let n = 0;
+      for (const p of data.posts ?? []) {
+        await api.savePost({
+          title: p.title,
+          slug: p.slug,
+          excerpt: p.excerpt,
+          content_html: p.content_html,
+          cover_url: p.cover_url,
+          tags: p.tags,
+          lang: p.lang,
+          status: p.status,
+          visibility: p.visibility ?? 'public',
+          allowed_users: p.allowed_users ?? [],
+          allowed_groups: p.allowed_groups ?? [],
+        });
+        n++;
+      }
+      toast(`${t('imported')}: ${n}`);
+      load();
+    } catch (e) {
+      toast(errorText(e, t));
+    }
+  }
+
+  return (
+    <>
+      <header className="page-head">
+        <h1>{t('admin')}</h1>
+        <div className="row wrap">
+          {can.write(user) && (
+            <Link className="btn primary" to="/posts/new">
+              <PenSquare size={18} /> {t('newPost')}
+            </Link>
+          )}
+          {can.export(user) && (
+            <>
+              <button type="button" className="btn ghost" onClick={() => posts && downloadJsonBackup(posts)}>
+                <FileJson size={18} /> {t('exportJson')}
+              </button>
+              <button type="button" className="btn ghost" onClick={() => fileRef.current?.click()}>
+                <Upload size={18} /> {t('importJson')}
+              </button>
+              <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && importBackup(e.target.files[0])} />
+            </>
+          )}
+        </div>
+      </header>
+
+      {can.manageGroups(user) && (
+        <div className="seg tabs">
+          <button type="button" className={tab === 'posts' ? 'on' : ''} onClick={() => setTab('posts')}>
+            {t('allPosts')}
+          </button>
+          {can.manageUsers(user) && (
+            <>
+              <button type="button" className={tab === 'users' ? 'on' : ''} onClick={() => setTab('users')}>
+                {t('users')}
+              </button>
+              <button type="button" className={tab === 'requests' ? 'on' : ''} onClick={() => setTab('requests')}>
+                {t('requests')}
+                {pendingCount > 0 && <span className="count">{pendingCount}</span>}
+              </button>
+            </>
+          )}
+          <button type="button" className={tab === 'groups' ? 'on' : ''} onClick={() => setTab('groups')}>
+            {t('groups')}
+          </button>
+        </div>
+      )}
+
+      {tab === 'posts' && (
+        <ul className="admin-list">
+          {posts?.map((p) => (
+            <li key={p.id}>
+              <Link to={postPath(p.slug)} dir="auto" className="grow">
+                <strong>{p.title}</strong>
+                <small className="muted">
+                  {p.author?.display_name} · {formatDate(p.updated_at, prefs.uiLang)}
+                </small>
+              </Link>
+              {p.visibility && p.visibility !== 'public' && (() => {
+                const Icon = VIS_ICON[p.visibility];
+                return <Icon size={16} className="muted" aria-label={t(`vis_${p.visibility}`)} />;
+              })()}
+              <span className={`badge${p.status === 'published' ? ' ok' : ''}`}>{p.status === 'published' ? t('published') : t('draft')}</span>
+              {can.editPost(user, p) && (
+                <Link className="btn ghost sm" to={postPath(p.slug, '/edit')}>
+                  {t('edit')}
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {tab === 'users' && (
+        <>
+          <dl className="role-help">
+            {ROLES.map((r) => (
+              <div key={r}>
+                <dt>
+                  {t(`role_${r}`)} <span className="muted">· {users?.filter((u) => u.role === r).length ?? 0}</span>
+                </dt>
+                <dd>{t(`roleHelp_${r}`)}</dd>
+              </div>
+            ))}
+          </dl>
+          <div className="user-tools">
+            <label className="search-box grow">
+              <Search size={18} className="muted" />
+              <input type="search" value={userQuery} placeholder={t('searchUsers')} aria-label={t('searchUsers')} onChange={(e) => setUserQuery(e.target.value)} />
+            </label>
+            <select value={roleFilter} aria-label={t('role')} onChange={(e) => setRoleFilter(e.target.value as Role | '')}>
+              <option value="">{t('allRoles')}</option>
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {t(`role_${r}`)}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn primary" onClick={() => setEditingUser(null)}>
+              <UserPlus size={18} /> {t('addUser')}
+            </button>
+          </div>
+          <ul className="admin-list">
+            {users && !shownUsers.length && <p className="hint">{t('noUsersMatch')}</p>}
+            {shownUsers.map((u) => {
+              const self = u.id === user?.id;
+              return (
+                <li key={u.id} className={`user-row${u.suspended ? ' is-suspended' : ''}`}>
+                  <span className="avatar">{u.display_name.slice(0, 1)}</span>
+                  <span className="grow">
+                    <strong dir="auto">
+                      {u.display_name}
+                      {self && <span className="badge ok">{t('you')}</span>}
+                      {u.suspended && <span className="badge status-rejected">{t('suspended')}</span>}
+                      {u.must_change_password && <span className="badge">{t('tempPasswordBadge')}</span>}
+                    </strong>
+                    <small className="muted" dir="ltr">
+                      {u.email} · @{u.username}
+                    </small>
+                    <small className="muted">
+                      {t('joined')} {formatDate(u.created_at, prefs.uiLang)} ·{' '}
+                      {u.last_sign_in_at ? `${t('lastSignIn')} ${formatDate(u.last_sign_in_at, prefs.uiLang)}` : t('neverSignedIn')}
+                    </small>
+                  </span>
+                  <span className="user-actions">
+                    <select
+                      value={u.role}
+                      disabled={self}
+                      aria-label={t('role')}
+                      onChange={(e) => userAction(() => api.setRole(u.id, e.target.value as Role))}
+                    >
+                      {ROLES.map((r) => (
+                        <option key={r} value={r}>
+                          {t(`role_${r}`)}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" className="icon-btn" aria-label={t('edit')} title={t('edit')} onClick={() => setEditingUser(u)}>
+                      <Pencil size={16} />
+                    </button>
+                    {!self && (
+                      <>
+                        <button type="button" className="icon-btn" aria-label={t('resetPassword')} title={t('resetPassword')} onClick={() => setPwUser(u)}>
+                          <KeyRound size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          aria-label={u.suspended ? t('unsuspend') : t('suspend')}
+                          title={u.suspended ? t('unsuspend') : t('suspend')}
+                          onClick={() => {
+                            if (!u.suspended && !window.confirm(t('confirmSuspend'))) return;
+                            userAction(() => api.setSuspended(u.id, !u.suspended));
+                          }}
+                        >
+                          {u.suspended ? <UserCheck size={16} /> : <Ban size={16} />}
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-btn danger"
+                          aria-label={t('delete')}
+                          title={t('delete')}
+                          onClick={() => {
+                            if (window.confirm(t('confirmDeleteUser'))) userAction(() => api.deleteUser(u.id), t('userDeleted'));
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <UserSheet open={editingUser !== undefined} user={editingUser ?? null} onClose={() => setEditingUser(undefined)} onSaved={load} />
+          <PasswordSheet user={pwUser} onClose={() => setPwUser(null)} onSaved={load} />
+        </>
+      )}
+      {tab === 'requests' && (
+        <ul className="admin-list">
+          {!requests.length && <p className="hint">{t('noRequests')}</p>}
+          {requests.map((r) => (
+            <li key={r.id} className="request">
+              <span className="avatar">{r.user?.display_name.slice(0, 1) ?? '?'}</span>
+              <span className="grow">
+                <strong dir="auto">{r.user?.display_name ?? '—'}</strong>
+                <small className="muted">
+                  {r.user ? t(`role_${r.user.role}`) : ''} {prefs.uiLang === 'he' ? '←' : '→'} <b>{t(`role_${r.requested_role}`)}</b> · {formatDate(r.created_at, prefs.uiLang)}
+                </small>
+                {r.message && (
+                  <small dir="auto" className="request-msg">
+                    {r.message}
+                  </small>
+                )}
+              </span>
+              {r.status === 'pending' ? (
+                <span className="row">
+                  <button type="button" className="btn primary sm" onClick={() => decide(r.id, true)}>
+                    <Check size={16} /> {t('approve')}
+                  </button>
+                  <button type="button" className="btn ghost sm danger" onClick={() => decide(r.id, false)}>
+                    <X size={16} /> {t('reject')}
+                  </button>
+                </span>
+              ) : (
+                <span className={`badge status-${r.status}`}>{t(`status_${r.status}`)}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {tab === 'groups' && can.manageGroups(user) && (
+        <>
+          <div className="row end">
+            <button type="button" className="btn primary sm" onClick={() => setEditingGroup(null)}>
+              <Plus size={16} /> {t('newGroup')}
+            </button>
+          </div>
+          <ul className="admin-list" style={{ marginTop: 10 }}>
+            {!groups.length && <p className="hint">{t('noGroups')}</p>}
+            {groups.map((g) => (
+              <li key={g.id}>
+                <span className="avatar">
+                  <Users size={18} />
+                </span>
+                <span className="grow">
+                  <strong dir="auto">{g.name}</strong>
+                  <small className="muted" dir="auto">
+                    {g.member_ids.length} {t('members')}
+                    {g.created_by && g.created_by !== user?.id && users
+                      ? ` · ${t('by')} ${users.find((u) => u.id === g.created_by)?.display_name ?? '—'}`
+                      : ''}
+                    {g.description ? ` · ${g.description}` : ''}
+                  </small>
+                </span>
+                <button type="button" className="icon-btn" aria-label={t('edit')} onClick={() => setEditingGroup(g)}>
+                  <Pencil size={16} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn danger"
+                  aria-label={t('delete')}
+                  onClick={async () => {
+                    if (!window.confirm(t('confirmDeleteGroup'))) return;
+                    try {
+                      await api.deleteGroup(g.id);
+                      load();
+                    } catch (e) {
+                      toast(errorText(e, t));
+                    }
+                  }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <GroupSheet open={editingGroup !== undefined} group={editingGroup ?? null} onClose={() => setEditingGroup(undefined)} onSaved={load} />
+        </>
+      )}
+    </>
+  );
+}

@@ -1,0 +1,11 @@
+{
+  "name": "oded.me",
+  "short_name": "oded.me",
+  "start_url": ".",
+  "display": "standalone",
+  "dir": "auto",
+  "lang": "he",
+  "background_color": "#f7f6f2",
+  "theme_color": "#4f46e5",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

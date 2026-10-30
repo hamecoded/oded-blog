@@ -1,0 +1,94 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Printer, X } from 'lucide-react';
+import { api } from '../lib/api';
+import { useApp } from '../lib/app';
+import type { Post } from '../lib/types';
+import { can, formatDate } from '../lib/util';
+import { PostContent } from '../components/PostContent';
+import { TagChips } from '../components/PostBits';
+import { NotFound } from './NotFound';
+
+/**
+ * Print-optimized rendering used for PDF export (/posts/:slug/print and /posts/print).
+ * The browser's own PDF engine handles Hebrew shaping, RTL and fonts perfectly,
+ * which client-side PDF libraries do not.
+ */
+export function PrintView() {
+  const { slug } = useParams();
+  const { t, prefs, user, authReady } = useApp();
+  const allowed = can.export(user);
+  const nav = useNavigate();
+  const [posts, setPosts] = useState<Post[] | null>(null);
+
+  useEffect(() => {
+    if (!allowed) return;
+    if (slug) api.getPost(slug).then((p) => setPosts(p ? [p] : []));
+    else api.listPosts({ limit: 10000 }).then((ps) => setPosts([...ps].reverse()));
+  }, [slug, allowed]);
+
+  useEffect(() => {
+    if (!posts?.length) return;
+    document.title = slug ? posts[0].title : t('siteName');
+    let cancelled = false;
+    (async () => {
+      // Lazy images never load off-screen; force them so every page has its pictures.
+      document.querySelectorAll('img').forEach((i) => (i.loading = 'eager'));
+      await document.fonts.ready;
+      const images = Promise.all(
+        [...document.images]
+          .filter((i) => !i.complete)
+          .map(
+            (i) =>
+              new Promise((r) => {
+                i.addEventListener('load', r, { once: true });
+                i.addEventListener('error', r, { once: true });
+              }),
+          ),
+      );
+      await Promise.race([images, new Promise((r) => setTimeout(r, 6000))]);
+      await new Promise((r) => setTimeout(r, 300));
+      if (!cancelled) window.print();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [posts, slug, t]);
+
+  if (!authReady) return <p className="loading">{t('loading')}</p>;
+  if (!allowed) return <p className="empty">{t('forbidden')}</p>;
+  if (posts === null) return <p className="loading">{t('loading')}</p>;
+  if (!posts.length) return <NotFound />;
+
+  return (
+    <div className="print-page">
+      <div className="print-bar no-print">
+        <button type="button" className="icon-btn" onClick={() => nav(-1)} aria-label={t('close')}>
+          <X size={20} />
+        </button>
+        <span className="grow hint">{t('pdfHint')}</span>
+        <button type="button" className="btn primary" onClick={() => window.print()}>
+          <Printer size={18} /> {t('printNow')}
+        </button>
+      </div>
+      {!slug && (
+        <header className="print-title">
+          <h1>{t('siteName')}</h1>
+          <p>{t('tagline')}</p>
+        </header>
+      )}
+      {posts.map((p) => (
+        <article key={p.id} className="post print-post" dir={p.lang === 'he' ? 'rtl' : 'ltr'} lang={p.lang}>
+          {p.cover_url && <img className="post-cover" src={p.cover_url} alt="" />}
+          <h1>{p.title}</h1>
+          <p className="muted print-meta">
+            {p.author?.display_name} · {t('published')} {formatDate(p.published_at ?? p.created_at, prefs.uiLang)}
+            {p.updated_at !== p.published_at && ` · ${t('updated')} ${formatDate(p.updated_at, prefs.uiLang)}`}
+          </p>
+          <TagChips tags={p.tags} />
+          <PostContent html={p.content_html} lang={p.lang} />
+        </article>
+      ))}
+    </div>
+  );
+}
