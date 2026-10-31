@@ -54,12 +54,13 @@ Everyone who signs up starts as a **commenter** and can ask the manager for any 
 | Video blog | **Record video** in the editor with the front or back camera (or use the iPhone camera app). Upload it to **your YouTube channel** or save it in the blog. |
 | Audio | **Record audio** with a live level meter; it's saved in the blog with a built-in player. You can also embed **SoundCloud, Spotify, Mixcloud or Archive.org** links. |
 | Math | Inline or display LaTeX equations with a live KaTeX preview. |
+| Code snippets | Insert → Code snippet. Always left-to-right, Tab indents, pick a language or let it auto-detect. Posts show syntax colours, the language and a Copy button. |
 | Fonts | Twelve Google Fonts that support Hebrew, including the handwriting fonts **Playpen Sans Hebrew**, **Amatic SC** and Karantina. Readers choose font, size, line spacing and theme. |
 | Audience | When creating or editing a post, **Who can see this** sets it to **Public**, **Registered users** (anyone signed in), **Private** (only you and the manager) or **specific people and/or groups**. Each author has **their own groups**: create one right from that sheet (**+ New group**) or in **/admin → Groups**. The manager sees and manages everyone's groups. |
 | Roles | `admin` (manager), `editor` (author), `reviewer`, `commenter`, `reader`. New sign-ups are commenters. Users request other roles on **/account**, and the manager approves them in **/admin → Role requests**. |
 | User management | In **/admin → Users** the manager can search and filter by role, **add a user** (email, name, role and a temporary password to pass on privately), edit a name or username, change a role, **reset a password**, **suspend** an account (it can't sign in until access is restored) or **delete** it. Deleting removes the person's comments, likes and role requests, and moves their posts to the manager. Anyone given a temporary password is asked to change it at their next sign-in. The manager can't suspend, delete or demote their own account. |
 | Review | Select any text, tap **Comment**, and the comment is pinned to that text. Supports replies and resolve/reopen. Reviewers can read and comment on drafts. |
-| Social | Likes. Share to Facebook, WhatsApp, X, Telegram, LinkedIn, Reddit, Gmail and email, plus the phone's share sheet (TikTok, Instagram, Messages…). |
+| Social | Likes, with the count shown on each post card (♡ 3; hidden while there are none). Share to Facebook, WhatsApp, X, Telegram, LinkedIn, Reddit, Gmail and email, plus the phone's share sheet (TikTok, Instagram, Messages…). |
 | Search | `/search?q=…&tag=…`: free text, `#tag` typed in the box, or tag chips. Hebrew niqqud is ignored. |
 | Export (manager only) | **PDF** of one post or all posts. **HTML** (opens in TextEdit). **Markdown**. **ZIP** offline archive. **JSON** backup and restore. For everyone else these buttons are hidden, and the browser's own Print / Save as PDF shows a notice instead of the page. |
 | Post details | Author, publish date, "updated" date, reading time, and draft/published status. |
@@ -94,6 +95,7 @@ Everyone who signs up starts as a **commenter** and can ask the manager for any 
 | Build | **Vite** 8 | Fast dev server; outputs static files to `dist/`. |
 | Rich text | **TipTap** 3 (on ProseMirror) | Extensible editor with built-in text direction. Custom nodes for figures, video, audio and math. |
 | Math | **KaTeX** | Fast LaTeX rendering on screen, in PDF and in exports. |
+| Code | **highlight.js** | Syntax colours on screen only, loaded on demand for posts that contain code. |
 | Sanitizing | **DOMPurify** | Cleans post HTML on save and on display. Iframes only from allowed players. |
 | Markdown export | **Turndown** | HTML → Markdown converter. |
 | ZIP export | **JSZip** | Builds the offline archive in the browser. Loaded only when used. |
@@ -208,6 +210,7 @@ opens in any browser, TextEdit or Word, and keeps every formatting choice.
 | Video | `<figure data-type="video" data-kind="file\|embed" data-src="…">` containing `<video controls>` or a YouTube/Vimeo/TikTok `<iframe>` |
 | Audio | `<figure data-type="audio" data-kind="file\|embed" data-provider="file\|soundcloud\|spotify\|mixcloud\|archive">` containing `<audio controls>` or a player `<iframe>` |
 | Math | `<span data-type="math" data-latex="e^{i\pi}+1=0" dir="ltr">e^{i\pi}+1=0</span>` (`data-display="true"` for its own line) |
+| Code | `<pre><code class="language-python">…</code></pre>` (no class = auto-detect). Exported to Markdown as a fenced block. |
 
 `data-align` is one of `inline-start`, `inline-end`, `center`, `full` or `hero` (title banner).
 

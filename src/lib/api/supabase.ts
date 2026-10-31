@@ -4,6 +4,8 @@ import { htmlToText, loginEmail, makeExcerpt, RESERVED_SLUGS, slugify, USERNAME_
 import { sanitizeHtml } from '../sanitize';
 
 const POST_SELECT = '*, author:profiles!posts_author_id_fkey(display_name, username)';
+/** Lists also carry the like count (PostgREST embedded count; the "likes read" policy applies). */
+const POST_LIST_SELECT = `${POST_SELECT}, likes(count)`;
 const COMMENT_SELECT = '*, author:profiles!comments_user_id_fkey(display_name, username)';
 const BUCKET = 'media';
 const REQUEST_SELECT = '*, user:profiles!role_requests_user_id_fkey(display_name, username, role)';
@@ -86,8 +88,8 @@ export function createSupabaseApi(url: string, key: string): Api {
     async listPosts(q = {}) {
       const tags = q.tags ?? [];
       let query = q.q?.trim()
-        ? sb.rpc('search_posts', { q: q.q.trim(), tag_list: tags }).select(POST_SELECT)
-        : sb.from('posts').select(POST_SELECT);
+        ? sb.rpc('search_posts', { q: q.q.trim(), tag_list: tags }).select(POST_LIST_SELECT)
+        : sb.from('posts').select(POST_LIST_SELECT);
       if (!q.q?.trim() && tags.length) query = query.contains('tags', tags);
       const status = q.status ?? 'published';
       if (status !== 'all') query = query.eq('status', status);
@@ -106,7 +108,8 @@ export function createSupabaseApi(url: string, key: string): Api {
         .order('published_at', { ascending: false, nullsFirst: false })
         .order('updated_at', { ascending: false })
         .limit(q.limit ?? 100);
-      return check(res) as unknown as Post[];
+      const rows = check(res) as unknown as (Post & { likes?: { count: number }[] })[];
+      return rows.map(({ likes, ...p }) => ({ ...p, like_count: likes?.[0]?.count ?? 0 }));
     },
 
     async getPost(slug) {

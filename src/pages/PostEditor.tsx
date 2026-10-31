@@ -252,7 +252,8 @@ export function PostEditor() {
         </div>
         <details className="excerpt-edit">
           <summary>{t('excerpt')}</summary>
-          <textarea dir="auto" rows={2} value={draft.excerpt} onChange={(e) => update({ excerpt: e.target.value })} />
+          {/* Same rule as the title: RTL when there's Hebrew (even if it starts with an English word), else the post's language. */}
+          <textarea dir={titleDir(draft.excerpt, draft.lang)} rows={2} value={draft.excerpt} onChange={(e) => update({ excerpt: e.target.value })} />
         </details>
       </div>
 

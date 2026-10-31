@@ -76,6 +76,8 @@ export interface Post {
   created_at: string;
   updated_at: string;
   published_at: string | null;
+  /** Number of likes. Filled in by listPosts only (cards); the post page uses getLikes. */
+  like_count?: number;
 }
 
 export type PostDraft = Pick<

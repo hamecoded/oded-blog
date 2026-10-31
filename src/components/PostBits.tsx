@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Clock } from 'lucide-react';
+import { Clock, Heart } from 'lucide-react';
 import { VIS_ICON } from './Audience';
 import { useApp } from '../lib/app';
 import type { Post } from '../lib/types';
@@ -63,8 +63,18 @@ export function PostMeta({ post }: { post: Post }) {
         )}
         <span className="muted">
           {' · '}
-          <Clock size={13} className="inline-ico" /> {readingMinutes(post.content_text)} {t('minRead')}
+          <span className="nowrap">
+            <Clock size={13} className="inline-ico" /> {readingMinutes(post.content_text)} {t('minRead')}
+          </span>
         </span>
+        {!!post.like_count && (
+          <span className="muted like-count" title={t('likesCount')} aria-label={`${post.like_count} ${t('likesCount')}`}>
+            {' · '}
+            <span className="nowrap">
+              <Heart size={13} className="inline-ico" /> {post.like_count}
+            </span>
+          </span>
+        )}
       </span>
     </div>
   );
@@ -85,7 +95,12 @@ export function PostCard({ post, compact }: { post: Post; compact?: boolean }) {
           <Link to={postPath(post.slug)}>{post.title}</Link>
         </h2>
         <PostMeta post={post} />
-        <p className="excerpt">{post.excerpt}</p>
+        {/* Same rule as the title (and the editor's summary box): any Hebrew → RTL, else the post's language. */}
+        {post.excerpt && (
+          <p className="excerpt" dir={titleDir(post.excerpt, post.lang)}>
+            {post.excerpt}
+          </p>
+        )}
         <TagChips tags={post.tags} />
       </div>
     </article>

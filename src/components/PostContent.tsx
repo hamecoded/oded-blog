@@ -1,8 +1,9 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { renderMath } from '../lib/math';
 import { highlight, locate } from '../lib/anchor';
 import { ensureFonts, fontsInHtml } from '../lib/fonts';
 import { sanitizeHtml } from '../lib/sanitize';
+import { decorateCode, highlightCode, loadHighlighter } from '../lib/code';
 import { useApp } from '../lib/app';
 import type { Comment } from '../lib/types';
 
@@ -24,6 +25,8 @@ export const PostContent = forwardRef<
 >(function PostContent({ html, lang, comments = [], showResolved, activeComment, onHighlightClick, onOrphans }, fwd) {
   const ref = useRef<HTMLDivElement>(null);
   const { t } = useApp();
+  // Bumped once highlight.js has loaded, so code blocks get repainted with colours.
+  const [hlReady, setHlReady] = useState(0);
   useImperativeHandle(fwd, () => ref.current!);
 
   useEffect(() => {
@@ -35,6 +38,8 @@ export const PostContent = forwardRef<
       renderMath(m, m.dataset.latex ?? '', m.dataset.display === 'true'),
     );
     el.querySelectorAll('img').forEach((img) => img.setAttribute('decoding', 'async'));
+    if (!highlightCode(el)) void loadHighlighter().then(() => setHlReady((n) => n + 1));
+    decorateCode(el, { copy: t('copy'), copied: t('copiedText') });
     // "Watch on YouTube" under each YouTube embed: private videos play only on youtube.com, for the owner.
     // The label is CSS-generated (data-label), so it adds no text and comment anchors stay where they were.
     el.querySelectorAll<HTMLIFrameElement>('figure[data-type="video"] iframe').forEach((f) => {
@@ -63,7 +68,7 @@ export const PostContent = forwardRef<
     spans.forEach(({ c, at }) => highlight(el, at![0], at![1], c.id, c.resolved));
     onOrphans?.(orphans);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [html, comments, showResolved, t]);
+  }, [html, comments, showResolved, t, hlReady]);
 
   useEffect(() => {
     const el = ref.current;

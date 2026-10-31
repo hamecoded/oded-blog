@@ -305,7 +305,9 @@ export function createLocalApi(): Api {
           Number(!a.published_at) - Number(!b.published_at) ||
           (b.published_at ?? b.updated_at).localeCompare(a.published_at ?? a.updated_at),
       );
-      return posts.slice(0, q.limit ?? 100).map((p) => withAuthor(d, p));
+      return posts
+        .slice(0, q.limit ?? 100)
+        .map((p) => ({ ...withAuthor(d, p), like_count: d.likes.filter((l) => l.post_id === p.id).length }));
     },
 
     async getPost(slug) {

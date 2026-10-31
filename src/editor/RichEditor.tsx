@@ -40,15 +40,17 @@ import {
   Mic,
   Music,
   Clapperboard,
+  CodeXml,
 } from 'lucide-react';
 import { useApp } from '../lib/app';
 import type { TKey } from '../lib/i18n';
 import { ensureFonts, FONTS } from '../lib/fonts';
+import { CODE_LANGUAGES } from '../lib/code';
 import { Audio, Figure, MathInline, MEDIA_ALIGNS, Video, type MediaAlign } from './extensions';
 import { RecorderSheet, type RecordKind } from './Recorder';
 import { CaptionDialog, LinkDialog, MathDialog, MediaDialog } from './dialogs';
 
-type Panel = 'text' | 'para' | 'align' | 'font' | 'insert' | 'media' | null;
+type Panel = 'text' | 'para' | 'align' | 'font' | 'insert' | 'media' | 'code' | null;
 type Dialog = 'image' | 'video' | 'audio' | 'link' | 'math' | 'caption' | null;
 
 const SIZES = [14, 16, 18, 20, 24, 28, 32, 40];
@@ -130,6 +132,8 @@ export function RichEditor({
       StarterKit.configure({
         heading: { levels: [2, 3, 4] },
         link: { openOnClick: false, autolink: true, defaultProtocol: 'https' },
+        // Code snippets: always left-to-right, Tab indents.
+        codeBlock: { enableTabIndentation: true, tabSize: 2, HTMLAttributes: { dir: 'ltr' } },
       }),
       TextStyle,
       FontFamily,
@@ -160,12 +164,14 @@ export function RichEditor({
   const selected = editor && editor.state.selection instanceof NodeSelection ? editor.state.selection.node : null;
   const mediaSelected = selected && ['figure', 'video', 'audio'].includes(selected.type.name) ? selected : null;
   const mathSelected = selected?.type.name === 'math' ? selected : null;
+  const inCode = !!editor?.isActive('codeBlock');
 
-  // Show contextual media controls as soon as an image/video is tapped.
+  // Show contextual controls as soon as an image/video is tapped or the caret enters a code block.
   useEffect(() => {
     if (mediaSelected) setPanel('media');
-    else setPanel((p) => (p === 'media' ? null : p));
-  }, [mediaSelected]);
+    else if (inCode) setPanel((p) => (p === null || p === 'media' || p === 'insert' ? 'code' : p));
+    else setPanel((p) => (p === 'media' || p === 'code' ? null : p));
+  }, [mediaSelected, inCode]);
 
   if (!editor) return null;
   const chain = () => editor.chain().focus();
@@ -228,6 +234,7 @@ export function RichEditor({
           <Btn icon={<AlignCenter />} label={t('ed_align')} active={panel === 'align'} onClick={() => toggle('align')} />
           <Btn icon={<Type />} label={t('ed_font')} active={panel === 'font'} onClick={() => toggle('font')} />
           {mediaSelected && <Btn icon={<ImageIcon />} label={t('ed_media')} active={panel === 'media'} onClick={() => toggle('media')} />}
+          {inCode && <Btn icon={<CodeXml />} label={t('ed_codeBlock')} active={panel === 'code'} onClick={() => toggle('code')} />}
           {mathSelected && <Btn icon={<Sigma />} label={t('ed_math')} active onClick={() => setDialog('math')} />}
           <Btn icon={<Plus />} label={t('ed_insert')} active={panel === 'insert'} onClick={() => toggle('insert')} primary />
         </div>
@@ -253,6 +260,7 @@ export function RichEditor({
                 <Btn icon={<List />} label={t('ed_bullet')} active={editor.isActive('bulletList')} onClick={() => chain().toggleBulletList().run()} />
                 <Btn icon={<ListOrdered />} label={t('ed_ordered')} active={editor.isActive('orderedList')} onClick={() => chain().toggleOrderedList().run()} />
                 <Btn icon={<Quote />} label={t('ed_quote')} active={editor.isActive('blockquote')} onClick={() => chain().toggleBlockquote().run()} />
+                <Btn icon={<CodeXml />} label={t('ed_codeBlock')} active={inCode} onClick={() => chain().toggleCodeBlock().run()} />
                 <Btn icon={<Minus />} label={t('ed_hr')} onClick={() => chain().setHorizontalRule().run()} />
               </>
             )}
@@ -307,9 +315,32 @@ export function RichEditor({
                 <Btn icon={<Clapperboard />} label={t('rec_video')} onClick={() => setRecording('video')} wide />
                 <Btn icon={<Mic />} label={t('rec_audio')} onClick={() => setRecording('audio')} wide />
                 <Btn icon={<Sigma />} label={t('ed_math')} onClick={() => setDialog('math')} wide />
+                <Btn icon={<CodeXml />} label={t('ed_codeBlock')} onClick={() => chain().setCodeBlock().run()} wide />
                 <Btn icon={<Link2 />} label={t('ed_link')} onClick={() => setDialog('link')} wide />
                 <Btn icon={<Minus />} label={t('ed_hr')} onClick={() => chain().setHorizontalRule().run()} wide />
               </>
+            )}
+            {panel === 'code' && inCode && (
+              <div className="media-panel">
+                <div className="chips scroll" dir="ltr">
+                  <span className="chip-label">{t('ed_language')}</span>
+                  {CODE_LANGUAGES.map((l) => (
+                    <button
+                      type="button"
+                      key={l.id}
+                      className={`chip${(editor.getAttributes('codeBlock').language ?? '') === l.id ? ' on' : ''}`}
+                      onClick={() => chain().updateAttributes('codeBlock', { language: l.id || null }).run()}
+                    >
+                      {l.id ? l.label : t('ed_langAuto')}
+                    </button>
+                  ))}
+                </div>
+                <div className="chips scroll">
+                  <button type="button" className="chip danger" onClick={() => chain().toggleCodeBlock().run()}>
+                    <Trash2 size={16} /> {t('ed_codeToText')}
+                  </button>
+                </div>
+              </div>
             )}
             {panel === 'media' && mediaSelected && (
               <div className="media-panel">
