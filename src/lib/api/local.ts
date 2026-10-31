@@ -263,7 +263,7 @@ export function createLocalApi(): Api {
       return OAUTH_PROVIDERS;
     },
 
-    // Demo stand-in: there is no real Google/Facebook in the browser-only demo, so each provider maps to one
+    // Demo stand-in: there is no real Google (or other provider) in the browser-only demo, so each provider maps to one
     // made-up account, created on first use like a normal sign-up. The live site uses Supabase (supabase.ts).
     async signInWithOAuth(provider) {
       const d = await db();

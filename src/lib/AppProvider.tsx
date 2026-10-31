@@ -10,7 +10,7 @@ const PREFS_KEY = 'blog.prefs';
 // Read before Supabase consumes it: the email-confirmation link lands with its result in the URL hash
 // (#access_token=…&type=signup, or #error=…&error_code=otp_expired).
 const AUTH_HASH = new URLSearchParams(location.hash.slice(1));
-// A failed Google/Facebook sign-in returns ?error=…&error_description=… (or the same in the hash).
+// A failed Google (or other provider) sign-in returns ?error=…&error_description=… (or the same in the hash).
 const AUTH_QUERY = new URLSearchParams(location.search);
 
 const DEFAULT_PREFS: Prefs = {

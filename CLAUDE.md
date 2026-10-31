@@ -43,11 +43,16 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   Sign-ups start as reader and request a role on `/account`. The admin approves requests
   in /admin → Role requests, or manages people directly in /admin → Users (add with a
   temporary password, edit, reset password, suspend, delete).
-- **Sign in with Google / Facebook** (also Apple, GitHub) through Supabase's built-in OAuth.
-  Buttons sit below the email form, chosen with `VITE_OAUTH_PROVIDERS` (default
-  `google,facebook`, `none` hides them). Provider keys live only in the Supabase dashboard.
-  Demo mode signs in as a made-up `<provider>.demo@example.com` account. Never tested
-  against real providers yet.
+- **Sign in with Google** (Facebook, Apple, GitHub supported in code) through Supabase's
+  built-in OAuth. Buttons sit below the email form, chosen with `VITE_OAUTH_PROVIDERS`
+  (default `google`, `none` hides them). Facebook was dropped on 2026-10-31 because Meta
+  only publishes new apps after business verification. Provider keys live only in the Supabase dashboard.
+  Demo mode signs in as a made-up `<provider>.demo@example.com` account. On the live site
+  only providers that Supabase's `/auth/v1/settings` reports as enabled get a button
+  (`api.oauthProviders()`), so a half-configured provider never shows a broken button.
+- **Privacy policy at `/privacy`** (`src/pages/Privacy.tsx`, both languages, `#delete` anchor).
+  Google's app settings link to it. Keep it in step with what the app stores.
+  `spa-fallback.mjs` writes `dist/privacy.html` so it answers 200 on GitHub Pages.
 - **No service-role key anywhere in the app.** Admin user management on Supabase goes
   through the security-definer `admin_*` SQL functions in `schema.sql`, which write
   `auth.users`.
@@ -79,8 +84,16 @@ management, the compact homepage, and the RTL/LTR layouts at phone and desktop w
 - A real YouTube upload, the `psql` route in setup, and `migrate:media` against real
   projects.
 
-**Not done yet:** a git repository (none exists), a GitHub repo, setting up Supabase,
-deploying, and the custom domain oded.me.
+**Live since 2026-10-31** at https://oded.me (GitHub Pages, repo `hamecoded/oded-blog`,
+Supabase project `tbwskzgkmoztdejeiyhz`); `.deploy.json` records the last deploy.
+
+**Sign in with Google, status 2026-10-31:**
+- Live, using a dedicated Google Cloud project (not the YouTube one). The flow was checked up
+  to Google's account screen; a full sign-in that creates an account hasn't been confirmed yet.
+- Facebook removed from the default buttons. The Meta app "oded.me" (App ID
+  1153870960650318) stays in Development mode; publishing it needs Meta business
+  verification. Facebook should be switched off in Supabase too.
+- App icon for the provider consoles: `branding/app-icon-1024.png`.
 
 ## Conventions
 

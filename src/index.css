@@ -2164,6 +2164,10 @@ legend {
 }
 .oauth-buttons .btn {
   background: var(--surface);
+  gap: 10px;
+}
+.oauth-logo {
+  flex-shrink: 0;
 }
 .or-divider {
   display: flex;

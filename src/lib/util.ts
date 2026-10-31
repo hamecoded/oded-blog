@@ -114,10 +114,13 @@ export const OAUTH_LABELS: Record<OAuthProvider, string> = {
   github: 'GitHub',
 };
 
-/** VITE_OAUTH_PROVIDERS: comma-separated, in display order. Unset → Google and Facebook; "none" → email only. */
+/**
+ * VITE_OAUTH_PROVIDERS: comma-separated, in display order. Unset → Google only; "none" → email only.
+ * Facebook works in code but is off by default: Meta lets a new app go Live only after business verification.
+ */
 export const OAUTH_PROVIDERS: OAuthProvider[] = (() => {
   const raw = (import.meta.env.VITE_OAUTH_PROVIDERS as string | undefined)?.trim();
-  if (!raw) return ['google', 'facebook'];
+  if (!raw) return ['google'];
   return raw
     .toLowerCase()
     .split(/[\s,]+/)

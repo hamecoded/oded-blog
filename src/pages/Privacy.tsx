@@ -4,7 +4,8 @@ import { ADMIN_EMAIL } from '../lib/util';
 import { usePageTitle } from './usePageTitle';
 
 // Keep in step with what the app really stores (supabase/schema.sql, AppProvider.tsx, sanitize.ts, fonts.ts).
-// Google's sign-in setup links here (Google Auth Platform → Branding → privacy policy link).
+// Google's sign-in setup links here (Google Auth Platform → Branding → privacy policy link). A Meta app would
+// link to /privacy and /privacy#delete (privacy policy / data deletion instructions) if Facebook sign-in returns.
 // The text is long-form, so each language is a block here rather than dictionary entries in i18n.ts.
 const UPDATED = '2026-10-31';
 
@@ -38,9 +39,9 @@ function English() {
         <li>when you signed up and last signed in.</li>
       </ul>
       <p>
-        If you sign up with email, your password is stored only in hashed form. If you sign in with Google or Facebook,
-        the blog receives your name, email address and profile picture from that service. It never receives your password
-        there, does not see your contacts, and never posts anything on your behalf.
+        If you sign up with email, your password is stored only in hashed form. If you sign in with Google, the blog
+        receives your name, email address and profile picture from Google. It never receives your Google password, does
+        not see your contacts, and never posts anything on your behalf.
       </p>
       <h2>What you add</h2>
       <p>
@@ -58,7 +59,7 @@ function English() {
         Your browser keeps your display settings (language, font, theme) and your sign-in session in local storage on your
         device.
       </p>
-      <h2>Deleting your data</h2>
+      <h2 id="delete">Deleting your data</h2>
       <p>
         To delete your account, email {mail}. Deleting it removes your account, comments, likes and role requests. Posts
         you wrote stay on the blog under the manager's name unless you ask for them to be removed too.
@@ -92,7 +93,7 @@ function Hebrew() {
         <li>מתי נרשמתם ומתי התחברתם לאחרונה.</li>
       </ul>
       <p>
-        בהרשמה עם אימייל, הסיסמה נשמרת רק בצורה מוצפנת (hash). בכניסה עם Google או Facebook, הבלוג מקבל מהשירות את השם,
+        בהרשמה עם אימייל, הסיסמה נשמרת רק בצורה מוצפנת (hash). בכניסה עם Google, הבלוג מקבל מ-Google את השם,
         כתובת האימייל ותמונת הפרופיל שלכם. הוא לא מקבל את הסיסמה שלכם שם, לא רואה את אנשי הקשר שלכם ואף פעם לא מפרסם דבר
         בשמכם.
       </p>
@@ -108,7 +109,7 @@ function Hebrew() {
         חשבונות, פוסטים, תגובות וקבצים שהועלו נשמרים ב-Supabase, שמספק לבלוג את מסד הנתונים ואת מערכת הכניסה. הדפדפן שלכם
         שומר במכשיר את הגדרות התצוגה (שפה, גופן, ערכת צבעים) ואת חיבור הכניסה שלכם.
       </p>
-      <h2>מחיקת המידע</h2>
+      <h2 id="delete">מחיקת המידע</h2>
       <p>
         כדי למחוק את החשבון, כתבו אל {mail}. המחיקה מסירה את החשבון, התגובות, הלייקים ובקשות התפקיד. פוסטים שכתבתם נשארים
         בבלוג בשם המנהל, אלא אם תבקשו להסיר גם אותם.

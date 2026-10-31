@@ -261,7 +261,7 @@ environment variables).
 | `VITE_SUPABASE_URL` | For a live site | `https://abcd1234.supabase.co` | Supabase project URL. Leave empty for demo mode. |
 | `VITE_SUPABASE_ANON_KEY` | For a live site | `sb_publishable_…` or `eyJhbGci…` | Supabase publishable (anon) key. It's public by design. |
 | `VITE_GOOGLE_CLIENT_ID` | Optional | `123…apps.googleusercontent.com` | Enables **Upload to YouTube**. |
-| `VITE_OAUTH_PROVIDERS` | Optional | `google,facebook` | Sign-in buttons below the email form (`google`, `facebook`, `apple`, `github`). Default `google,facebook`; `none` for email only. Each must be enabled in Supabase (§8.1 step 5). |
+| `VITE_OAUTH_PROVIDERS` | Optional | `google` | Sign-in buttons below the email form (`google`, `facebook`, `apple`, `github`). Default `google`; `none` for email only. Each must be enabled in Supabase (§8.1 step 5). |
 | `VITE_ADMIN_EMAIL` | Optional | `admin@oded.me` | The email that the `admin` sign-in shortcut maps to. It must match the SQL file. |
 | `VITE_BASE` | Optional | `/` or `/my-blog/` | The path the site is served under. The GitHub workflow sets it automatically. |
 
@@ -302,7 +302,7 @@ Node.js 20+ for local builds.
      per hour. For real sign-ups, either connect your own SMTP under
      **Authentication → Emails → SMTP Settings** (any provider with a free tier works), or
      turn confirmation off for a small private blog.
-5. **Sign in with Google / Facebook** (shown by default; skip it with
+5. **Sign in with Google** (shown by default; skip it with
    `VITE_OAUTH_PROVIDERS=none`). Each service needs an app of its own, whose keys go into
    Supabase, never into `.env`. Every service asks for the same **callback URL**, which
    Supabase shows on the provider's page: `https://<project>.supabase.co/auth/v1/callback`.
@@ -313,18 +313,22 @@ Node.js 20+ for local builds.
      turn it on and paste the client ID and secret. Before publishing the Google app, fill in
      *Branding*: home page `https://oded.me`, privacy policy `https://oded.me/privacy` (a
      page in the blog), and authorized domains `oded.me` and `supabase.co`.
-   - **Facebook:** in [Meta for Developers](https://developers.facebook.com/apps), create
+   - **Facebook (off by default):** Meta lets a new app go Live only after **business
+     verification** (a registered business), so the blog ships without it. To add it later,
+     set `VITE_OAUTH_PROVIDERS=google,facebook`. In [Meta for Developers](https://developers.facebook.com/apps), create
      an app with the **Authenticate and request data from users with Facebook Login** use
      case, and add the `email` permission. Under *Facebook Login → Settings*, add the
      callback URL to *Valid OAuth Redirect URIs*. Copy the App ID and App Secret
-     (*App settings → Basic*) into Supabase → **Providers → Facebook**. Switch the app to
+     (*App settings → Basic*) into Supabase → **Providers → Facebook**.
+     In *App settings → Basic*, set the privacy policy URL to `https://oded.me/privacy` and the
+     data deletion instructions URL to `https://oded.me/privacy#delete`. Switch the app to
      **Live** when done, or only you can sign in with it.
    - In **Authentication → URL Configuration → Redirect URLs**, also add your address with
      `/**` at the end (e.g. `https://oded.me/**`, `http://localhost:5173/**`), so people
      return to the page they were on. Without it they land on the homepage, still signed in.
 
    Accounts made this way start as commenters, like email sign-ups, and take their name
-   from the Google or Facebook profile. If someone already has an email account with the
+   from their Google profile. If someone already has an email account with the
    same address, Supabase links the two.
 6. Go to **Project Settings → API Keys** and copy the **Project URL** and the
    **publishable / anon** key. You'll need them in §8.3.

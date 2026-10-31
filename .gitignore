@@ -37,3 +37,6 @@ credentials.md
 # Backup copies made while editing
 *.bak
 *.bak[0-9]
+
+# Scratch files waiting to be deleted
+_to_delete/

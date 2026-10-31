@@ -111,6 +111,16 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
               <div className="oauth-buttons">
                 {providers.map((p) => (
                   <button key={p} type="button" className={`btn ghost block oauth-${p}`} disabled={busy} onClick={() => oauth(p)}>
+                    {/* The provider's official mark, from its branding kit (public/brand/<provider>.svg).
+                        Hidden if the file isn't there, so the button still reads fine without it. */}
+                    <img
+                      className="oauth-logo"
+                      src={`${import.meta.env.BASE_URL}brand/${p}.svg`}
+                      alt=""
+                      width={24}
+                      height={24}
+                      onError={(e) => (e.currentTarget.style.display = 'none')}
+                    />
                     {t('continueWith')} <bdi dir="ltr">{OAUTH_LABELS[p]}</bdi>
                   </button>
                 ))}
