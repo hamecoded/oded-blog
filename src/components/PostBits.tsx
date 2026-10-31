@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Clock, Heart } from 'lucide-react';
-import { VIS_ICON } from './Audience';
+import { VIS_ICON } from './visIcons';
 import { useApp } from '../lib/app';
 import type { Post } from '../lib/types';
 import { formatDate, postPath, readingMinutes, tagPath, titleDir } from '../lib/util';

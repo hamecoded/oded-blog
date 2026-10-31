@@ -1,5 +1,7 @@
 export type Role = 'admin' | 'editor' | 'reviewer' | 'commenter' | 'reader';
 export type Lang = 'he' | 'en';
+/** Sign-in services offered next to email. Each must also be enabled in Supabase → Authentication → Providers. */
+export type OAuthProvider = 'google' | 'facebook' | 'apple' | 'github';
 export type PostStatus = 'draft' | 'published';
 /** public: everyone · members: any signed-in user · private: author + admin · restricted: chosen people and groups. */
 export type Visibility = 'public' | 'members' | 'private' | 'restricted';
@@ -136,6 +138,10 @@ export interface Api {
   onAuthChange(cb: (p: Profile | null) => void): () => void;
   signUp(email: string, password: string, displayName: string): Promise<{ needsConfirmation: boolean }>;
   signIn(email: string, password: string): Promise<void>;
+  /** The configured sign-in services that actually work right now (live: switched on in Supabase). */
+  oauthProviders(): Promise<OAuthProvider[]>;
+  /** Leaves the page for the provider; on return the session is picked up from the URL. `returnTo` is an app path. */
+  signInWithOAuth(provider: OAuthProvider, returnTo: string): Promise<void>;
   signOut(): Promise<void>;
   changePassword(newPassword: string): Promise<void>;
   // posts

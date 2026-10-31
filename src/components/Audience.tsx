@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Globe, Lock, Plus, Search, UserCheck, Users } from 'lucide-react';
+import { Check, Plus, Search, Users } from 'lucide-react';
+import { VIS_ICON } from './visIcons';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import type { Group, Profile, Visibility } from '../lib/types';
@@ -12,8 +13,6 @@ export interface AudienceValue {
   allowed_users: string[];
   allowed_groups: string[];
 }
-
-export const VIS_ICON: Record<Visibility, typeof Globe> = { public: Globe, members: UserCheck, private: Lock, restricted: Users };
 
 function usePeopleAndGroups(open: boolean) {
   const [people, setPeople] = useState<Profile[]>([]);
@@ -171,12 +170,16 @@ export function GroupSheet({
   const [desc, setDesc] = useState('');
   const [members, setMembers] = useState<string[]>([]);
 
-  useEffect(() => {
-    if (!open) return;
-    setName(group?.name ?? '');
-    setDesc(group?.description ?? '');
-    setMembers(group?.member_ids ?? []);
-  }, [open, group]);
+  // Refill the form each time the sheet opens (adjusted during render, not in an effect).
+  const [shownFor, setShownFor] = useState<{ open: boolean; group: Group | null | undefined }>({ open: false, group: null });
+  if (shownFor.open !== open || shownFor.group !== group) {
+    setShownFor({ open, group });
+    if (open) {
+      setName(group?.name ?? '');
+      setDesc(group?.description ?? '');
+      setMembers(group?.member_ids ?? []);
+    }
+  }
 
   return (
     <Sheet open={open} onClose={onClose} title={group ? group.name : t('newGroup')}>

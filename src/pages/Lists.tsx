@@ -70,11 +70,11 @@ export function Home() {
   const { t, user } = useApp();
   const posts = usePosts({}, []);
   const tags = useTags();
-  const [drafts, setDrafts] = useState<Post[]>([]);
+  const [loadedDrafts, setDrafts] = useState<Post[]>([]);
+  const drafts = can.seeDrafts(user) ? loadedDrafts : [];
   usePageTitle();
   useEffect(() => {
     if (can.seeDrafts(user)) api.listPosts({ status: 'draft' }).then(setDrafts).catch(() => {});
-    else setDrafts([]);
   }, [user]);
 
   return (

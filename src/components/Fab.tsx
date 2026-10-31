@@ -1,29 +1,11 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Archive, Languages, LogIn, Menu, PenSquare, Search, Settings2, Shield, Tags, UserRound, X } from 'lucide-react';
 import { useApp } from '../lib/app';
 import { can } from '../lib/util';
 import { DisplaySettings } from './DisplaySettings';
 import { ExportAllSheet } from './ExportAllSheet';
-
-export interface FabAction {
-  id: string;
-  label: string;
-  icon: ReactNode;
-  onClick: () => void;
-}
-
-const FabCtx = createContext<(a: FabAction[]) => void>(() => {});
-
-/** Pages contribute context actions (edit, export, share…) to the floating menu. */
-export function useFabActions(actions: FabAction[], deps: unknown[]) {
-  const set = useContext(FabCtx);
-  useEffect(() => {
-    set(actions);
-    return () => set([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-}
+import { FabCtx, type FabAction } from './fabActions';
 
 export function FabProvider({ children }: { children: ReactNode }) {
   const [pageActions, setPageActions] = useState<FabAction[]>([]);
@@ -42,7 +24,12 @@ function Fab({ pageActions }: { pageActions: FabAction[] }) {
   const [open, setOpen] = useState(false);
   const [sheet, setSheet] = useState<'display' | 'export' | null>(null);
 
-  useEffect(() => setOpen(false), [loc.pathname]);
+  // Close the menu on navigation (adjusted during render, not in an effect).
+  const [path, setPath] = useState(loc.pathname);
+  if (path !== loc.pathname) {
+    setPath(loc.pathname);
+    setOpen(false);
+  }
   if (/\/(edit|new)$/.test(loc.pathname) || loc.pathname.endsWith('/print')) return null;
 
   const go = (path: string) => () => nav(path);

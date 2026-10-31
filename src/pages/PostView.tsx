@@ -12,7 +12,7 @@ import { PostMeta, TagChips } from '../components/PostBits';
 import { LikeButton, ShareSheet } from '../components/Social';
 import { CommentsPanel } from '../components/CommentsPanel';
 import { Sheet } from '../components/Sheet';
-import { useFabActions } from '../components/Fab';
+import { useFabActions } from '../components/fabActions';
 import { NotFound } from './NotFound';
 import { usePageTitle } from './usePageTitle';
 
@@ -34,9 +34,22 @@ export function PostView() {
 
   usePageTitle(post?.title);
 
-  useEffect(() => {
+  // Show the spinner again when the slug or viewer changes (adjusted during render, not in an effect).
+  const loadKey = `${slug}|${user?.id ?? ''}`;
+  const [loadedFor, setLoadedFor] = useState(loadKey);
+  if (loadedFor !== loadKey) {
+    setLoadedFor(loadKey);
     setPost(undefined);
-    api.getPost(slug).then(setPost).catch(() => setPost(null));
+  }
+  useEffect(() => {
+    let stale = false;
+    api
+      .getPost(slug)
+      .then((p) => !stale && setPost(p))
+      .catch(() => !stale && setPost(null));
+    return () => {
+      stale = true;
+    };
   }, [slug, user?.id]);
 
   const loadComments = useCallback(() => {

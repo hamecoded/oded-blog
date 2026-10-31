@@ -4,7 +4,7 @@
  * with zero setup (`npm run dev`) and on any static host for a quick preview.
  */
 import type { Api, Comment, Group, LikeInfo, Post, PostDraft, Profile, Role, RoleRequest } from '../types';
-import { ADMIN_EMAIL, can, canViewPost, htmlToText, loginEmail, makeExcerpt, normalizeSearch, RESERVED_SLUGS, slugify, uid, USERNAME_RE } from '../util';
+import { ADMIN_EMAIL, can, canViewPost, htmlToText, loginEmail, makeExcerpt, normalizeSearch, OAUTH_LABELS, OAUTH_PROVIDERS, RESERVED_SLUGS, slugify, uid, USERNAME_RE } from '../util';
 import { sanitizeHtml } from '../sanitize';
 import { seedPosts, SEED_AUTHOR } from './seed';
 
@@ -251,6 +251,36 @@ export function createLocalApi(): Api {
       const hash = await sha256(`${e}:${password}`);
       const u = d.users.find((x) => x.email === e && x.pw === hash);
       if (!u) throw new Error('auth/invalid');
+      if (u.suspended) throw new Error('auth/suspended');
+      u.last_sign_in_at = new Date().toISOString();
+      await persist();
+      sessionId = u.id;
+      writeSession(u.id);
+      emit(publicProfile(u));
+    },
+
+    async oauthProviders() {
+      return OAUTH_PROVIDERS;
+    },
+
+    // Demo stand-in: there is no real Google/Facebook in the browser-only demo, so each provider maps to one
+    // made-up account, created on first use like a normal sign-up. The live site uses Supabase (supabase.ts).
+    async signInWithOAuth(provider) {
+      const d = await db();
+      const e = `${provider}.demo@example.com`;
+      let u = d.users.find((x) => x.email === e);
+      if (!u) {
+        u = {
+          id: uid(),
+          email: e,
+          pw: await sha256(`${e}:${uid()}`), // no usable password, like a real OAuth account
+          display_name: `${OAUTH_LABELS[provider]} demo`,
+          username: uniqueUsername(d, e),
+          role: 'commenter',
+          created_at: new Date().toISOString(),
+        };
+        d.users.push(u);
+      }
       if (u.suspended) throw new Error('auth/suspended');
       u.last_sign_in_at = new Date().toISOString();
       await persist();

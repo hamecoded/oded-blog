@@ -167,11 +167,14 @@ export function RichEditor({
   const inCode = !!editor?.isActive('codeBlock');
 
   // Show contextual controls as soon as an image/video is tapped or the caret enters a code block.
-  useEffect(() => {
+  // (Adjusted during render when the selection context changes, not in an effect.)
+  const [shownFor, setShownFor] = useState<{ media: typeof mediaSelected; inCode: boolean }>({ media: null, inCode: false });
+  if (shownFor.media !== mediaSelected || shownFor.inCode !== inCode) {
+    setShownFor({ media: mediaSelected, inCode });
     if (mediaSelected) setPanel('media');
     else if (inCode) setPanel((p) => (p === null || p === 'media' || p === 'insert' ? 'code' : p));
     else setPanel((p) => (p === 'media' || p === 'code' ? null : p));
-  }, [mediaSelected, inCode]);
+  }
 
   if (!editor) return null;
   const chain = () => editor.chain().focus();

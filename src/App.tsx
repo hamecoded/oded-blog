@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { createBrowserRouter, Link, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { api } from './lib/api';
-import { AppProvider, useApp } from './lib/app';
+import { useApp } from './lib/app';
+import { AppProvider } from './lib/AppProvider';
 import { can } from './lib/util';
 import { FabProvider } from './components/Fab';
 import { ArchivePage, AuthorPage, Home, SearchPage, TagPage, TagsPage } from './pages/Lists';
@@ -11,6 +12,7 @@ import { PrintView } from './pages/PrintView';
 import { AuthPage, Logout } from './pages/Auth';
 import { AccountPage } from './pages/Account';
 import { NotFound } from './pages/NotFound';
+import { PrivacyPage } from './pages/Privacy';
 
 function Layout() {
   const { t, user, toastMsg } = useApp();
@@ -80,6 +82,7 @@ function Layout() {
  *   /authors/:username    posts by author   /archive/:year/:month?
  *   /search?q=…&tag=…     search            /admin              manage posts, users, role requests
  *   /account              role, password, request a role
+ *   /privacy              privacy policy (linked from Google's sign-in setup)
  */
 // The editor (TipTap) only loads for writers.
 const editor = () => import('./pages/PostEditor').then((m) => ({ Component: m.PostEditor }));
@@ -104,6 +107,7 @@ const router = createBrowserRouter(
         { path: '/signup', element: <AuthPage mode="signup" /> },
         { path: '/logout', element: <Logout /> },
         { path: '/account', element: <AccountPage /> },
+        { path: '/privacy', element: <PrivacyPage /> },
         { path: '/admin', lazy: () => import('./pages/Admin').then((m) => ({ Component: m.AdminPage })) },
         { path: '*', element: <NotFound /> },
       ],

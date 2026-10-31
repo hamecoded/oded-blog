@@ -38,7 +38,8 @@ $$;
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
-  base text := regexp_replace(lower(split_part(new.email, '@', 1)), '[^a-z0-9]', '', 'g');
+  -- Email sign-ups send display_name; Google, Facebook etc. send full_name / name (see the profile insert below).
+  base text := coalesce(regexp_replace(lower(split_part(new.email, '@', 1)), '[^a-z0-9]', '', 'g'), '');
   uname text;
   n int := 1;
 begin
@@ -51,7 +52,12 @@ begin
   insert into public.profiles (id, display_name, username, role)
   values (
     new.id,
-    coalesce(nullif(new.raw_user_meta_data ->> 'display_name', ''), base),
+    coalesce(
+      nullif(new.raw_user_meta_data ->> 'display_name', ''),
+      nullif(new.raw_user_meta_data ->> 'full_name', ''),
+      nullif(new.raw_user_meta_data ->> 'name', ''),
+      base
+    ),
     uname,
     'commenter'
   );

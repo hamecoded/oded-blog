@@ -1,8 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api } from './api';
-import { DICTS, type TKey } from './i18n';
-import { DEFAULT_FONT, ensureFonts, fontStack } from './fonts';
+import { createContext, useContext } from 'react';
+import type { TKey } from './i18n';
 import type { Lang, Profile } from './types';
+
+// The provider component lives in AppProvider.tsx; this file holds only the context, hook and helpers,
+// so React Fast Refresh keeps working (a file should export either components or non-components).
 
 export interface Prefs {
   uiLang: Lang;
@@ -12,29 +13,7 @@ export interface Prefs {
   theme: 'auto' | 'light' | 'dark';
 }
 
-const PREFS_KEY = 'blog.prefs';
-
-// Read before Supabase consumes it: the email-confirmation link lands with its result in the URL hash
-// (#access_token=…&type=signup, or #error=…&error_code=otp_expired).
-const AUTH_HASH = new URLSearchParams(location.hash.slice(1));
-
-const DEFAULT_PREFS: Prefs = {
-  uiLang: 'he',
-  font: DEFAULT_FONT,
-  fontSize: 18,
-  lineHeight: 1.3,
-  theme: 'dark',
-};
-
-function loadPrefs(): Prefs {
-  try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') };
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
-
-interface AppCtx {
+export interface AppCtx {
   user: Profile | null;
   authReady: boolean;
   prefs: Prefs;
@@ -46,68 +25,7 @@ interface AppCtx {
   refreshUser: () => Promise<void>;
 }
 
-const Ctx = createContext<AppCtx | null>(null);
-
-export function AppProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<Profile | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-
-  useEffect(() => {
-    api.currentUser().then((u) => {
-      setUser(u);
-      setAuthReady(true);
-    });
-    return api.onAuthChange((u) => {
-      setUser(u);
-      setAuthReady(true);
-    });
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-    } catch {
-      /* storage unavailable */
-    }
-    const root = document.documentElement;
-    root.lang = prefs.uiLang;
-    root.dir = prefs.uiLang === 'he' ? 'rtl' : 'ltr';
-    if (prefs.theme === 'auto') delete root.dataset.theme;
-    else root.dataset.theme = prefs.theme;
-    ensureFonts([prefs.font]);
-    root.style.setProperty('--read-font', fontStack(prefs.font));
-    root.style.setProperty('--read-size', `${prefs.fontSize}px`);
-    root.style.setProperty('--read-lh', String(prefs.lineHeight));
-  }, [prefs]);
-
-  const setPrefs = useCallback((p: Partial<Prefs>) => setPrefsState((cur) => ({ ...cur, ...p })), []);
-  const resetPrefs = useCallback(() => setPrefsState((cur) => ({ ...DEFAULT_PREFS, uiLang: cur.uiLang })), []);
-  const t = useCallback((k: TKey) => DICTS[prefs.uiLang][k] ?? k, [prefs.uiLang]);
-
-  const toast = useCallback((msg: string) => {
-    setToastMsg(msg);
-    window.setTimeout(() => setToastMsg((m) => (m === msg ? null : m)), 2600);
-  }, []);
-
-  useEffect(() => {
-    if (AUTH_HASH.get('type') === 'signup' && AUTH_HASH.has('access_token')) toast(DICTS[prefs.uiLang].emailConfirmed);
-    else if (AUTH_HASH.has('error_code') || AUTH_HASH.has('error_description')) {
-      toast(DICTS[prefs.uiLang].linkExpired);
-      history.replaceState(null, '', location.pathname + location.search);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const refreshUser = useCallback(async () => setUser(await api.currentUser()), []);
-
-  const value = useMemo(
-    () => ({ user, authReady, prefs, setPrefs, resetPrefs, t, toast, toastMsg, refreshUser }),
-    [user, authReady, prefs, setPrefs, resetPrefs, t, toast, toastMsg, refreshUser],
-  );
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
-}
+export const Ctx = createContext<AppCtx | null>(null);
 
 export function useApp(): AppCtx {
   const c = useContext(Ctx);

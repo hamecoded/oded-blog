@@ -43,6 +43,11 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   Sign-ups start as reader and request a role on `/account`. The admin approves requests
   in /admin → Role requests, or manages people directly in /admin → Users (add with a
   temporary password, edit, reset password, suspend, delete).
+- **Sign in with Google / Facebook** (also Apple, GitHub) through Supabase's built-in OAuth.
+  Buttons sit below the email form, chosen with `VITE_OAUTH_PROVIDERS` (default
+  `google,facebook`, `none` hides them). Provider keys live only in the Supabase dashboard.
+  Demo mode signs in as a made-up `<provider>.demo@example.com` account. Never tested
+  against real providers yet.
 - **No service-role key anywhere in the app.** Admin user management on Supabase goes
   through the security-definer `admin_*` SQL functions in `schema.sql`, which write
   `auth.users`.
@@ -96,6 +101,11 @@ deploying, and the custom domain oded.me.
   user-entered text `dir="auto"`, and give emails, usernames and URLs `dir="ltr"`.
 - **Styles** are all in `src/index.css`, using the color tokens defined there (`var(--accent)`
   and so on), with sections marked by `/* ───── Name ───── */` comments.
+- **Lint-clean React.** A `.tsx` file exports either components or non-components, so
+  hooks, contexts and constants get their own file (`lib/app.tsx` vs `lib/AppProvider.tsx`,
+  `components/fabActions.ts`, `components/visIcons.ts`). Don't call `setState` directly in an
+  effect. To refill a form when a sheet opens, compare the previous `open` value during
+  render (the `shownFor` pattern in `UserSheets.tsx` and `dialogs.tsx`).
 - **Error codes** like `auth/forbidden` or `user/self` are thrown by the API and turned
   into translated messages in `errorText()` (`src/lib/app.tsx`).
 - **Verify in the browser pane in demo mode.** Sign in as admin/admin and check

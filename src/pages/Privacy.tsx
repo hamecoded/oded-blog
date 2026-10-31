@@ -1,0 +1,139 @@
+import { Link } from 'react-router-dom';
+import { useApp } from '../lib/app';
+import { ADMIN_EMAIL } from '../lib/util';
+import { usePageTitle } from './usePageTitle';
+
+// Keep in step with what the app really stores (supabase/schema.sql, AppProvider.tsx, sanitize.ts, fonts.ts).
+// Google's sign-in setup links here (Google Auth Platform → Branding → privacy policy link).
+// The text is long-form, so each language is a block here rather than dictionary entries in i18n.ts.
+const UPDATED = '2026-10-31';
+
+const mail = (
+  <a href={`mailto:${ADMIN_EMAIL}`} dir="ltr">
+    {ADMIN_EMAIL}
+  </a>
+);
+
+function English() {
+  return (
+    <>
+      <p>
+        oded.me is a personal blog run by Oded. This page explains what the blog stores about you and why. Questions or
+        requests: {mail}.
+      </p>
+      <h2>Reading the blog</h2>
+      <p>
+        You can read public posts without an account. The blog has no advertising, no analytics and no tracking cookies.
+        The hosting service may keep standard server logs, such as IP addresses, to deliver the site.
+      </p>
+      <p>
+        Some parts load from other services, which see your IP address and follow their own privacy policies: fonts from
+        Google Fonts, and videos or audio embedded in posts from YouTube, Spotify, SoundCloud, Mixcloud or Archive.org.
+      </p>
+      <h2>Your account</h2>
+      <p>When you sign up, the blog stores:</p>
+      <ul>
+        <li>your email address, display name and username;</li>
+        <li>your role (for example reader or commenter) and any role you request;</li>
+        <li>when you signed up and last signed in.</li>
+      </ul>
+      <p>
+        If you sign up with email, your password is stored only in hashed form. If you sign in with Google or Facebook,
+        the blog receives your name, email address and profile picture from that service. It never receives your password
+        there, does not see your contacts, and never posts anything on your behalf.
+      </p>
+      <h2>What you add</h2>
+      <p>
+        Comments, likes and role requests are stored with your account, and so are posts and groups if you write for the
+        blog.
+      </p>
+      <h2>Who can see it</h2>
+      <p>
+        Your display name and username appear next to your comments and posts. Your email address is visible only to the
+        blog's manager. Your information is never sold or shared for marketing.
+      </p>
+      <h2>Where it is kept</h2>
+      <p>
+        Accounts, posts, comments and uploads are stored with Supabase, which provides the blog's database and sign-in.
+        Your browser keeps your display settings (language, font, theme) and your sign-in session in local storage on your
+        device.
+      </p>
+      <h2>Deleting your data</h2>
+      <p>
+        To delete your account, email {mail}. Deleting it removes your account, comments, likes and role requests. Posts
+        you wrote stay on the blog under the manager's name unless you ask for them to be removed too.
+      </p>
+      <h2>Changes</h2>
+      <p>If this page changes, the date below changes with it.</p>
+    </>
+  );
+}
+
+function Hebrew() {
+  return (
+    <>
+      <p>
+        oded.me הוא בלוג אישי שמנהל עודד. בעמוד הזה מוסבר מה הבלוג שומר עליכם ולמה. לשאלות ובקשות: {mail}.
+      </p>
+      <h2>קריאה בבלוג</h2>
+      <p>
+        אפשר לקרוא פוסטים ציבוריים בלי חשבון. אין בבלוג פרסומות, אין כלי ניתוח ואין עוגיות מעקב. שירות האחסון עשוי לשמור
+        יומני שרת רגילים, כמו כתובות IP, כדי להגיש את האתר.
+      </p>
+      <p>
+        חלקים מסוימים נטענים משירותים אחרים, שרואים את כתובת ה-IP שלכם ופועלים לפי מדיניות הפרטיות שלהם: גופנים מ-Google
+        Fonts, וסרטונים או קטעי שמע שמוטמעים בפוסטים מ-YouTube,‏ Spotify,‏ SoundCloud,‏ Mixcloud או Archive.org.
+      </p>
+      <h2>החשבון שלכם</h2>
+      <p>כשנרשמים, הבלוג שומר:</p>
+      <ul>
+        <li>כתובת אימייל, שם תצוגה ושם משתמש;</li>
+        <li>התפקיד שלכם (למשל קורא או מגיב) וכל תפקיד שביקשתם;</li>
+        <li>מתי נרשמתם ומתי התחברתם לאחרונה.</li>
+      </ul>
+      <p>
+        בהרשמה עם אימייל, הסיסמה נשמרת רק בצורה מוצפנת (hash). בכניסה עם Google או Facebook, הבלוג מקבל מהשירות את השם,
+        כתובת האימייל ותמונת הפרופיל שלכם. הוא לא מקבל את הסיסמה שלכם שם, לא רואה את אנשי הקשר שלכם ואף פעם לא מפרסם דבר
+        בשמכם.
+      </p>
+      <h2>מה שאתם מוסיפים</h2>
+      <p>תגובות, לייקים ובקשות תפקיד נשמרים עם החשבון שלכם, וכך גם פוסטים וקבוצות אם אתם כותבים בבלוג.</p>
+      <h2>מי רואה מה</h2>
+      <p>
+        שם התצוגה ושם המשתמש שלכם מופיעים ליד התגובות והפוסטים שלכם. כתובת האימייל גלויה רק למנהל הבלוג. המידע שלכם לא
+        נמכר ולא מועבר לשיווק.
+      </p>
+      <h2>איפה המידע נשמר</h2>
+      <p>
+        חשבונות, פוסטים, תגובות וקבצים שהועלו נשמרים ב-Supabase, שמספק לבלוג את מסד הנתונים ואת מערכת הכניסה. הדפדפן שלכם
+        שומר במכשיר את הגדרות התצוגה (שפה, גופן, ערכת צבעים) ואת חיבור הכניסה שלכם.
+      </p>
+      <h2>מחיקת המידע</h2>
+      <p>
+        כדי למחוק את החשבון, כתבו אל {mail}. המחיקה מסירה את החשבון, התגובות, הלייקים ובקשות התפקיד. פוסטים שכתבתם נשארים
+        בבלוג בשם המנהל, אלא אם תבקשו להסיר גם אותם.
+      </p>
+      <h2>שינויים</h2>
+      <p>אם העמוד הזה ישתנה, התאריך למטה ישתנה איתו.</p>
+    </>
+  );
+}
+
+/** /privacy — what the blog stores. Shown in the interface language. */
+export function PrivacyPage() {
+  const { t, prefs } = useApp();
+  usePageTitle(t('privacy'));
+  const he = prefs.uiLang === 'he';
+  return (
+    <article className="privacy prose" dir={he ? 'rtl' : 'ltr'} lang={prefs.uiLang}>
+      <h1>{t('privacy')}</h1>
+      {he ? <Hebrew /> : <English />}
+      <p className="muted">
+        {t('lastUpdated')} <time dateTime={UPDATED}>{UPDATED}</time>
+      </p>
+      <p>
+        <Link to="/">{t('backHome')}</Link>
+      </p>
+    </article>
+  );
+}

@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Api, Comment, Group, Post, PostDraft, Profile, RoleRequest } from '../types';
-import { htmlToText, loginEmail, makeExcerpt, RESERVED_SLUGS, slugify, USERNAME_RE } from '../util';
+import type { Api, Comment, Group, OAuthProvider, Post, PostDraft, Profile, RoleRequest } from '../types';
+import { htmlToText, loginEmail, makeExcerpt, OAUTH_PROVIDERS, RESERVED_SLUGS, slugify, USERNAME_RE } from '../util';
 import { sanitizeHtml } from '../sanitize';
 
 const POST_SELECT = '*, author:profiles!posts_author_id_fkey(display_name, username)';
@@ -21,6 +21,7 @@ export function createSupabaseApi(url: string, key: string): Api {
   });
 
   let profileCache: Profile | null = null;
+  let providersPromise: Promise<OAuthProvider[]> | null = null;
 
   async function loadProfile(userId: string | undefined): Promise<Profile | null> {
     if (!userId) return (profileCache = null);
@@ -70,6 +71,26 @@ export function createSupabaseApi(url: string, key: string): Api {
     async signIn(email, password) {
       const res = await sb.auth.signInWithPassword({ email: loginEmail(email), password });
       if (res.error) throw new Error(/banned/i.test(res.error.message) ? 'auth/suspended' : 'auth/invalid');
+    },
+
+    oauthProviders() {
+      // A provider that isn't switched on in Supabase sends people to a raw JSON error page, so only show
+      // buttons for those its public settings report as enabled. Checked once per page load.
+      providersPromise ??= fetch(`${url.replace(/\/$/, '')}/auth/v1/settings`, { headers: { apikey: key } })
+        .then((r) => (r.ok ? r.json() : { external: {} }))
+        .then((s: { external?: Record<string, boolean> }) => OAUTH_PROVIDERS.filter((p) => s.external?.[p]))
+        .catch(() => []);
+      return providersPromise;
+    },
+
+    async signInWithOAuth(provider, returnTo) {
+      // Back to the page the visitor came from. Supabase only honours redirect URLs on its allow list
+      // (Authentication → URL Configuration); anything else falls back to the Site URL, which is fine too.
+      const res = await sb.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: `${location.origin}${import.meta.env.BASE_URL}${returnTo.replace(/^\//, '')}` },
+      });
+      if (res.error) throw new Error(res.error.message);
     },
 
     async signOut() {

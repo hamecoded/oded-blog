@@ -262,6 +262,7 @@ function buildEnv(env, state) {
     VITE_SUPABASE_URL: env.VITE_SUPABASE_URL ?? '',
     VITE_SUPABASE_ANON_KEY: env.VITE_SUPABASE_ANON_KEY ?? '',
     VITE_GOOGLE_CLIENT_ID: env.VITE_GOOGLE_CLIENT_ID ?? '',
+    VITE_OAUTH_PROVIDERS: env.VITE_OAUTH_PROVIDERS ?? '',
     VITE_ADMIN_EMAIL: env.VITE_ADMIN_EMAIL ?? '',
     VITE_BASE: state.base ?? '/',
   };
@@ -450,6 +451,7 @@ function saveEnv(env) {
     VITE_SUPABASE_URL: env.VITE_SUPABASE_URL,
     VITE_SUPABASE_ANON_KEY: env.VITE_SUPABASE_ANON_KEY,
     VITE_GOOGLE_CLIENT_ID: env.VITE_GOOGLE_CLIENT_ID,
+    VITE_OAUTH_PROVIDERS: env.VITE_OAUTH_PROVIDERS,
     VITE_ADMIN_EMAIL: env.VITE_ADMIN_EMAIL,
   });
   ok('Saved .env (git-ignored; holds only public values)');
@@ -579,11 +581,20 @@ async function authSettings(env, state) {
   const ref = projectRef(env.VITE_SUPABASE_URL);
   say(`Authentication → URL Configuration:`);
   say(`   Site URL:       ${bold(state.siteUrl)}`);
-  say(`   Redirect URLs:  ${bold(state.siteUrl)}  and  ${bold('http://localhost:5173')}`);
+  say(`   Redirect URLs:  ${bold(`${state.siteUrl.replace(/\/$/, '')}/**`)}  and  ${bold('http://localhost:5173/**')}`);
+  say('   (/** lets Google/Facebook sign-ins return to the page the visitor was on.)');
   say('Authentication → Sign In / Providers → Email: decide on "Confirm email". The built-in mailer sends only a');
   say('few emails an hour — connect your own SMTP, or turn confirmation off for a small private blog.');
   if (await confirm('Open the URL Configuration page now?', true)) openUrl(`https://supabase.com/dashboard/project/${ref}/auth/url-configuration`);
   await ask('Press Enter when the URLs are saved');
+  const providers = (env.VITE_OAUTH_PROVIDERS || 'google,facebook').toLowerCase();
+  if (providers !== 'none') {
+    say(`Sign-in buttons on the site: ${bold(providers)}. Each needs its own app (README §8.1 step 5) whose`);
+    say(`client ID and secret go in Authentication → Sign In / Providers. Callback URL for all of them:`);
+    say(`   ${bold(`${env.VITE_SUPABASE_URL.replace(/\/$/, '')}/auth/v1/callback`)}`);
+    say('Until a provider is set up there, its button shows an error. Set VITE_OAUTH_PROVIDERS=none to hide them.');
+    if (await confirm('Open the Providers page now?', true)) openUrl(`https://supabase.com/dashboard/project/${ref}/auth/providers`);
+  }
 }
 
 // ── deploy, per host ──
@@ -679,6 +690,7 @@ async function deployGitHub(env, state) {
   for (const k of ['VITE_SUPABASE_URL', 'VITE_SUPABASE_ANON_KEY', 'VITE_GOOGLE_CLIENT_ID']) {
     if (env[k]) run('gh', ['secret', 'set', k, '--repo', full], { input: env[k] });
   }
+  if (env.VITE_OAUTH_PROVIDERS) run('gh', ['variable', 'set', 'VITE_OAUTH_PROVIDERS', '--repo', full, '--body', env.VITE_OAUTH_PROVIDERS]);
   if (env.VITE_ADMIN_EMAIL) run('gh', ['variable', 'set', 'VITE_ADMIN_EMAIL', '--repo', full, '--body', env.VITE_ADMIN_EMAIL]);
   if (state.domain) run('gh', ['variable', 'set', 'VITE_BASE', '--repo', full, '--body', '/']);
   run('gh', ['variable', 'set', 'SITE_URL', '--repo', full, '--body', state.siteUrl]);

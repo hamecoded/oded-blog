@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Copy, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
@@ -42,14 +42,18 @@ export function UserSheet({ open, user, onClose, onSaved }: { open: boolean; use
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    setEmail(user?.email ?? '');
-    setName(user?.display_name ?? '');
-    setUsername(user?.username ?? '');
-    setRole(user?.role ?? 'reader');
-    setPassword(tempPassword());
-  }, [open, user]);
+  // Refill the form each time the sheet opens (adjusted during render, not in an effect).
+  const [shownFor, setShownFor] = useState<{ open: boolean; user: Profile | null }>({ open: false, user: null });
+  if (shownFor.open !== open || shownFor.user !== user) {
+    setShownFor({ open, user });
+    if (open) {
+      setEmail(user?.email ?? '');
+      setName(user?.display_name ?? '');
+      setUsername(user?.username ?? '');
+      setRole(user?.role ?? 'reader');
+      setPassword(tempPassword());
+    }
+  }
 
   const usernameOk = !user || USERNAME_RE.test(username.trim().toLowerCase());
 
@@ -132,9 +136,12 @@ export function PasswordSheet({ user, onClose, onSaved }: { user: Profile | null
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
+  // A fresh temporary password for each person (adjusted during render, not in an effect).
+  const [shownFor, setShownFor] = useState<Profile | null>(null);
+  if (shownFor !== user) {
+    setShownFor(user);
     if (user) setPassword(tempPassword());
-  }, [user]);
+  }
 
   return (
     <Sheet open={!!user} onClose={onClose} title={`${t('resetPassword')} · ${user?.display_name ?? ''}`}>

@@ -1,4 +1,4 @@
-import type { Post, Profile, Role } from './types';
+import type { OAuthProvider, Post, Profile, Role } from './types';
 
 /** Role capabilities. Keep in sync with the RLS policies in supabase/schema.sql. */
 export const can = {
@@ -106,6 +106,23 @@ export function titleDir(title: string, fallback: 'he' | 'en' = 'he'): 'rtl' | '
   if (!title.trim()) return fallback === 'he' ? 'rtl' : 'ltr';
   return hasHebrew(title) ? 'rtl' : 'ltr';
 }
+
+export const OAUTH_LABELS: Record<OAuthProvider, string> = {
+  google: 'Google',
+  facebook: 'Facebook',
+  apple: 'Apple',
+  github: 'GitHub',
+};
+
+/** VITE_OAUTH_PROVIDERS: comma-separated, in display order. Unset → Google and Facebook; "none" → email only. */
+export const OAUTH_PROVIDERS: OAuthProvider[] = (() => {
+  const raw = (import.meta.env.VITE_OAUTH_PROVIDERS as string | undefined)?.trim();
+  if (!raw) return ['google', 'facebook'];
+  return raw
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .filter((p): p is OAuthProvider => p in OAUTH_LABELS);
+})();
 
 export function uid(): string {
   return crypto.randomUUID();

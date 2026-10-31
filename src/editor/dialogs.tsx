@@ -24,7 +24,10 @@ export function MediaDialog({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
+  // Start empty each time the dialog opens (adjusted during render, not in an effect).
+  const [wasOpen, setWasOpen] = useState(false);
+  if (wasOpen !== open) {
+    setWasOpen(open);
     if (open) {
       setUrl('');
       setAlt('');
@@ -32,7 +35,7 @@ export function MediaDialog({
       setFile(null);
       setErr('');
     }
-  }, [open]);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -121,9 +124,11 @@ export function LinkDialog({
 }) {
   const { t } = useApp();
   const [href, setHref] = useState(initial);
-  useEffect(() => {
+  const [shownFor, setShownFor] = useState<{ open: boolean; initial: string }>({ open: false, initial });
+  if (shownFor.open !== open || shownFor.initial !== initial) {
+    setShownFor({ open, initial });
     if (open) setHref(initial);
-  }, [open, initial]);
+  }
   return (
     <Sheet open={open} onClose={onClose} title={t('ed_link')}>
       <form
@@ -184,12 +189,14 @@ export function MathDialog({
   const preview = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  const [shownFor, setShownFor] = useState({ open: false, initial });
+  if (shownFor.open !== open || shownFor.initial !== initial) {
+    setShownFor({ open, initial });
     if (open) {
       setLatex(initial.latex);
       setDisplay(initial.display);
     }
-  }, [open, initial]);
+  }
 
   useEffect(() => {
     if (preview.current) renderMath(preview.current, latex || '\\;', true);
@@ -271,12 +278,14 @@ export function CaptionDialog({
   const { t } = useApp();
   const [caption, setCaption] = useState(initial.caption);
   const [alt, setAlt] = useState(initial.alt);
-  useEffect(() => {
+  const [shownFor, setShownFor] = useState({ open: false, initial });
+  if (shownFor.open !== open || shownFor.initial !== initial) {
+    setShownFor({ open, initial });
     if (open) {
       setCaption(initial.caption);
       setAlt(initial.alt);
     }
-  }, [open, initial]);
+  }
   return (
     <Sheet open={open} onClose={onClose} title={t('ed_caption')}>
       <form

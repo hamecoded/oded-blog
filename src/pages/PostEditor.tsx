@@ -6,7 +6,8 @@ import { errorText, useApp } from '../lib/app';
 import type { Lang, Post, PostDraft, PostStatus } from '../lib/types';
 import { can, hasHebrew, postPath, titleDir } from '../lib/util';
 import { RichEditor } from '../editor/RichEditor';
-import { AudienceSheet, VIS_ICON } from '../components/Audience';
+import { AudienceSheet } from '../components/Audience';
+import { VIS_ICON } from '../components/visIcons';
 import { NotFound } from './NotFound';
 import { usePageTitle } from './usePageTitle';
 
