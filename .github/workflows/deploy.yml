@@ -11,6 +11,9 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Hourly rebuild so newly published posts get their social-preview page (scripts/prerender.mjs).
+  schedule:
+    - cron: '23 * * * *'
 
 permissions:
   contents: read
@@ -39,6 +42,8 @@ jobs:
           VITE_ADMIN_EMAIL: ${{ vars.VITE_ADMIN_EMAIL }}
           # user.github.io repos and custom domains serve from "/", project sites from "/<repo>/".
           # Override with a repository variable VITE_BASE if you use a custom domain.
+          # Address used in social-preview tags (scripts/prerender.mjs).
+          SITE_URL: ${{ vars.SITE_URL }}
           VITE_BASE: ${{ vars.VITE_BASE || (endsWith(github.event.repository.name, '.github.io') && '/' || format('/{0}/', github.event.repository.name)) }}
         run: npm run build
       - uses: actions/upload-pages-artifact@v5

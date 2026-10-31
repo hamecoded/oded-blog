@@ -3,7 +3,7 @@ import { Clock } from 'lucide-react';
 import { VIS_ICON } from './Audience';
 import { useApp } from '../lib/app';
 import type { Post } from '../lib/types';
-import { formatDate, postPath, readingMinutes, tagPath } from '../lib/util';
+import { formatDate, postPath, readingMinutes, tagPath, titleDir } from '../lib/util';
 
 export function TagChips({ tags, active }: { tags: string[]; active?: string[] }) {
   if (!tags.length) return null;
@@ -23,8 +23,10 @@ export function PostMeta({ post }: { post: Post }) {
   const { t, prefs } = useApp();
   const pub = post.published_at ?? post.created_at;
   const edited = new Date(post.updated_at).getTime() - new Date(pub).getTime() > 60_000;
+  // Its words ("by", "published", dates) are in the interface language, so the row follows that language,
+  // not the post's: Hebrew interface → right-aligned, even on an English post.
   return (
-    <div className="post-meta">
+    <div className="post-meta" dir={prefs.uiLang === 'he' ? 'rtl' : 'ltr'} lang={prefs.uiLang}>
       {post.author && (
         <Link to={`/authors/${encodeURIComponent(post.author.username)}`} className="author">
           <span className="avatar" aria-hidden>
@@ -32,7 +34,8 @@ export function PostMeta({ post }: { post: Post }) {
           </span>
           <span>
             <span className="muted">{t('by')} </span>
-            {post.author.display_name}
+            {/* bdi: a name in the other script doesn't jumble the row's order */}
+            <bdi>{post.author.display_name}</bdi>
           </span>
         </Link>
       )}
@@ -78,7 +81,7 @@ export function PostCard({ post, compact }: { post: Post; compact?: boolean }) {
         </Link>
       )}
       <div className="card-body">
-        <h2>
+        <h2 dir={titleDir(post.title, post.lang)}>
           <Link to={postPath(post.slug)}>{post.title}</Link>
         </h2>
         <PostMeta post={post} />

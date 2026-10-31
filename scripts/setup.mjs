@@ -681,6 +681,7 @@ async function deployGitHub(env, state) {
   }
   if (env.VITE_ADMIN_EMAIL) run('gh', ['variable', 'set', 'VITE_ADMIN_EMAIL', '--repo', full, '--body', env.VITE_ADMIN_EMAIL]);
   if (state.domain) run('gh', ['variable', 'set', 'VITE_BASE', '--repo', full, '--body', '/']);
+  run('gh', ['variable', 'set', 'SITE_URL', '--repo', full, '--body', state.siteUrl]);
 
   // Pages can only be switched on once the repo has a branch, so try before and, if needed, after the push.
   const enablePages = () => {

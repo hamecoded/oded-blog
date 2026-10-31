@@ -7,7 +7,7 @@ import { downloadJsonBackup } from '../lib/export';
 import type { Group, Post, Profile, Role, RoleRequest } from '../lib/types';
 import { GroupSheet, VIS_ICON } from '../components/Audience';
 import { PasswordSheet, UserSheet } from '../components/UserSheets';
-import { can, formatDate, normalizeSearch, postPath, ROLES } from '../lib/util';
+import { can, formatDate, normalizeSearch, postPath, ROLES, titleDir } from '../lib/util';
 import { usePageTitle } from './usePageTitle';
 
 /** /admin — posts (incl. drafts) for writers and reviewers, users & roles for the manager. */
@@ -160,7 +160,7 @@ export function AdminPage() {
           {posts?.map((p) => (
             <li key={p.id}>
               <Link to={postPath(p.slug)} dir="auto" className="grow">
-                <strong>{p.title}</strong>
+                <strong dir={titleDir(p.title, p.lang)}>{p.title}</strong>
                 <small className="muted">
                   {p.author?.display_name} · {formatDate(p.updated_at, prefs.uiLang)}
                 </small>

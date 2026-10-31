@@ -33,3 +33,7 @@ oded-blog-transfer.zip
 
 # Private notes with passwords and keys
 credentials.md
+
+# Backup copies made while editing
+*.bak
+*.bak[0-9]

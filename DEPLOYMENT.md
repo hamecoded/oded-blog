@@ -282,6 +282,24 @@ while `migrate:media` runs. Recordings that went to YouTube are unaffected.
 
 ---
 
+### 5.6 Sharing on social networks
+
+Facebook, WhatsApp, LinkedIn and X don't run JavaScript, so they read only the page's HTML. After
+`vite build`, `scripts/prerender.mjs` writes `dist/posts/<slug>.html` for every **published, public**
+post, with that post's title, summary, image and address in Open Graph and Twitter tags. People who open
+the link get the normal app. The preview image is the post's cover, else its first image, else its
+YouTube thumbnail, else `public/og-default.png`.
+
+- **New posts:** the GitHub workflow rebuilds every hour, so a new post's preview appears within an
+  hour. To get it at once: `gh workflow run deploy.yml` or `npm run deploy`. Netlify, Cloudflare and
+  Vercel deploys need `npm run deploy` after publishing.
+- **Facebook caches previews.** If a link was shared before its page existed, open the
+  [Sharing Debugger](https://developers.facebook.com/tools/debug/), paste the post's address and click
+  **Scrape Again**.
+- **Private and restricted posts** get no preview page; they share as the generic site card.
+- The site address comes from `SITE_URL` (the workflow sets it from a repository variable) or
+  `.deploy.json`.
+
 ## 6. Backups and restore
 
 | What | How | Restores |

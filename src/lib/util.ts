@@ -97,6 +97,15 @@ export function hasHebrew(s: string): boolean {
   return /[֐-׿]/.test(s);
 }
 
+/**
+ * Direction for a post title, from its own text: any Hebrew → right-to-left. Unlike dir="auto" (first strong
+ * character only), "React בעברית" or "2026 — סיכום" still align right. Empty → `fallback` (the post language).
+ */
+export function titleDir(title: string, fallback: 'he' | 'en' = 'he'): 'rtl' | 'ltr' {
+  if (!title.trim()) return fallback === 'he' ? 'rtl' : 'ltr';
+  return hasHebrew(title) ? 'rtl' : 'ltr';
+}
+
 export function uid(): string {
   return crypto.randomUUID();
 }

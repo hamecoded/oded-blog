@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, ImagePlus, Trash2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import type { Lang, Post, PostDraft, PostStatus } from '../lib/types';
-import { can, hasHebrew, postPath } from '../lib/util';
+import { can, hasHebrew, postPath, titleDir } from '../lib/util';
 import { RichEditor } from '../editor/RichEditor';
 import { AudienceSheet, VIS_ICON } from '../components/Audience';
 import { NotFound } from './NotFound';
@@ -192,7 +192,8 @@ export function PostEditor() {
         <textarea
           className="title-input"
           rows={1}
-          dir="auto"
+          // Re-evaluated on every keystroke, so the field flips to the right as soon as Hebrew is typed.
+          dir={titleDir(draft.title, draft.lang)}
           placeholder={t('titlePlaceholder')}
           value={draft.title}
           onChange={(e) => {

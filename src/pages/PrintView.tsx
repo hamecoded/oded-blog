@@ -4,7 +4,7 @@ import { Printer, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { Post } from '../lib/types';
-import { can, formatDate } from '../lib/util';
+import { can, formatDate, titleDir } from '../lib/util';
 import { PostContent } from '../components/PostContent';
 import { TagChips } from '../components/PostBits';
 import { NotFound } from './NotFound';
@@ -80,9 +80,9 @@ export function PrintView() {
       {posts.map((p) => (
         <article key={p.id} className="post print-post" dir={p.lang === 'he' ? 'rtl' : 'ltr'} lang={p.lang}>
           {p.cover_url && <img className="post-cover" src={p.cover_url} alt="" />}
-          <h1>{p.title}</h1>
-          <p className="muted print-meta">
-            {p.author?.display_name} · {t('published')} {formatDate(p.published_at ?? p.created_at, prefs.uiLang)}
+          <h1 dir={titleDir(p.title, p.lang)}>{p.title}</h1>
+          <p className="muted print-meta" dir={prefs.uiLang === 'he' ? 'rtl' : 'ltr'} lang={prefs.uiLang}>
+            <bdi>{p.author?.display_name}</bdi> · {t('published')} {formatDate(p.published_at ?? p.created_at, prefs.uiLang)}
             {p.updated_at !== p.published_at && ` · ${t('updated')} ${formatDate(p.updated_at, prefs.uiLang)}`}
           </p>
           <TagChips tags={p.tags} />

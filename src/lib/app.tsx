@@ -22,7 +22,7 @@ const DEFAULT_PREFS: Prefs = {
   uiLang: 'he',
   font: DEFAULT_FONT,
   fontSize: 18,
-  lineHeight: 1.75,
+  lineHeight: 1.3,
   theme: 'dark',
 };
 

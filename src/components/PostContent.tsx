@@ -3,6 +3,7 @@ import { renderMath } from '../lib/math';
 import { highlight, locate } from '../lib/anchor';
 import { ensureFonts, fontsInHtml } from '../lib/fonts';
 import { sanitizeHtml } from '../lib/sanitize';
+import { useApp } from '../lib/app';
 import type { Comment } from '../lib/types';
 
 /**
@@ -22,6 +23,7 @@ export const PostContent = forwardRef<
   }
 >(function PostContent({ html, lang, comments = [], showResolved, activeComment, onHighlightClick, onOrphans }, fwd) {
   const ref = useRef<HTMLDivElement>(null);
+  const { t } = useApp();
   useImperativeHandle(fwd, () => ref.current!);
 
   useEffect(() => {
@@ -33,6 +35,20 @@ export const PostContent = forwardRef<
       renderMath(m, m.dataset.latex ?? '', m.dataset.display === 'true'),
     );
     el.querySelectorAll('img').forEach((img) => img.setAttribute('decoding', 'async'));
+    // "Watch on YouTube" under each YouTube embed: private videos play only on youtube.com, for the owner.
+    // The label is CSS-generated (data-label), so it adds no text and comment anchors stay where they were.
+    el.querySelectorAll<HTMLIFrameElement>('figure[data-type="video"] iframe').forEach((f) => {
+      const id = f.src.match(/^https:\/\/www\.youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})/)?.[1];
+      if (!id) return;
+      const a = document.createElement('a');
+      a.className = 'yt-watch';
+      a.href = `https://www.youtube.com/watch?v=${id}`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.dataset.label = t('watchOnYoutube');
+      a.setAttribute('aria-label', t('watchOnYoutube'));
+      (f.closest('.embed') ?? f).after(a);
+    });
 
     const orphans = new Set<string>();
     const roots = comments.filter((c) => !c.parent_id && c.quote && (showResolved || !c.resolved));
@@ -47,7 +63,7 @@ export const PostContent = forwardRef<
     spans.forEach(({ c, at }) => highlight(el, at![0], at![1], c.id, c.resolved));
     onOrphans?.(orphans);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [html, comments, showResolved]);
+  }, [html, comments, showResolved, t]);
 
   useEffect(() => {
     const el = ref.current;

@@ -6,7 +6,7 @@ import { errorText, useApp } from '../lib/app';
 import { anchorFromRange, type TextAnchor } from '../lib/anchor';
 import { downloadPostHtml, downloadPostMarkdown } from '../lib/export';
 import type { Comment, Post } from '../lib/types';
-import { can, postPath } from '../lib/util';
+import { can, postPath, titleDir } from '../lib/util';
 import { PostContent } from '../components/PostContent';
 import { PostMeta, TagChips } from '../components/PostBits';
 import { LikeButton, ShareSheet } from '../components/Social';
@@ -95,7 +95,7 @@ export function PostView() {
       <article className="post" dir={dir} lang={post.lang}>
         {post.cover_url && <img className="post-cover" src={post.cover_url} alt="" />}
         <header className="post-header">
-          <h1>{post.title}</h1>
+          <h1 dir={titleDir(post.title, post.lang)}>{post.title}</h1>
           <PostMeta post={post} />
           <TagChips tags={post.tags} />
         </header>
