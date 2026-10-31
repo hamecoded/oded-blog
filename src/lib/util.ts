@@ -29,6 +29,7 @@ export function canViewPost(
   const vis = post.visibility ?? 'public';
   if (vis === 'public') return true;
   if (vis === 'private' || !user) return false;
+  if (vis === 'members') return true;
   return (post.allowed_users ?? []).includes(user.id) || (post.allowed_groups ?? []).some((g) => groupsOf.includes(g));
 }
 

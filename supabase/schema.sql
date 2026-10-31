@@ -102,12 +102,12 @@ create table if not exists public.posts (
   constraint posts_author_id_fkey foreign key (author_id) references public.profiles (id) on delete restrict
 );
 
--- Audience: public | private (author + admin) | restricted (allowed_users + members of allowed_groups)
+-- Audience: public | members (any signed-in user) | private (author + admin) | restricted (allowed_users + members of allowed_groups)
 alter table public.posts add column if not exists visibility text not null default 'public';
 alter table public.posts add column if not exists allowed_users uuid[] not null default '{}';
 alter table public.posts add column if not exists allowed_groups uuid[] not null default '{}';
 alter table public.posts drop constraint if exists posts_visibility_check;
-alter table public.posts add constraint posts_visibility_check check (visibility in ('public', 'private', 'restricted'));
+alter table public.posts add constraint posts_visibility_check check (visibility in ('public', 'members', 'private', 'restricted'));
 
 create index if not exists posts_tags_idx on public.posts using gin (tags);
 create index if not exists posts_published_idx on public.posts (published_at desc);
@@ -158,6 +158,7 @@ returns boolean language sql stable security definer set search_path = public as
         (p.status = 'published' or coalesce(public.current_role_name() in ('editor', 'reviewer'), false))
         and (
           p.visibility = 'public'
+          or (p.visibility = 'members' and auth.uid() is not null)
           or (p.visibility = 'restricted' and auth.uid() is not null and (
                 auth.uid() = any (p.allowed_users)
                 or exists (select 1 from public.group_members gm

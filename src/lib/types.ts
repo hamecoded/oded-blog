@@ -1,8 +1,8 @@
 export type Role = 'admin' | 'editor' | 'reviewer' | 'commenter' | 'reader';
 export type Lang = 'he' | 'en';
 export type PostStatus = 'draft' | 'published';
-/** public: everyone · private: author + admin · restricted: chosen people and groups. */
-export type Visibility = 'public' | 'private' | 'restricted';
+/** public: everyone · members: any signed-in user · private: author + admin · restricted: chosen people and groups. */
+export type Visibility = 'public' | 'members' | 'private' | 'restricted';
 
 export interface Group {
   id: string;

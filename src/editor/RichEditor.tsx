@@ -53,25 +53,49 @@ type Dialog = 'image' | 'video' | 'audio' | 'link' | 'math' | 'caption' | null;
 
 const SIZES = [14, 16, 18, 20, 24, 28, 32, 40];
 
-/** Keeps the floating bar above the iOS on-screen keyboard. */
-function useKeyboardInset() {
+/**
+ * While writing, the bar floats just below the app's header and the editor's top row
+ * (both sticky). This keeps --bar-top at the lower edge of whichever of them is lower.
+ */
+const BARS_ABOVE = ['.site-header', '.editor-top'];
+function useBarTop() {
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
+    const els = BARS_ABOVE.map((s) => document.querySelector(s)).filter((el): el is Element => !!el);
+    let frame = 0;
     const update = () => {
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      document.documentElement.style.setProperty('--kb-inset', `${inset}px`);
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const bottom = Math.max(0, ...els.map((el) => el.getBoundingClientRect().bottom));
+        document.documentElement.style.setProperty('--bar-top', `${Math.round(bottom)}px`);
+      });
     };
     update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
+    const ro = new ResizeObserver(update);
+    els.forEach((el) => ro.observe(el));
+    const vv = window.visualViewport;
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    vv?.addEventListener('resize', update);
+    vv?.addEventListener('scroll', update);
     return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
-      document.documentElement.style.setProperty('--kb-inset', '0px');
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      vv?.removeEventListener('resize', update);
+      vv?.removeEventListener('scroll', update);
+      document.documentElement.style.setProperty('--bar-top', '0px');
     };
   }, []);
 }
+
+/** Keep the caret clear of the floating bar (and its open panel) when the editor scrolls to it. */
+const SCROLL_ROOM = { top: 130, bottom: 40, left: 0, right: 0 };
+const editorProps = (lang: 'he' | 'en') => ({
+  attributes: { class: 'prose editor-surface', lang, dir: lang === 'he' ? 'rtl' : 'ltr' },
+  scrollThreshold: SCROLL_ROOM,
+  scrollMargin: SCROLL_ROOM,
+});
 
 export function RichEditor({
   initialHtml,
@@ -90,7 +114,8 @@ export function RichEditor({
   const [panel, setPanel] = useState<Panel>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [recording, setRecording] = useState<RecordKind | null>(null);
-  useKeyboardInset();
+  const [writing, setWriting] = useState(false);
+  useBarTop();
 
   const editor = useEditor({
     extensions: [
@@ -112,7 +137,9 @@ export function RichEditor({
     textDirection: 'auto',
     content: initialHtml,
     shouldRerenderOnTransaction: true,
-    editorProps: { attributes: { class: 'prose editor-surface', lang, dir: lang === 'he' ? 'rtl' : 'ltr' } },
+    editorProps: editorProps(lang),
+    onFocus: () => setWriting(true),
+    onBlur: () => setWriting(false),
     onUpdate: ({ editor: ed }) => onChange(ed.getHTML()),
   });
 
@@ -121,7 +148,7 @@ export function RichEditor({
   }, []);
 
   useEffect(() => {
-    editor?.setOptions({ editorProps: { attributes: { class: 'prose editor-surface', lang, dir: lang === 'he' ? 'rtl' : 'ltr' } } });
+    editor?.setOptions({ editorProps: editorProps(lang) });
   }, [editor, lang]);
 
   const selected = editor && editor.state.selection instanceof NodeSelection ? editor.state.selection.node : null;
@@ -184,145 +211,147 @@ export function RichEditor({
 
   return (
     <div className="rich-editor">
-      <EditorContent editor={editor} />
-
-      <div className="cmdbar-wrap" onMouseDown={(e) => e.preventDefault()}>
-        {panel && (
-          <div className="cmd-panel" role="toolbar">
-            {panel === 'text' && (
-              <>
-                <Btn icon={<Bold />} label={t('ed_bold')} active={editor.isActive('bold')} onClick={() => chain().toggleBold().run()} />
-                <Btn icon={<Italic />} label={t('ed_italic')} active={editor.isActive('italic')} onClick={() => chain().toggleItalic().run()} />
-                <Btn icon={<Underline />} label={t('ed_underline')} active={editor.isActive('underline')} onClick={() => chain().toggleUnderline().run()} />
-                <Btn icon={<Strikethrough />} label={t('ed_strike')} active={editor.isActive('strike')} onClick={() => chain().toggleStrike().run()} />
-                <Btn icon={<Highlighter />} label={t('ed_highlight')} active={editor.isActive('highlight')} onClick={() => chain().toggleHighlight().run()} />
-                <Btn icon={<Code />} label={t('ed_code')} active={editor.isActive('code')} onClick={() => chain().toggleCode().run()} />
-                <Btn icon={<Link2 />} label={t('ed_link')} active={editor.isActive('link')} onClick={() => setDialog('link')} />
-                <Btn icon={<RemoveFormatting />} label={t('ed_clear')} onClick={() => chain().unsetAllMarks().run()} />
-              </>
-            )}
-            {panel === 'para' && (
-              <>
-                <Btn icon={<Pilcrow />} label={t('ed_p')} active={editor.isActive('paragraph')} onClick={() => chain().setParagraph().run()} />
-                <Btn icon={<Heading2 />} label={t('ed_h2')} active={editor.isActive('heading', { level: 2 })} onClick={() => chain().toggleHeading({ level: 2 }).run()} />
-                <Btn icon={<Heading3 />} label={t('ed_h3')} active={editor.isActive('heading', { level: 3 })} onClick={() => chain().toggleHeading({ level: 3 }).run()} />
-                <Btn icon={<List />} label={t('ed_bullet')} active={editor.isActive('bulletList')} onClick={() => chain().toggleBulletList().run()} />
-                <Btn icon={<ListOrdered />} label={t('ed_ordered')} active={editor.isActive('orderedList')} onClick={() => chain().toggleOrderedList().run()} />
-                <Btn icon={<Quote />} label={t('ed_quote')} active={editor.isActive('blockquote')} onClick={() => chain().toggleBlockquote().run()} />
-                <Btn icon={<Minus />} label={t('ed_hr')} onClick={() => chain().setHorizontalRule().run()} />
-              </>
-            )}
-            {panel === 'align' && (
-              <>
-                <Btn icon={<AlignRight />} label={t('ed_right')} active={editor.isActive({ textAlign: 'right' })} onClick={() => chain().setTextAlign('right').run()} />
-                <Btn icon={<AlignCenter />} label={t('ed_center')} active={editor.isActive({ textAlign: 'center' })} onClick={() => chain().setTextAlign('center').run()} />
-                <Btn icon={<AlignLeft />} label={t('ed_left')} active={editor.isActive({ textAlign: 'left' })} onClick={() => chain().setTextAlign('left').run()} />
-                <Btn icon={<AlignJustify />} label={t('ed_justify')} active={editor.isActive({ textAlign: 'justify' })} onClick={() => chain().setTextAlign('justify').run()} />
-                <span className="sep" />
-                <Btn icon={<span className="txt-ico">‏א←</span>} label={t('ed_rtl')} onClick={() => chain().setTextDirection('rtl').run()} />
-                <Btn icon={<span className="txt-ico">A→</span>} label={t('ed_ltr')} onClick={() => chain().setTextDirection('ltr').run()} />
-                <Btn icon={<ArrowLeftRight />} label={t('ed_auto')} onClick={() => chain().setTextDirection('auto').run()} />
-              </>
-            )}
-            {panel === 'font' && (
-              <div className="font-panel">
-                <div className="chips scroll">
-                  <button type="button" className={`chip${!curFont ? ' on' : ''}`} onClick={() => chain().unsetFontFamily().run()}>
-                    {t('ed_default')}
-                  </button>
-                  {FONTS.map((f) => (
-                    <button
-                      type="button"
-                      key={f.family}
-                      className={`chip${curFont === f.family ? ' on' : ''}`}
-                      style={{ fontFamily: `'${f.family}'` }}
-                      onClick={() => chain().setFontFamily(`'${f.family}'`).run()}
-                    >
-                      {f.label.he}
-                    </button>
-                  ))}
-                </div>
-                <div className="chips scroll">
-                  <span className="chip-label">{t('ed_size')}</span>
-                  <button type="button" className={`chip${!curSize ? ' on' : ''}`} onClick={() => chain().unsetFontSize().run()}>
-                    {t('ed_default')}
-                  </button>
-                  {SIZES.map((s) => (
-                    <button type="button" key={s} className={`chip${curSize === `${s}px` ? ' on' : ''}`} onClick={() => chain().setFontSize(`${s}px`).run()}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {panel === 'insert' && (
-              <>
-                <Btn icon={<ImageIcon />} label={t('ed_image')} onClick={() => setDialog('image')} wide />
-                <Btn icon={<VideoIcon />} label={t('ed_video')} onClick={() => setDialog('video')} wide />
-                <Btn icon={<Music />} label={t('ed_audio')} onClick={() => setDialog('audio')} wide />
-                <Btn icon={<Clapperboard />} label={t('rec_video')} onClick={() => setRecording('video')} wide />
-                <Btn icon={<Mic />} label={t('rec_audio')} onClick={() => setRecording('audio')} wide />
-                <Btn icon={<Sigma />} label={t('ed_math')} onClick={() => setDialog('math')} wide />
-                <Btn icon={<Link2 />} label={t('ed_link')} onClick={() => setDialog('link')} wide />
-                <Btn icon={<Minus />} label={t('ed_hr')} onClick={() => chain().setHorizontalRule().run()} wide />
-              </>
-            )}
-            {panel === 'media' && mediaSelected && (
-              <div className="media-panel">
-                <div className="chips scroll" hidden={mediaSelected.type.name === 'audio'}>
-                  {MEDIA_ALIGNS.map((a) => (
-                    <button
-                      type="button"
-                      key={a}
-                      className={`chip align-chip${mediaSelected.attrs.align === a ? ' on' : ''}`}
-                      onClick={() => setMediaAttrs({ align: a })}
-                    >
-                      {alignIcon[a]}
-                      {t(alignLabel[a])}
-                    </button>
-                  ))}
-                </div>
-                <div className="chips scroll">
-                  {mediaSelected.type.name !== 'audio' && !['full', 'hero'].includes(mediaSelected.attrs.align) && (
-                    <>
-                      <span className="chip-label">{t('ed_width')}</span>
-                      {[25, 33, 50, 75, 100].map((w) => (
-                        <button type="button" key={w} className={`chip${mediaSelected.attrs.width === w ? ' on' : ''}`} onClick={() => setMediaAttrs({ width: w })}>
-                          {w}%
-                        </button>
-                      ))}
-                    </>
-                  )}
-                  <button type="button" className="chip" onClick={() => setDialog('caption')}>
-                    <Captions size={16} /> {t('ed_caption')}
-                  </button>
-                  {mediaSelected.type.name === 'figure' && (
-                    <button type="button" className="chip" onClick={() => onSetCover(mediaSelected.attrs.src)}>
-                      <ImagePlay size={16} /> {t('ed_setCover')}
-                    </button>
-                  )}
-                  <button type="button" className="chip danger" onClick={() => chain().deleteSelection().run()}>
-                    <Trash2 size={16} /> {t('ed_remove')}
-                  </button>
-                </div>
-              </div>
-            )}
+      {/* While the body has focus the bar floats just below the header; otherwise it sits above the body. */}
+      <div className="cmdbar-slot">
+        <div className={`cmdbar-wrap${writing ? ' floating' : ''}`} onMouseDown={(e) => e.preventDefault()}>
+          <div className="cmdbar" role="toolbar" aria-label={t('menu')}>
+            <Btn icon={<Undo2 />} label={t('ed_undo')} disabled={!editor.can().undo()} onClick={() => chain().undo().run()} />
+            <Btn icon={<Redo2 />} label={t('ed_redo')} disabled={!editor.can().redo()} onClick={() => chain().redo().run()} />
+            <span className="sep" />
+            <Btn icon={<Bold />} label={t('ed_text')} active={panel === 'text'} onClick={() => toggle('text')} />
+            <Btn icon={<Pilcrow />} label={t('ed_paragraph')} active={panel === 'para'} onClick={() => toggle('para')} />
+            <Btn icon={<AlignCenter />} label={t('ed_align')} active={panel === 'align'} onClick={() => toggle('align')} />
+            <Btn icon={<Type />} label={t('ed_font')} active={panel === 'font'} onClick={() => toggle('font')} />
+            {mediaSelected && <Btn icon={<ImageIcon />} label={t('ed_media')} active={panel === 'media'} onClick={() => toggle('media')} />}
+            {mathSelected && <Btn icon={<Sigma />} label={t('ed_math')} active onClick={() => setDialog('math')} />}
+            <Btn icon={<Plus />} label={t('ed_insert')} active={panel === 'insert'} onClick={() => toggle('insert')} primary />
           </div>
-        )}
-
-        <div className="cmdbar" role="toolbar" aria-label={t('menu')}>
-          <Btn icon={<Undo2 />} label={t('ed_undo')} disabled={!editor.can().undo()} onClick={() => chain().undo().run()} />
-          <Btn icon={<Redo2 />} label={t('ed_redo')} disabled={!editor.can().redo()} onClick={() => chain().redo().run()} />
-          <span className="sep" />
-          <Btn icon={<Bold />} label={t('ed_text')} active={panel === 'text'} onClick={() => toggle('text')} />
-          <Btn icon={<Pilcrow />} label={t('ed_paragraph')} active={panel === 'para'} onClick={() => toggle('para')} />
-          <Btn icon={<AlignCenter />} label={t('ed_align')} active={panel === 'align'} onClick={() => toggle('align')} />
-          <Btn icon={<Type />} label={t('ed_font')} active={panel === 'font'} onClick={() => toggle('font')} />
-          {mediaSelected && <Btn icon={<ImageIcon />} label={t('ed_media')} active={panel === 'media'} onClick={() => toggle('media')} />}
-          {mathSelected && <Btn icon={<Sigma />} label={t('ed_math')} active onClick={() => setDialog('math')} />}
-          <Btn icon={<Plus />} label={t('ed_insert')} active={panel === 'insert'} onClick={() => toggle('insert')} primary />
+          {panel && (
+            <div className="cmd-panel" role="toolbar">
+              {panel === 'text' && (
+                <>
+                  <Btn icon={<Bold />} label={t('ed_bold')} active={editor.isActive('bold')} onClick={() => chain().toggleBold().run()} />
+                  <Btn icon={<Italic />} label={t('ed_italic')} active={editor.isActive('italic')} onClick={() => chain().toggleItalic().run()} />
+                  <Btn icon={<Underline />} label={t('ed_underline')} active={editor.isActive('underline')} onClick={() => chain().toggleUnderline().run()} />
+                  <Btn icon={<Strikethrough />} label={t('ed_strike')} active={editor.isActive('strike')} onClick={() => chain().toggleStrike().run()} />
+                  <Btn icon={<Highlighter />} label={t('ed_highlight')} active={editor.isActive('highlight')} onClick={() => chain().toggleHighlight().run()} />
+                  <Btn icon={<Code />} label={t('ed_code')} active={editor.isActive('code')} onClick={() => chain().toggleCode().run()} />
+                  <Btn icon={<Link2 />} label={t('ed_link')} active={editor.isActive('link')} onClick={() => setDialog('link')} />
+                  <Btn icon={<RemoveFormatting />} label={t('ed_clear')} onClick={() => chain().unsetAllMarks().run()} />
+                </>
+              )}
+              {panel === 'para' && (
+                <>
+                  <Btn icon={<Pilcrow />} label={t('ed_p')} active={editor.isActive('paragraph')} onClick={() => chain().setParagraph().run()} />
+                  <Btn icon={<Heading2 />} label={t('ed_h2')} active={editor.isActive('heading', { level: 2 })} onClick={() => chain().toggleHeading({ level: 2 }).run()} />
+                  <Btn icon={<Heading3 />} label={t('ed_h3')} active={editor.isActive('heading', { level: 3 })} onClick={() => chain().toggleHeading({ level: 3 }).run()} />
+                  <Btn icon={<List />} label={t('ed_bullet')} active={editor.isActive('bulletList')} onClick={() => chain().toggleBulletList().run()} />
+                  <Btn icon={<ListOrdered />} label={t('ed_ordered')} active={editor.isActive('orderedList')} onClick={() => chain().toggleOrderedList().run()} />
+                  <Btn icon={<Quote />} label={t('ed_quote')} active={editor.isActive('blockquote')} onClick={() => chain().toggleBlockquote().run()} />
+                  <Btn icon={<Minus />} label={t('ed_hr')} onClick={() => chain().setHorizontalRule().run()} />
+                </>
+              )}
+              {panel === 'align' && (
+                <>
+                  <Btn icon={<AlignRight />} label={t('ed_right')} active={editor.isActive({ textAlign: 'right' })} onClick={() => chain().setTextAlign('right').run()} />
+                  <Btn icon={<AlignCenter />} label={t('ed_center')} active={editor.isActive({ textAlign: 'center' })} onClick={() => chain().setTextAlign('center').run()} />
+                  <Btn icon={<AlignLeft />} label={t('ed_left')} active={editor.isActive({ textAlign: 'left' })} onClick={() => chain().setTextAlign('left').run()} />
+                  <Btn icon={<AlignJustify />} label={t('ed_justify')} active={editor.isActive({ textAlign: 'justify' })} onClick={() => chain().setTextAlign('justify').run()} />
+                  <span className="sep" />
+                  <Btn icon={<span className="txt-ico">‏א←</span>} label={t('ed_rtl')} onClick={() => chain().setTextDirection('rtl').run()} />
+                  <Btn icon={<span className="txt-ico">A→</span>} label={t('ed_ltr')} onClick={() => chain().setTextDirection('ltr').run()} />
+                  <Btn icon={<ArrowLeftRight />} label={t('ed_auto')} onClick={() => chain().setTextDirection('auto').run()} />
+                </>
+              )}
+              {panel === 'font' && (
+                <div className="font-panel">
+                  <div className="chips scroll">
+                    <button type="button" className={`chip${!curFont ? ' on' : ''}`} onClick={() => chain().unsetFontFamily().run()}>
+                      {t('ed_default')}
+                    </button>
+                    {FONTS.map((f) => (
+                      <button
+                        type="button"
+                        key={f.family}
+                        className={`chip${curFont === f.family ? ' on' : ''}`}
+                        style={{ fontFamily: `'${f.family}'` }}
+                        onClick={() => chain().setFontFamily(`'${f.family}'`).run()}
+                      >
+                        {f.label.he}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="chips scroll">
+                    <span className="chip-label">{t('ed_size')}</span>
+                    <button type="button" className={`chip${!curSize ? ' on' : ''}`} onClick={() => chain().unsetFontSize().run()}>
+                      {t('ed_default')}
+                    </button>
+                    {SIZES.map((s) => (
+                      <button type="button" key={s} className={`chip${curSize === `${s}px` ? ' on' : ''}`} onClick={() => chain().setFontSize(`${s}px`).run()}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {panel === 'insert' && (
+                <>
+                  <Btn icon={<ImageIcon />} label={t('ed_image')} onClick={() => setDialog('image')} wide />
+                  <Btn icon={<VideoIcon />} label={t('ed_video')} onClick={() => setDialog('video')} wide />
+                  <Btn icon={<Music />} label={t('ed_audio')} onClick={() => setDialog('audio')} wide />
+                  <Btn icon={<Clapperboard />} label={t('rec_video')} onClick={() => setRecording('video')} wide />
+                  <Btn icon={<Mic />} label={t('rec_audio')} onClick={() => setRecording('audio')} wide />
+                  <Btn icon={<Sigma />} label={t('ed_math')} onClick={() => setDialog('math')} wide />
+                  <Btn icon={<Link2 />} label={t('ed_link')} onClick={() => setDialog('link')} wide />
+                  <Btn icon={<Minus />} label={t('ed_hr')} onClick={() => chain().setHorizontalRule().run()} wide />
+                </>
+              )}
+              {panel === 'media' && mediaSelected && (
+                <div className="media-panel">
+                  <div className="chips scroll" hidden={mediaSelected.type.name === 'audio'}>
+                    {MEDIA_ALIGNS.map((a) => (
+                      <button
+                        type="button"
+                        key={a}
+                        className={`chip align-chip${mediaSelected.attrs.align === a ? ' on' : ''}`}
+                        onClick={() => setMediaAttrs({ align: a })}
+                      >
+                        {alignIcon[a]}
+                        {t(alignLabel[a])}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="chips scroll">
+                    {mediaSelected.type.name !== 'audio' && !['full', 'hero'].includes(mediaSelected.attrs.align) && (
+                      <>
+                        <span className="chip-label">{t('ed_width')}</span>
+                        {[25, 33, 50, 75, 100].map((w) => (
+                          <button type="button" key={w} className={`chip${mediaSelected.attrs.width === w ? ' on' : ''}`} onClick={() => setMediaAttrs({ width: w })}>
+                            {w}%
+                          </button>
+                        ))}
+                      </>
+                    )}
+                    <button type="button" className="chip" onClick={() => setDialog('caption')}>
+                      <Captions size={16} /> {t('ed_caption')}
+                    </button>
+                    {mediaSelected.type.name === 'figure' && (
+                      <button type="button" className="chip" onClick={() => onSetCover(mediaSelected.attrs.src)}>
+                        <ImagePlay size={16} /> {t('ed_setCover')}
+                      </button>
+                    )}
+                    <button type="button" className="chip danger" onClick={() => chain().deleteSelection().run()}>
+                      <Trash2 size={16} /> {t('ed_remove')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
+      <EditorContent editor={editor} />
+
 
       <MediaDialog kind="image" open={dialog === 'image'} onClose={() => setDialog(null)} onInsert={insertMedia} />
       <MediaDialog kind="video" open={dialog === 'video'} onClose={() => setDialog(null)} onInsert={insertMedia} />

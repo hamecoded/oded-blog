@@ -55,7 +55,7 @@ Everyone who signs up starts as a **commenter** and can ask the manager for any 
 | Audio | **Record audio** with a live level meter; it's saved in the blog with a built-in player. You can also embed **SoundCloud, Spotify, Mixcloud or Archive.org** links. |
 | Math | Inline or display LaTeX equations with a live KaTeX preview. |
 | Fonts | Twelve Google Fonts that support Hebrew, including the handwriting fonts **Playpen Sans Hebrew**, **Amatic SC** and Karantina. Readers choose font, size, line spacing and theme. |
-| Audience | When creating or editing a post, **Who can see this** sets it to **Public**, **Private** (only you and the manager) or **specific people and/or groups**. Each author has **their own groups**: create one right from that sheet (**+ New group**) or in **/admin → Groups**. The manager sees and manages everyone's groups. |
+| Audience | When creating or editing a post, **Who can see this** sets it to **Public**, **Registered users** (anyone signed in), **Private** (only you and the manager) or **specific people and/or groups**. Each author has **their own groups**: create one right from that sheet (**+ New group**) or in **/admin → Groups**. The manager sees and manages everyone's groups. |
 | Roles | `admin` (manager), `editor` (author), `reviewer`, `commenter`, `reader`. New sign-ups are commenters. Users request other roles on **/account**, and the manager approves them in **/admin → Role requests**. |
 | User management | In **/admin → Users** the manager can search and filter by role, **add a user** (email, name, role and a temporary password to pass on privately), edit a name or username, change a role, **reset a password**, **suspend** an account (it can't sign in until access is restored) or **delete** it. Deleting removes the person's comments, likes and role requests, and moves their posts to the manager. Anyone given a temporary password is asked to change it at their next sign-in. The manager can't suspend, delete or demote their own account. |
 | Review | Select any text, tap **Comment**, and the comment is pinned to that text. Supports replies and resolve/reopen. Reviewers can read and comment on drafts. |
@@ -186,7 +186,7 @@ All tables are in the `public` schema and are created by
 | `tags` | text[] | Tag names, e.g. `{מדריך,rtl}` |
 | `lang` | `he` \| `en` | Post language → overall direction |
 | `status` | `draft` \| `published` | |
-| `visibility` | `public` \| `private` \| `restricted` | Audience |
+| `visibility` | `public` \| `members` \| `private` \| `restricted` | Audience |
 | `allowed_users`, `allowed_groups` | uuid[] | Who may read a `restricted` post |
 | `author_id` | uuid | → `profiles.id` |
 | `created_at`, `updated_at`, `published_at` | timestamptz | `updated_at` is set automatically on every save |

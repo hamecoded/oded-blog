@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Globe, Lock, Plus, Search, Users } from 'lucide-react';
+import { Check, Globe, Lock, Plus, Search, UserCheck, Users } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import type { Group, Profile, Visibility } from '../lib/types';
@@ -13,7 +13,7 @@ export interface AudienceValue {
   allowed_groups: string[];
 }
 
-export const VIS_ICON: Record<Visibility, typeof Globe> = { public: Globe, private: Lock, restricted: Users };
+export const VIS_ICON: Record<Visibility, typeof Globe> = { public: Globe, members: UserCheck, private: Lock, restricted: Users };
 
 function usePeopleAndGroups(open: boolean) {
   const [people, setPeople] = useState<Profile[]>([]);
@@ -88,7 +88,7 @@ export function AudienceSheet({
     <Sheet open={open} onClose={onClose} title={t('audience')}>
       <div className="form">
         <div className="vis-options">
-          {(['public', 'private', 'restricted'] as const).map((v) => {
+          {(['public', 'members', 'private', 'restricted'] as const).map((v) => {
             const Icon = VIS_ICON[v];
             return (
               <button type="button" key={v} className={`vis-opt${value.visibility === v ? ' on' : ''}`} onClick={() => onChange({ ...value, visibility: v })}>
