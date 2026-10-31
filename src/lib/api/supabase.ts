@@ -102,7 +102,8 @@ export function createSupabaseApi(url: string, key: string): Api {
         query = query.gte('published_at', from.toISOString()).lt('published_at', to.toISOString());
       }
       const res = await query
-        .order('published_at', { ascending: false, nullsFirst: true })
+        // Published posts newest first, then drafts (no published_at) by last edit.
+        .order('published_at', { ascending: false, nullsFirst: false })
         .order('updated_at', { ascending: false })
         .limit(q.limit ?? 100);
       return check(res) as unknown as Post[];

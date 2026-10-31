@@ -299,7 +299,12 @@ export function createLocalApi(): Api {
           return terms.every((t) => hay.includes(t));
         });
       }
-      posts.sort((a, b) => (b.published_at ?? b.updated_at).localeCompare(a.published_at ?? a.updated_at));
+      // Published posts newest first, then drafts by last edit.
+      posts.sort(
+        (a, b) =>
+          Number(!a.published_at) - Number(!b.published_at) ||
+          (b.published_at ?? b.updated_at).localeCompare(a.published_at ?? a.updated_at),
+      );
       return posts.slice(0, q.limit ?? 100).map((p) => withAuthor(d, p));
     },
 

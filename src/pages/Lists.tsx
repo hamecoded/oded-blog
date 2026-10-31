@@ -89,16 +89,16 @@ export function Home() {
         </Link>
         <TagCloud tags={tags} limit={12} strip />
       </div>
+      <section>
+        {drafts.length > 0 && <h2 className="section-title">{t('latest')}</h2>}
+        <PostGrid posts={posts} compact />
+      </section>
       {drafts.length > 0 && (
         <section>
           <h2 className="section-title">{t('drafts')}</h2>
           <PostGrid posts={drafts} compact />
         </section>
       )}
-      <section>
-        {drafts.length > 0 && <h2 className="section-title">{t('latest')}</h2>}
-        <PostGrid posts={posts} compact />
-      </section>
     </>
   );
 }
