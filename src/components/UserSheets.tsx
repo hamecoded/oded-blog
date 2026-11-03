@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Copy, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
@@ -9,11 +9,14 @@ import { Sheet } from './Sheet';
 /** Temporary-password field with Generate and Copy. */
 function TempPasswordField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const { t, toast } = useApp();
+  const id = useId();
+  // Not a <label>: a tap on a label's text is passed on to the first button inside it (Generate), which would
+  // silently replace a password you may already have copied.
   return (
-    <label>
-      {t('tempPassword')}
+    <div className="field" role="group" aria-labelledby={id}>
+      <span id={id}>{t('tempPassword')}</span>
       <span className="row">
-        <input dir="ltr" required minLength={6} className="mono" value={value} onChange={(e) => onChange(e.target.value)} />
+        <input dir="ltr" required minLength={6} className="mono" aria-labelledby={id} value={value} onChange={(e) => onChange(e.target.value)} />
         <button type="button" className="icon-btn" aria-label={t('generate')} title={t('generate')} onClick={() => onChange(tempPassword())}>
           <RefreshCw size={18} />
         </button>
@@ -28,7 +31,7 @@ function TempPasswordField({ value, onChange }: { value: string; onChange: (v: s
         </button>
       </span>
       <small className="hint">{t('tempPasswordHelp')}</small>
-    </label>
+    </div>
   );
 }
 

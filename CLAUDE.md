@@ -30,6 +30,7 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
 | `npm run build` | Type-check plus production build into `dist/` |
 | `npm run setup` | Guided deploy: `.env`, database, host, smoke test |
 | `npm run deploy` / `npm run deploy:check` | Redeploy / verify everything |
+| `npm run deploy:auto` | Redeploy in one go, no questions (`deploy --yes`); commit message written from the changed files |
 | `npm run migrate:media` | Copy uploads after moving Supabase projects |
 
 ## Decisions already made (and why)

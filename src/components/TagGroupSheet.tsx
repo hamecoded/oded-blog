@@ -37,6 +37,7 @@ export function TagGroupSheet({
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const tagInputRef = useRef<HTMLInputElement>(null);
 
   // Refill the form each time the sheet opens (adjusted during render, not in an effect).
   const [shownFor, setShownFor] = useState<{ open: boolean; group: TagGroup | null }>({ open: false, group: null });
@@ -149,9 +150,17 @@ export function TagGroupSheet({
         </label>
         {bi('name', t('tg_name'))}
 
-        <label>
-          {t('tags')}
-          <div className="tag-input">
+        {/* Not a <label>: a tap on a label's text or padding is passed on to the first button inside it, which
+            here is the × of the first chosen tag, so stray taps were deleting tags. */}
+        <div className="field" role="group" aria-labelledby="tg-tags-label">
+          <span id="tg-tags-label">{t('tags')}</span>
+          <div
+            className="tag-input"
+            onClick={(e) => {
+              // A tap on the box itself (not on a chip or its ×) goes to the typing field.
+              if (e.target === e.currentTarget) tagInputRef.current?.focus();
+            }}
+          >
             {draft.tags.map((tg) => (
               <span key={tg} className="tag on" dir="auto">
                 #{tg}
@@ -161,8 +170,10 @@ export function TagGroupSheet({
               </span>
             ))}
             <input
+              ref={tagInputRef}
               dir="auto"
               value={tagInput}
+              aria-labelledby="tg-tags-label"
               enterKeyHint="done"
               placeholder={t('addTag')}
               onChange={(e) => setTagInput(e.target.value)}
@@ -197,7 +208,7 @@ export function TagGroupSheet({
           <small className="hint">
             {t('tg_tagsHelp')} · <b>{matching}</b> {t('tg_postsMatch')}
           </small>
-        </label>
+        </div>
 
         <label>
           {t('tg_landing')}

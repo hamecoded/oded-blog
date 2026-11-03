@@ -1236,7 +1236,8 @@ dialog.sheet::backdrop {
   flex-direction: column;
   gap: 14px;
 }
-.form label {
+.form label,
+.form .field {
   display: flex;
   flex-direction: column;
   gap: 6px;

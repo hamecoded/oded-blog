@@ -3,10 +3,13 @@
 //
 //   npm run setup                 step-by-step: keys → .env → database → build → deploy → smoke test
 //   npm run deploy                rebuild and redeploy to the host chosen during setup
+//   npm run deploy:auto           the same in one go, with no questions (= npm run deploy -- --yes)
 //   npm run deploy:check          check .env, the Supabase project, the build and (optionally) the live site
 //   npm run migrate:media         copy uploaded files from an old Supabase project to the current one
 //
 // Add --dry-run to print every command and file write instead of doing it.
+// Add --yes (or -y) to answer every question with its default: the commit message is written from the changed
+// files. It stops rather than guess where a default isn't safe (a database that needs schema.sql, no git identity).
 // See DEPLOYMENT.md for what each step does and how to do it by hand.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -28,6 +31,11 @@ const HOST_NAMES = { github: 'GitHub Pages', netlify: 'Netlify', cloudflare: 'Cl
 const argv = process.argv.slice(2);
 const DRY = argv.includes('--dry-run');
 const command = argv.find((a) => !a.startsWith('-')) ?? 'setup';
+/**
+ * --yes / -y: no questions; each takes its default. Used by `npm run deploy:auto`. Only for `deploy`: setup's
+ * questions (keys, domain, host) have no safe defaults.
+ */
+const YES = command === 'deploy' && (argv.includes('--yes') || argv.includes('-y'));
 
 // ───────────────────────── terminal helpers ─────────────────────────
 const tty = process.stdout.isTTY;
@@ -67,6 +75,10 @@ rl.on('close', () => {
 const nextLine = () => (lines.length ? Promise.resolve(lines.shift()) : inputClosed ? Promise.resolve(null) : new Promise((r) => waiting.push(r)));
 
 async function ask(question, def = '') {
+  if (YES) {
+    say(`${bold('?')} ${question} ${dim(`→ ${def || '(empty)'}`)} ${dim('[--yes]')}`);
+    return def;
+  }
   process.stdout.write(`${bold('?')} ${question}${def ? dim(` (${def})`) : ''} `);
   const line = await nextLine();
   if (line === null) process.stdout.write('\n');
@@ -75,6 +87,10 @@ async function ask(question, def = '') {
 }
 
 async function askSecret(question) {
+  if (YES) {
+    warn(`${question}: can't be asked with --yes.`);
+    return '';
+  }
   process.stdout.write(`${bold('?')} ${question} ${dim('(hidden)')} `);
   muted.on = true;
   const line = await nextLine();
@@ -84,6 +100,10 @@ async function askSecret(question) {
 }
 
 async function confirm(question, def = true) {
+  if (YES) {
+    say(`${bold('?')} ${question} ${dim(`→ ${def ? 'yes' : 'no'}`)} ${dim('[--yes]')}`);
+    return def;
+  }
   const a = (await ask(`${question} ${dim(def ? '[Y/n]' : '[y/N]')}`)).toLowerCase();
   return a ? a.startsWith('y') : def;
 }
@@ -91,6 +111,10 @@ async function confirm(question, def = true) {
 async function choose(question, options, def = 0) {
   say(`${bold('?')} ${question}`);
   options.forEach((o, i) => say(`   ${i + 1}) ${o}`));
+  if (YES) {
+    say(dim(`  → ${def + 1} [--yes]`));
+    return def;
+  }
   for (;;) {
     const a = await ask('Choose a number', String(def + 1));
     const n = Number(a) - 1;
@@ -491,6 +515,11 @@ async function applySchema(env, state) {
   if (dbUrl && have('psql')) {
     info('Running it with psql, using SUPABASE_DB_URL.');
     how = 1;
+  } else if (YES) {
+    // The SQL editor needs a person to paste and press Run; only psql with SUPABASE_DB_URL works unattended.
+    warn('schema.sql needs to run, and --yes can run it only with psql and SUPABASE_DB_URL set.');
+    info('Run `npm run deploy` without --yes once (or set SUPABASE_DB_URL), or run schema.sql in the SQL editor.');
+    return false;
   } else {
     how = await choose('How do you want to run it?', [
       'Copy it to the clipboard and open the Supabase SQL editor (paste, then Run)',
@@ -578,6 +607,10 @@ async function ensureDatabase(env, state) {
   if (healthy) info('supabase/schema.sql has changed since it was last run on the database.');
   else warn('The database needs supabase/schema.sql before the site can work.');
   if (await applySchema(env, state)) return true;
+  // With --yes this goes ahead only when the database already passes the checks for the latest version
+  // (schema.sql changed in some other way); a database that is missing what the app needs stops the deploy.
+  if (YES && healthy) warn('Deploying anyway: the database already has what this version needs. Run schema.sql when you can.');
+  if (YES && !healthy) fail('Not deploying: the site would break without schema.sql. Run it, then deploy again.');
   return confirm('Deploy anyway?', healthy);
 }
 
@@ -618,10 +651,45 @@ function gitInit() {
 /** A first commit fails without a name and email; set them for this repo only. */
 async function ensureGitIdentity() {
   if (DRY || (capture('git', ['config', 'user.name']).stdout && capture('git', ['config', 'user.email']).stdout)) return;
+  if (YES) {
+    fail('git does not know who you are yet (needed to commit). Run `npm run deploy` once without --yes to set it.');
+    return false;
+  }
   warn('git does not know who you are yet (needed to commit). This sets it for this folder only.');
   const me = capture('gh', ['api', 'user', '--jq', '[.name // .login, .email // ""] | @tsv']).stdout.split('\t');
   run('git', ['config', 'user.name', await ask('Your name for commits', me[0] || '')]);
   run('git', ['config', 'user.email', await ask('Your email for commits (can be the GitHub noreply one)', me[1] || '')]);
+  return true;
+}
+
+/**
+ * A commit message written from what is about to be committed (run after `git add -A`):
+ *   Deploy: Admin.tsx, Lists.tsx, index.css and 2 more
+ *
+ *   Modified: src/pages/Admin.tsx
+ *   Added:    src/site/New.tsx
+ *   …
+ *   5 files changed, 120 insertions(+), 14 deletions(-)
+ * .deploy.json (rewritten on every deploy) is listed in the body but left out of the subject.
+ */
+function commitMessage() {
+  const rows = capture('git', ['diff', '--cached', '--name-status', '-M']).stdout.split('\n').filter(Boolean);
+  if (!rows.length) return 'Deploy oded.me blog';
+  const KIND = { M: 'Modified', A: 'Added', D: 'Deleted', R: 'Renamed', C: 'Copied', T: 'Changed type' };
+  const files = rows.map((r) => {
+    const [code, ...paths] = r.split('\t');
+    return { kind: KIND[code[0]] ?? code, path: paths.join(' → '), last: paths[paths.length - 1] };
+  });
+  const named = files.filter((f) => f.last !== '.deploy.json');
+  const base = (f) => f.last.split('/').pop();
+  const shown = named.slice(0, 4).map(base);
+  const subject = named.length
+    ? `Deploy: ${shown.join(', ')}${named.length > shown.length ? ` and ${named.length - shown.length} more` : ''}`
+    : 'Deploy oded.me blog (deploy settings only)';
+  const width = Math.max(...files.map((f) => f.kind.length)) + 1;
+  const body = files.map((f) => `${`${f.kind}:`.padEnd(width + 1)}${f.path}`);
+  const stat = capture('git', ['diff', '--cached', '--shortstat']).stdout.trim();
+  return [subject, '', ...body, ...(stat ? ['', stat] : [])].join('\n');
 }
 
 async function deployGitHub(env, state) {
@@ -631,6 +699,10 @@ async function deployGitHub(env, state) {
   }
   if (capture('gh', ['auth', 'status']).status !== 0) {
     warn('You are not signed in to GitHub.');
+    if (YES) {
+      fail('Run `gh auth login` once, then `npm run deploy:auto` again.');
+      return null;
+    }
     if (run('gh', ['auth', 'login']).status !== 0) return null;
   }
   // The signed-in account is the owner; an empty or stale saved owner gives a wrong repo and site address.
@@ -674,9 +746,15 @@ async function deployGitHub(env, state) {
   if (changes) {
     say(changes);
     if (await confirm('Commit these changes?', true)) {
-      await ensureGitIdentity();
+      if ((await ensureGitIdentity()) === false) return null;
       run('git', ['add', '-A']);
-      if (run('git', ['commit', '-m', await ask('Commit message', 'Deploy oded.me blog')]).status !== 0) {
+      // Written from the changed files; shown as the default (press Enter to keep it), used as is with --yes.
+      const auto = DRY && isNew ? 'Deploy oded.me blog' : commitMessage();
+      if (YES) say(dim(auto.replace(/^/gm, '    ')));
+      const subject = auto.split('\n')[0];
+      const typed = await ask('Commit message', subject);
+      const message = typed === subject ? auto : typed;
+      if (run('git', ['commit', '-m', message]).status !== 0) {
         fail('The commit failed (see above).');
         return null;
       }
@@ -1182,7 +1260,7 @@ async function cmdMedia() {
 
 const COMMANDS = { setup: cmdSetup, deploy: cmdDeploy, check: cmdCheck, media: cmdMedia };
 if (!COMMANDS[command]) {
-  fail(`Unknown command "${command}". Use: setup, deploy, check or media (plus --dry-run).`);
+  fail(`Unknown command "${command}". Use: setup, deploy, check or media (plus --dry-run, --yes).`);
   process.exit(1);
 }
 try {

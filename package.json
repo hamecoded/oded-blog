@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build && node scripts/prerender.mjs && node scripts/spa-fallback.mjs",
     "setup": "node scripts/setup.mjs setup",
     "deploy": "node scripts/setup.mjs deploy",
+    "deploy:auto": "node scripts/setup.mjs deploy --yes",
     "deploy:check": "node scripts/setup.mjs check",
     "migrate:media": "node scripts/setup.mjs media",
     "lint": "oxlint",

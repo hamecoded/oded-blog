@@ -81,6 +81,9 @@ answers and skips work that is already done.
 npm run deploy          # rebuild + redeploy to the host chosen in setup, then smoke-test
 ```
 ```bash
+npm run deploy:auto     # the same in one go, no questions (same as npm run deploy -- --yes)
+```
+```bash
 npm run deploy:check    # check .env, the Supabase project, a build, and the live site
 ```
 ```bash
@@ -89,6 +92,20 @@ npm run migrate:media   # copy uploaded files from an old Supabase project (see 
 
 Add `-- --dry-run` to any of them (e.g. `npm run setup -- --dry-run`) to see every command
 and file write without anything being changed.
+
+**`npm run deploy:auto`** (or `npm run deploy -- --yes`, `-y`) answers every question with its default:
+it commits all changes, pushes, and watches the workflow to the end, then checks the live site. The commit
+message is written from the changes since the last commit. The subject names up to four changed files
+(`Deploy: Admin.tsx, Lists.tsx, index.css and 2 more`), and the body lists every file as
+Added / Modified / Deleted / Renamed, plus the line count. `.deploy.json`, rewritten on every deploy, is
+listed but kept out of the subject. Plain `npm run deploy` offers the same message; press Enter to keep it.
+It stops instead of guessing when a default isn't safe:
+- **`schema.sql` needs running:** unattended, it can only run through `psql` with `SUPABASE_DB_URL` set. If
+  the database already passes the checks for this version, it warns and deploys. If it doesn't, it stops,
+  because the site would break.
+- **No git name/email or no `gh` sign-in yet:** run plain `npm run deploy` (or `gh auth login`) once.
+
+`--yes` applies to `deploy` only; `setup` always asks.
 
 **Files it writes:**
 
@@ -100,7 +117,7 @@ and file write without anything being changed.
 
 **What it never does:** handle the Supabase secret key, store your database password (the
 `psql` connection string is used once, passed through environment variables, and
-forgotten), delete anything, or push without asking.
+forgotten), delete anything, or push without asking (unless you run `npm run deploy:auto`, which is that request).
 
 ---
 
