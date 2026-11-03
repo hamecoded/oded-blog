@@ -6,6 +6,8 @@ import type { Bilingual, Post, TagCount, TagGroup, TagGroupConfig, TagGroupDraft
 import { emptyTagGroupConfig, normalizeSearch, publicInTagGroup, validSiteSlug } from '../lib/util';
 import { videoFromUrl } from '../lib/video';
 import { CUSTOM_LANDINGS } from '../landings';
+import { contactUrl, DEFAULT_CTA_LABEL, parseContact, type Contact } from '../lib/contact';
+import { ContactField } from './ContactField';
 import { Sheet } from './Sheet';
 
 type TextKey = 'name' | 'tagline' | 'about' | 'video_heading' | 'cta_title' | 'cta_label';
@@ -32,6 +34,8 @@ export function TagGroupSheet({
   const { t, toast } = useApp();
   const [draft, setDraft] = useState<TagGroupDraft>(blankDraft);
   const [tagInput, setTagInput] = useState('');
+  // The call to action as kind + fields; cta_url is rebuilt from it on every change.
+  const [contact, setContact] = useState<Contact>(() => parseContact(''));
   const [bgInput, setBgInput] = useState('');
   const [suggest, setSuggest] = useState<TagCount[]>([]);
   const [busy, setBusy] = useState(false);
@@ -45,6 +49,7 @@ export function TagGroupSheet({
     setShownFor({ open, group });
     if (open) {
       setDraft(group ? { id: group.id, slug: group.slug, tags: group.tags, landing: group.landing, config: group.config } : blankDraft());
+      setContact(parseContact(group?.config.cta_url ?? ''));
       setTagInput('');
       setBgInput('');
     }
@@ -98,6 +103,7 @@ export function TagGroupSheet({
         ) : (
           <input
             key={lang}
+            enterKeyHint="next"
             dir={lang === 'he' ? 'rtl' : 'ltr'}
             lang={lang}
             value={cfg[k][lang]}
@@ -114,6 +120,19 @@ export function TagGroupSheet({
     <Sheet open={open} onClose={onClose} title={group ? t('tg_edit') : t('tg_new')} wide>
       <form
         className="form tg-form"
+        // Enter (a phone keyboard's Go/Next key) moves to the next field instead of saving: it used to submit the
+        // form, which saved half-filled settings and closed the sheet. Saving is the Save button only. Fields with
+        // their own Enter (tags, image address) prevent the default first and are left alone.
+        onKeyDown={(e) => {
+          const el = e.target as HTMLElement;
+          if (e.key !== 'Enter' || e.defaultPrevented || e.nativeEvent.isComposing || el.tagName !== 'INPUT') return;
+          if (['checkbox', 'radio', 'button', 'submit', 'color', 'file'].includes((el as HTMLInputElement).type)) return;
+          e.preventDefault();
+          const fields = [...e.currentTarget.querySelectorAll<HTMLElement>('input:not([type=hidden]):not([type=file]), textarea, select')].filter(
+            (f) => !(f as HTMLInputElement).disabled && f.offsetParent !== null,
+          );
+          fields[fields.indexOf(el) + 1]?.focus();
+        }}
         onSubmit={async (e) => {
           e.preventDefault();
           if (!slugOk) return;
@@ -139,6 +158,7 @@ export function TagGroupSheet({
             <input
               dir="ltr"
               required
+              enterKeyHint="next"
               value={draft.slug}
               placeholder="coach"
               autoCapitalize="off"
@@ -227,7 +247,7 @@ export function TagGroupSheet({
         {bi('tagline', t('tg_tagline'))}
         <label>
           {t('tg_video')}
-          <input dir="ltr" type="url" value={cfg.video_url} placeholder="https://www.youtube.com/watch?v=…" onChange={(e) => setCfg({ video_url: e.target.value })} />
+          <input dir="ltr" type="url" enterKeyHint="next" value={cfg.video_url} placeholder="https://www.youtube.com/watch?v=…" onChange={(e) => setCfg({ video_url: e.target.value })} />
           <small className={`hint${videoOk ? '' : ' error'}`}>{videoOk ? t('tg_videoHelp') : t('tg_videoUnrecognised')}</small>
         </label>
         {bi('video_heading', t('tg_videoHeading'))}
@@ -310,11 +330,16 @@ export function TagGroupSheet({
         </fieldset>
 
         {bi('cta_title', t('tg_ctaTitle'))}
-        {bi('cta_label', t('tg_ctaLabel'))}
-        <label>
-          {t('tg_ctaUrl')}
-          <input dir="ltr" value={cfg.cta_url} placeholder="https://wa.me/972…  ·  mailto:…" onChange={(e) => setCfg({ cta_url: e.target.value })} />
-        </label>
+        <ContactField
+          contact={contact}
+          onChange={(c) => {
+            setContact(c);
+            // A fresh pick with no button text yet gets a fitting one ("Message me on WhatsApp"), in both languages.
+            const fill = c.kind !== contact.kind && !cfg.cta_label.he && !cfg.cta_label.en ? DEFAULT_CTA_LABEL[c.kind] : undefined;
+            setCfg({ cta_url: contactUrl(c), ...(fill ? { cta_label: { ...fill } } : {}) });
+          }}
+        />
+        {contact.kind !== 'none' && bi('cta_label', t('tg_ctaLabel'))}
         <label className="tg-color">
           {t('tg_accent')}
           <input type="color" value={/^#[0-9a-f]{6}$/i.test(cfg.accent) ? cfg.accent : '#e0a458'} onChange={(e) => setCfg({ accent: e.target.value })} />

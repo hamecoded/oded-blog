@@ -3139,3 +3139,71 @@ legend {
     justify-content: flex-end;
   }
 }
+
+/* Tag group sheet: call to action as a kind of contact (WhatsApp, email…) plus fields. */
+.contact-field {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.contact-field legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.contact-kinds {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+@media (min-width: 620px) {
+  .contact-kinds {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+.contact-kind {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 58px;
+  padding: 6px 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.contact-kind.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 500;
+}
+.contact-kind.k-whatsapp.on svg {
+  color: #25d366;
+}
+.contact-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.contact-preview code {
+  font-size: 0.78rem;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  overflow-wrap: anywhere;
+}
+/* Landing: the contact icon inside the call-to-action button. */
+.lp-btn svg {
+  flex-shrink: 0;
+}

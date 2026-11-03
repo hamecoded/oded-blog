@@ -1,11 +1,13 @@
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowDown, ArrowLeft, ArrowRight, Play } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, Mail, Phone, Play } from 'lucide-react';
 import { useApp } from '../lib/app';
 import { useGroupPosts, useSite } from '../lib/site';
 import type { TagGroup } from '../lib/types';
 import { pickText, tagPath } from '../lib/util';
 import { videoFromUrl } from '../lib/video';
+import { contactKind, DEFAULT_CTA_LABEL } from '../lib/contact';
+import { WhatsAppIcon } from '../components/Social';
 import { usePageTitle } from '../pages/usePageTitle';
 import { ParallaxBackdrop, PostCarousel, VideoEmbed } from './blocks';
 import { useActiveSection } from './useLanding';
@@ -31,7 +33,11 @@ export function DefaultLanding({ group }: { group: TagGroup }) {
   // of their own, so they make poor backgrounds.)
   const images = c.backgrounds;
   const Fwd = L === 'he' ? ArrowLeft : ArrowRight;
-  const cta = c.cta_url && tx('cta_label') ? { href: c.cta_url, label: tx('cta_label') } : null;
+  // The button says how visitors will reach out: WhatsApp logo, envelope or phone, and a fitting text when none was written.
+  const kind = contactKind(c.cta_url);
+  const ctaLabel = tx('cta_label') || DEFAULT_CTA_LABEL[kind]?.[L] || '';
+  const ctaIcon = kind === 'whatsapp' ? <WhatsAppIcon size={20} /> : kind === 'email' ? <Mail size={18} /> : kind === 'phone' ? <Phone size={18} /> : null;
+  const cta = c.cta_url && ctaLabel ? { href: c.cta_url, label: ctaLabel } : null;
   // https:, mailto:, tel:, wa.me… and #anchors are plain links; anything else is a page of this site
   // ("posts" or "/posts/x"), with or without the leading slash.
   const external = (href: string) => /^([a-z][a-z0-9+.-]*:|#)/i.test(href);
@@ -61,11 +67,11 @@ export function DefaultLanding({ group }: { group: TagGroup }) {
             {cta &&
               (external(cta.href) ? (
                 <a className="btn primary lp-btn" href={cta.href} target={/^https?:/.test(cta.href) ? '_blank' : undefined} rel="noopener noreferrer">
-                  {cta.label}
+                  {ctaIcon} {cta.label}
                 </a>
               ) : (
                 <Link className="btn primary lp-btn" to={sitePath(cta.href)}>
-                  {cta.label}
+                  {ctaIcon} {cta.label}
                 </Link>
               ))}
             {hasVideo ? (
@@ -135,11 +141,11 @@ export function DefaultLanding({ group }: { group: TagGroup }) {
             {cta &&
               (external(cta.href) ? (
                 <a className="btn primary lp-btn" href={cta.href} target={/^https?:/.test(cta.href) ? '_blank' : undefined} rel="noopener noreferrer">
-                  {cta.label}
+                  {ctaIcon} {cta.label}
                 </a>
               ) : (
                 <Link className="btn primary lp-btn" to={sitePath(cta.href)}>
-                  {cta.label}
+                  {ctaIcon} {cta.label}
                 </Link>
               ))}
           </div>

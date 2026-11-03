@@ -7,6 +7,11 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-04 01:34
+
+- Fixed: tag group sheet saving half-filled settings: Enter (a phone keyboard's Go key) submitted the form, saving and closing the sheet mid-way; it now moves to the next field, and only Save saves
+- Changed: landing call-to-action setup: pick WhatsApp, email, phone call, web link or a site page and fill in plain fields (number, ready-made message, address, subject); the sheet builds and previews the link, and the button shows a matching icon
+
 ## 2026-11-03 17:41
 
 - Added: commit messages that explain each deploy: built from the lines under Unreleased in this file, which then move under the deploy's date
