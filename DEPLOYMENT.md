@@ -159,8 +159,20 @@ drops a table or deletes rows.
    bucket.
 4. Deploy the matching app version.
 
-**Changes in the current version** (user management), in case you're upgrading an older
-project:
+**Changes in the current version** (tag groups, 2026-11-02):
+
+| Change | Effect on existing data |
+| --- | --- |
+| New `tag_groups` table (anyone reads, admin writes) | None |
+| `comments.user_id` may be null; new `guest_name` column and `comments_author_check` | None; existing comments all have a user |
+| New `guest_likes` table and `guest_toggle_like()`, `guest_can_engage()` functions | None |
+| New "comments insert guest" policy | Visitors may comment only on public posts that carry a tag-group tag |
+
+**Run `schema.sql` before deploying this version.** The app falls back gracefully if you
+don't (the blog keeps working, and tag-group addresses show "not found"), but tag groups
+can't be saved until it has run.
+
+Previous version (user management), in case you're upgrading an older project:
 
 | Change | Effect on existing data |
 | --- | --- |
@@ -297,6 +309,11 @@ YouTube thumbnail, else `public/og-default.png`.
   [Sharing Debugger](https://developers.facebook.com/tools/debug/), paste the post's address and click
   **Scrape Again**.
 - **Private and restricted posts** get no preview page; they share as the generic site card.
+- **Tag groups** get pages too: `dist/<slug>.html` (and `dist/<slug>/index.html`) for the landing page,
+  with the group's name, tagline and first background image, and `dist/<slug>/posts/<post>.html` for each of
+  its posts, under the group's name rather than oded.me's. So `oded.me/coach` answers 200 on GitHub Pages.
+  A new tag group gets these pages with the next rebuild; until then its links still work, they just share
+  with the generic card.
 - The site address comes from `SITE_URL` (the workflow sets it from a repository variable) or
   `.deploy.json`.
 

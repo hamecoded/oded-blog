@@ -1,11 +1,26 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Api, Comment, Group, OAuthProvider, Post, PostDraft, Profile, RoleRequest } from '../types';
-import { htmlToText, loginEmail, makeExcerpt, OAUTH_PROVIDERS, RESERVED_SLUGS, slugify, USERNAME_RE } from '../util';
+import type { Api, Comment, Group, OAuthProvider, Post, PostDraft, Profile, RoleRequest, TagGroup } from '../types';
+import {
+  emptyTagGroupConfig,
+  htmlToText,
+  loginEmail,
+  makeExcerpt,
+  normalizeTagGroup,
+  OAUTH_PROVIDERS,
+  RESERVED_SLUGS,
+  sha256Hex,
+  slugify,
+  USERNAME_RE,
+  validSiteSlug,
+  visitorSecret,
+} from '../util';
 import { sanitizeHtml } from '../sanitize';
 
 const POST_SELECT = '*, author:profiles!posts_author_id_fkey(display_name, username)';
-/** Lists also carry the like count (PostgREST embedded count; the "likes read" policy applies). */
-const POST_LIST_SELECT = `${POST_SELECT}, likes(count)`;
+/** Lists also carry the like count (PostgREST embedded counts; the "likes read" policies apply). */
+const POST_LIST_SELECT = `${POST_SELECT}, likes(count), guest_likes(count)`;
+/** Before schema.sql has been re-run there is no guest_likes table; fall back so the blog keeps working. */
+const POST_LIST_SELECT_OLD = `${POST_SELECT}, likes(count)`;
 const COMMENT_SELECT = '*, author:profiles!comments_user_id_fkey(display_name, username)';
 const BUCKET = 'media';
 const REQUEST_SELECT = '*, user:profiles!role_requests_user_id_fkey(display_name, username, role)';
@@ -21,6 +36,7 @@ export function createSupabaseApi(url: string, key: string): Api {
   });
 
   let profileCache: Profile | null = null;
+  let guestLikesTable = true;
   let providersPromise: Promise<OAuthProvider[]> | null = null;
 
   async function loadProfile(userId: string | undefined): Promise<Profile | null> {
@@ -107,11 +123,14 @@ export function createSupabaseApi(url: string, key: string): Api {
     },
 
     async listPosts(q = {}) {
+      if (q.anyTags && !q.anyTags.length) return [];
       const tags = q.tags ?? [];
+      const select = guestLikesTable ? POST_LIST_SELECT : POST_LIST_SELECT_OLD;
       let query = q.q?.trim()
-        ? sb.rpc('search_posts', { q: q.q.trim(), tag_list: tags }).select(POST_LIST_SELECT)
-        : sb.from('posts').select(POST_LIST_SELECT);
+        ? sb.rpc('search_posts', { q: q.q.trim(), tag_list: tags }).select(select)
+        : sb.from('posts').select(select);
       if (!q.q?.trim() && tags.length) query = query.contains('tags', tags);
+      if (q.anyTags) query = query.overlaps('tags', q.anyTags);
       const status = q.status ?? 'published';
       if (status !== 'all') query = query.eq('status', status);
       if (q.author) {
@@ -129,8 +148,15 @@ export function createSupabaseApi(url: string, key: string): Api {
         .order('published_at', { ascending: false, nullsFirst: false })
         .order('updated_at', { ascending: false })
         .limit(q.limit ?? 100);
-      const rows = check(res) as unknown as (Post & { likes?: { count: number }[] })[];
-      return rows.map(({ likes, ...p }) => ({ ...p, like_count: likes?.[0]?.count ?? 0 }));
+      if (res.error && guestLikesTable && /guest_likes/.test(res.error.message)) {
+        guestLikesTable = false;
+        return api.listPosts(q);
+      }
+      const rows = check(res) as unknown as (Post & { likes?: { count: number }[]; guest_likes?: { count: number }[] })[];
+      return rows.map(({ likes, guest_likes, ...p }) => ({
+        ...p,
+        like_count: (likes?.[0]?.count ?? 0) + (guest_likes?.[0]?.count ?? 0),
+      }));
     },
 
     async getPost(slug) {
@@ -187,9 +213,19 @@ export function createSupabaseApi(url: string, key: string): Api {
       return check(res) as unknown as Comment[];
     },
 
-    async addComment(c) {
+    async addComment({ guest_name, ...c }) {
       const user = profileCache ?? (await api.currentUser());
-      if (!user) throw new Error('auth/required');
+      if (!user) {
+        // A visitor on a tag-group site; the "comments insert guest" policy decides where that's allowed.
+        const name = (guest_name ?? '').trim();
+        if (!name || name.length > 60) throw new Error('comment/name-required');
+        const res = await sb
+          .from('comments')
+          .insert({ ...c, parent_id: c.parent_id ?? null, user_id: null, guest_name: name })
+          .select(COMMENT_SELECT)
+          .single();
+        return check(res) as unknown as Comment;
+      }
       const res = await sb
         .from('comments')
         .insert({ ...c, parent_id: c.parent_id ?? null, user_id: user.id })
@@ -208,18 +244,33 @@ export function createSupabaseApi(url: string, key: string): Api {
 
     async getLikes(postId) {
       const res = await sb.from('likes').select('user_id', { count: 'exact', head: true }).eq('post_id', postId);
+      let guests = 0;
+      if (guestLikesTable) {
+        const g = await sb.from('guest_likes').select('post_id', { count: 'exact', head: true }).eq('post_id', postId);
+        if (g.error) guestLikesTable = false;
+        else guests = g.count ?? 0;
+      }
       const me = profileCache;
       let liked = false;
       if (me) {
         const mine = await sb.from('likes').select('user_id').eq('post_id', postId).eq('user_id', me.id).maybeSingle();
         liked = !!mine.data;
+      } else if (guestLikesTable) {
+        // Stored as a hash, so the public list of likes doesn't reveal anyone's secret.
+        const hash = await sha256Hex(visitorSecret());
+        const mine = await sb.from('guest_likes').select('post_id').eq('post_id', postId).eq('visitor_hash', hash).maybeSingle();
+        liked = !!mine.data;
       }
-      return { count: res.count ?? 0, liked };
+      return { count: (res.count ?? 0) + guests, liked };
     },
 
     async toggleLike(postId) {
       const me = profileCache ?? (await api.currentUser());
-      if (!me) throw new Error('auth/required');
+      if (!me) {
+        // Visitor on a tag-group site: guest_toggle_like() checks the post and stores the hash of the secret.
+        check(await sb.rpc('guest_toggle_like', { p_post: postId, p_secret: visitorSecret() }));
+        return api.getLikes(postId);
+      }
       const cur = await api.getLikes(postId);
       if (cur.liked) check(await sb.from('likes').delete().eq('post_id', postId).eq('user_id', me.id));
       else check(await sb.from('likes').insert({ post_id: postId, user_id: me.id }));
@@ -303,6 +354,37 @@ export function createSupabaseApi(url: string, key: string): Api {
 
     async deleteGroup(id) {
       check(await sb.from('groups').delete().eq('id', id));
+    },
+
+    async listTagGroups() {
+      const res = await sb.from('tag_groups').select('*').order('slug');
+      return (check(res) as TagGroup[]).map(normalizeTagGroup);
+    },
+
+    async getTagGroup(slug) {
+      const res = await sb.from('tag_groups').select('*').eq('slug', slug).maybeSingle();
+      if (res.error) return null; // e.g. schema.sql not re-run yet: behave like an unknown address
+      return res.data ? normalizeTagGroup(res.data as TagGroup) : null;
+    },
+
+    async saveTagGroup(g) {
+      const slug = g.slug.trim().toLowerCase();
+      if (!validSiteSlug(slug)) throw new Error('tagGroup/slug-invalid');
+      const row = {
+        slug,
+        tags: [...new Set(g.tags.map((t) => t.trim()).filter(Boolean))],
+        landing: g.landing || 'default',
+        config: { ...emptyTagGroupConfig(), ...g.config },
+      };
+      const res = g.id
+        ? await sb.from('tag_groups').update(row).eq('id', g.id).select().single()
+        : await sb.from('tag_groups').insert(row).select().single();
+      if (res.error) throw new Error(res.error.code === '23505' ? 'tagGroup/slug-taken' : res.error.message);
+      return normalizeTagGroup(res.data as TagGroup);
+    },
+
+    async deleteTagGroup(id) {
+      check(await sb.from('tag_groups').delete().eq('id', id));
     },
 
     async requestRole(role, message) {

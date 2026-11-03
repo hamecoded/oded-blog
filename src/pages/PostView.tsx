@@ -6,7 +6,9 @@ import { errorText, useApp } from '../lib/app';
 import { anchorFromRange, type TextAnchor } from '../lib/anchor';
 import { downloadPostHtml, downloadPostMarkdown } from '../lib/export';
 import type { Comment, Post } from '../lib/types';
-import { can, postPath, titleDir } from '../lib/util';
+import { can, inTagGroup, postPath, titleDir } from '../lib/util';
+import { useSite } from '../lib/site';
+import { PublicComments } from '../site/PublicComments';
 import { PostContent } from '../components/PostContent';
 import { PostMeta, TagChips } from '../components/PostBits';
 import { LikeButton, ShareSheet } from '../components/Social';
@@ -19,6 +21,9 @@ import { usePageTitle } from './usePageTitle';
 export function PostView() {
   const { slug = '' } = useParams();
   const { t, user, toast, prefs } = useApp();
+  // On a tag-group site: only the group's posts, and a plain comment section open to visitors instead of
+  // the select-to-comment drawer.
+  const { group } = useSite();
   const nav = useNavigate();
   const [post, setPost] = useState<Post | null | undefined>(undefined);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -84,7 +89,7 @@ export function PostView() {
   );
 
   if (post === undefined) return <p className="loading">{t('loading')}</p>;
-  if (post === null) return <NotFound />;
+  if (post === null || (group && !inTagGroup(post, group))) return <NotFound />;
 
   const dir = post.lang === 'he' ? 'rtl' : 'ltr';
   const openCount = comments.filter((c) => !c.parent_id && !c.resolved).length;
@@ -117,7 +122,7 @@ export function PostView() {
           ref={contentRef}
           html={post.content_html}
           lang={post.lang}
-          comments={comments}
+          comments={group ? [] : comments}
           showResolved={showResolved}
           activeComment={active}
           onOrphans={setOrphans}
@@ -132,10 +137,12 @@ export function PostView() {
           <button type="button" className="pill" onClick={() => setSheet('share')}>
             <Share2 size={18} /> {t('share')}
           </button>
-          <button type="button" className="pill" onClick={() => setPanel((p) => !p)}>
-            <MessagesSquare size={18} /> {openCount || ''} {t('comments')}
-          </button>
-          {can.export(user) && (
+          {!group && (
+            <button type="button" className="pill" onClick={() => setPanel((p) => !p)}>
+              <MessagesSquare size={18} /> {openCount || ''} {t('comments')}
+            </button>
+          )}
+          {can.export(user) && !group && (
             <button type="button" className="pill" onClick={() => setSheet('export')}>
               <Download size={18} /> {t('export')}
             </button>
@@ -146,15 +153,18 @@ export function PostView() {
             </Link>
           )}
         </footer>
-        <p className="hint center">{t('selectToComment')}</p>
+        {!group && <p className="hint center">{t('selectToComment')}</p>}
       </article>
 
-      {selAnchor && (
+      {group && <PublicComments postId={post.id} comments={comments} onChanged={loadComments} />}
+
+      {selAnchor && !group && (
         <button type="button" className="sel-comment" onMouseDown={(e) => e.preventDefault()} onClick={startComment}>
           <MessageSquarePlus size={18} /> {t('addComment')}
         </button>
       )}
 
+      {!group && (
       <CommentsPanel
         open={panel}
         onClose={() => setPanel(false)}
@@ -167,6 +177,7 @@ export function PostView() {
         onChanged={loadComments}
         postId={post.id}
       />
+      )}
 
       <ShareSheet post={post} open={sheet === 'share'} onClose={() => setSheet(null)} />
 

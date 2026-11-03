@@ -3,8 +3,27 @@
  * Used automatically when no Supabase keys are configured, so the site runs
  * with zero setup (`npm run dev`) and on any static host for a quick preview.
  */
-import type { Api, Comment, Group, LikeInfo, Post, PostDraft, Profile, Role, RoleRequest } from '../types';
-import { ADMIN_EMAIL, can, canViewPost, htmlToText, loginEmail, makeExcerpt, normalizeSearch, OAUTH_LABELS, OAUTH_PROVIDERS, RESERVED_SLUGS, slugify, uid, USERNAME_RE } from '../util';
+import type { Api, Comment, Group, LikeInfo, Post, PostDraft, Profile, Role, RoleRequest, TagGroup } from '../types';
+import {
+  ADMIN_EMAIL,
+  can,
+  canViewPost,
+  emptyTagGroupConfig,
+  htmlToText,
+  loginEmail,
+  makeExcerpt,
+  normalizeSearch,
+  normalizeTagGroup,
+  OAUTH_LABELS,
+  OAUTH_PROVIDERS,
+  RESERVED_SLUGS,
+  sha256Hex,
+  slugify,
+  uid,
+  USERNAME_RE,
+  validSiteSlug,
+  visitorSecret,
+} from '../util';
 import { sanitizeHtml } from '../sanitize';
 import { seedPosts, SEED_AUTHOR } from './seed';
 
@@ -20,6 +39,7 @@ interface Db {
   likes: { post_id: string; user_id: string }[];
   roleRequests: RoleRequest[];
   groups: Group[];
+  tagGroups: TagGroup[];
 }
 
 const DB_NAME = 'bilingual-blog';
@@ -120,7 +140,7 @@ export function createLocalApi(): Api {
     if (cache) return cache;
     const stored = await idbGet<Db>('db');
     if (stored) {
-      cache = { ...stored, roleRequests: stored.roleRequests ?? [], groups: stored.groups ?? [] };
+      cache = { ...stored, roleRequests: stored.roleRequests ?? [], groups: stored.groups ?? [], tagGroups: stored.tagGroups ?? [] };
       if (await ensureAdmin(cache)) await idbSet('db', cache);
     } else {
       const now = Date.now();
@@ -144,6 +164,7 @@ export function createLocalApi(): Api {
         likes: [],
         roleRequests: [],
         groups: [],
+        tagGroups: [],
       };
       await ensureAdmin(cache);
       await idbSet('db', cache);
@@ -198,6 +219,25 @@ export function createLocalApi(): Api {
     const d = await db();
     const p = d.posts.find((x) => x.id === postId);
     if (!p || !visible(d, user, p)) throw new Error('auth/forbidden');
+  }
+
+  /**
+   * Visitors (no account) may comment on and like only what a tag-group site shows: public, published posts
+   * with a tag from some tag group. Mirrors guest_can_engage() in supabase/schema.sql.
+   */
+  function guestCanEngage(d: Db, postId: string): boolean {
+    const p = d.posts.find((x) => x.id === postId);
+    return (
+      !!p &&
+      p.status === 'published' &&
+      (p.visibility ?? 'public') === 'public' &&
+      d.tagGroups.some((g) => g.tags.some((t) => p.tags.includes(t)))
+    );
+  }
+
+  /** Visitor likes are stored under a hash of the browser's secret, like the live site. */
+  async function guestKey(): Promise<string> {
+    return `guest:${await sha256Hex(visitorSecret())}`;
   }
 
   function withAuthor(d: Db, p: Post): Post {
@@ -316,6 +356,7 @@ export function createLocalApi(): Api {
         posts = posts.filter((p) => p.author_id === a?.id);
       }
       if (q.tags?.length) posts = posts.filter((p) => q.tags!.every((t) => p.tags.includes(t)));
+      if (q.anyTags) posts = posts.filter((p) => p.tags.some((t) => q.anyTags!.includes(t)));
       if (q.year) {
         posts = posts.filter((p) => {
           const dt = new Date(p.published_at ?? p.created_at);
@@ -428,7 +469,29 @@ export function createLocalApi(): Api {
 
     async addComment(c) {
       const d = await db();
-      const user = await requireMe();
+      const user = await me();
+      if (!user) {
+        // A visitor on a tag-group site: a name instead of an account.
+        const name = (c.guest_name ?? '').trim();
+        if (!name || name.length > 60) throw new Error('comment/name-required');
+        if (!guestCanEngage(d, c.post_id)) throw new Error('auth/required');
+        const comment: Comment = {
+          id: uid(),
+          post_id: c.post_id,
+          user_id: null,
+          guest_name: name,
+          parent_id: c.parent_id ?? null,
+          quote: c.quote,
+          prefix: c.prefix,
+          suffix: c.suffix,
+          body: c.body.trim(),
+          resolved: false,
+          created_at: new Date().toISOString(),
+        };
+        d.comments.push(comment);
+        await persist();
+        return { ...comment, author: null };
+      }
       if (!can.comment(user)) throw new Error('auth/forbidden');
       await requireVisible(c.post_id, user);
       const comment: Comment = {
@@ -469,16 +532,19 @@ export function createLocalApi(): Api {
     async getLikes(postId): Promise<LikeInfo> {
       const d = await db();
       const likes = d.likes.filter((l) => l.post_id === postId);
-      return { count: likes.length, liked: !!sessionId && likes.some((l) => l.user_id === sessionId) };
+      const who = sessionId ?? (await guestKey());
+      return { count: likes.length, liked: likes.some((l) => l.user_id === who) };
     },
 
     async toggleLike(postId) {
       const d = await db();
-      const user = await requireMe();
-      await requireVisible(postId, user);
-      const i = d.likes.findIndex((l) => l.post_id === postId && l.user_id === user.id);
+      const user = await me();
+      if (user) await requireVisible(postId, user);
+      else if (!guestCanEngage(d, postId)) throw new Error('auth/required');
+      const who = user?.id ?? (await guestKey());
+      const i = d.likes.findIndex((l) => l.post_id === postId && l.user_id === who);
       if (i >= 0) d.likes.splice(i, 1);
-      else d.likes.push({ post_id: postId, user_id: user.id });
+      else d.likes.push({ post_id: postId, user_id: who });
       await persist();
       return api.getLikes(postId);
     },
@@ -600,6 +666,45 @@ export function createLocalApi(): Api {
       if (!group || !can.editGroup(user, group)) throw new Error('auth/forbidden');
       d.groups = d.groups.filter((g) => g.id !== id);
       d.posts.forEach((p) => (p.allowed_groups = (p.allowed_groups ?? []).filter((x) => x !== id)));
+      await persist();
+    },
+
+    async listTagGroups() {
+      return [...(await db()).tagGroups].map(normalizeTagGroup).sort((a, b) => a.slug.localeCompare(b.slug));
+    },
+
+    async getTagGroup(slug) {
+      const g = (await db()).tagGroups.find((x) => x.slug === slug);
+      return g ? normalizeTagGroup(g) : null;
+    },
+
+    async saveTagGroup(g) {
+      const d = await db();
+      if (!can.manageTagGroups(await requireMe())) throw new Error('auth/forbidden');
+      const slug = g.slug.trim().toLowerCase();
+      if (!validSiteSlug(slug)) throw new Error('tagGroup/slug-invalid');
+      if (d.tagGroups.some((x) => x.slug === slug && x.id !== g.id)) throw new Error('tagGroup/slug-taken');
+      const existing = g.id ? d.tagGroups.find((x) => x.id === g.id) : undefined;
+      const now = new Date().toISOString();
+      const saved: TagGroup = normalizeTagGroup({
+        id: existing?.id ?? uid(),
+        slug,
+        tags: [...new Set(g.tags.map((t) => t.trim()).filter(Boolean))],
+        landing: g.landing || 'default',
+        config: { ...emptyTagGroupConfig(), ...g.config },
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+      });
+      if (existing) d.tagGroups[d.tagGroups.indexOf(existing)] = saved;
+      else d.tagGroups.push(saved);
+      await persist();
+      return saved;
+    },
+
+    async deleteTagGroup(id) {
+      const d = await db();
+      if (!can.manageTagGroups(await requireMe())) throw new Error('auth/forbidden');
+      d.tagGroups = d.tagGroups.filter((g) => g.id !== id);
       await persist();
     },
 

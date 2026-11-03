@@ -4,7 +4,7 @@ import { Check, CornerDownLeft, RotateCcw, Trash2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import type { Comment } from '../lib/types';
-import { can, formatDate } from '../lib/util';
+import { can, commentAuthorName, formatDate } from '../lib/util';
 
 export function CommentsPanel({
   open,
@@ -113,8 +113,8 @@ export function CommentsPanel({
     return (
       <div className={`comment${reply ? ' reply' : ''}`}>
         <div className="comment-head">
-          <span className="avatar sm">{c.author?.display_name.slice(0, 1) ?? '?'}</span>
-          <strong>{c.author?.display_name ?? '—'}</strong>
+          <span className="avatar sm">{commentAuthorName(c).slice(0, 1)}</span>
+          <strong dir="auto">{commentAuthorName(c)}</strong>
           <time className="muted">{formatDate(c.created_at, prefs.uiLang)}</time>
           {(mine || user?.role === 'admin') && (
             <button

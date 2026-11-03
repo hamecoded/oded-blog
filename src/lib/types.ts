@@ -90,7 +90,10 @@ export type PostDraft = Pick<
 export interface Comment {
   id: string;
   post_id: string;
-  user_id: string;
+  /** null for a visitor's comment on a tag-group site (see guest_name). */
+  user_id: string | null;
+  /** Name a visitor typed instead of signing in. Only on tag-group sites. */
+  guest_name?: string | null;
   parent_id: string | null;
   /** W3C TextQuoteSelector-style anchor into the rendered post text. */
   quote: string;
@@ -109,11 +112,16 @@ export interface NewComment {
   prefix: string;
   suffix: string;
   body: string;
+  /** Visitors (not signed in) on a tag-group site comment under a name instead of an account. */
+  guest_name?: string;
 }
 
 export interface PostQuery {
   q?: string;
+  /** Posts that have all of these tags. */
   tags?: string[];
+  /** Posts that have at least one of these tags (tag-group sites). An empty list matches nothing. */
+  anyTags?: string[];
   author?: string;
   status?: PostStatus | 'all';
   year?: number;
@@ -130,6 +138,48 @@ export interface LikeInfo {
   count: number;
   liked: boolean;
 }
+
+/** One text in both interface languages. */
+export interface Bilingual {
+  he: string;
+  en: string;
+}
+
+/** What the default landing page shows. Custom landings (src/landings) may read the same fields. */
+export interface TagGroupConfig {
+  /** Brand shown in the header and the browser tab, e.g. "Oded Sagir — Coaching". */
+  name: Bilingual;
+  tagline: Bilingual;
+  about: Bilingual;
+  /** YouTube link for the welcome video ('' = none). */
+  video_url: string;
+  video_heading: Bilingual;
+  /** Images the background shifts between while scrolling. */
+  backgrounds: string[];
+  cta_title: Bilingual;
+  cta_label: Bilingual;
+  /** Where the call-to-action button goes: https://…, mailto:…, https://wa.me/… */
+  cta_url: string;
+  /** Accent color, #rrggbb. */
+  accent: string;
+}
+
+/**
+ * A "site inside the site": /<slug> shows only posts that carry at least one of `tags`,
+ * with its own landing page and no blog chrome. Admin-managed.
+ */
+export interface TagGroup {
+  id: string;
+  slug: string;
+  tags: string[];
+  /** 'default', or a key of CUSTOM_LANDINGS in src/landings/index.ts. */
+  landing: string;
+  config: TagGroupConfig;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TagGroupDraft = Pick<TagGroup, 'slug' | 'tags' | 'landing' | 'config'> & { id?: string };
 
 export interface Api {
   mode: 'supabase' | 'local';
@@ -157,6 +207,7 @@ export interface Api {
   setCommentResolved(id: string, resolved: boolean): Promise<void>;
   deleteComment(id: string): Promise<void>;
   getLikes(postId: string): Promise<LikeInfo>;
+  /** Signed in: the account's like. Otherwise a visitor's like on a tag-group site (anonymous browser id). */
   toggleLike(postId: string): Promise<LikeInfo>;
   // users
   getProfile(username: string): Promise<Profile | null>;
@@ -178,6 +229,11 @@ export interface Api {
   listGroups(): Promise<Group[]>;
   saveGroup(g: Pick<Group, 'name' | 'description' | 'member_ids'> & { id?: string }): Promise<Group>;
   deleteGroup(id: string): Promise<void>;
+  // tag groups (anyone reads; admin writes)
+  listTagGroups(): Promise<TagGroup[]>;
+  getTagGroup(slug: string): Promise<TagGroup | null>;
+  saveTagGroup(g: TagGroupDraft): Promise<TagGroup>;
+  deleteTagGroup(id: string): Promise<void>;
   // role requests
   requestRole(role: Role, message: string): Promise<void>;
   listMyRoleRequests(): Promise<RoleRequest[]>;

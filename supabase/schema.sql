@@ -11,6 +11,7 @@
 -- (email odedsme@gmail.com) and change the password right away.
 
 create extension if not exists pg_trgm;
+create extension if not exists pgcrypto with schema extensions;
 
 -- ───────────────────────── profiles ─────────────────────────
 create table if not exists public.profiles (
@@ -196,6 +197,79 @@ create table if not exists public.likes (
   primary key (post_id, user_id)
 );
 
+-- ───────────────────────── tag groups (sites inside the site) ─────────────────────────
+-- /<slug> shows only public, published posts carrying at least one of `tags`, with its own landing page.
+-- `config` holds the landing page's texts and media (see TagGroupConfig in src/lib/types.ts).
+create table if not exists public.tag_groups (
+  id         uuid primary key default gen_random_uuid(),
+  slug       text not null unique,
+  tags       text[] not null default '{}',
+  landing    text not null default 'default',
+  config     jsonb not null default '{}',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+-- Addresses the blog itself uses can't be taken. Keep in step with RESERVED_SITE_SLUGS in src/lib/util.ts.
+alter table public.tag_groups drop constraint if exists tag_groups_slug_check;
+alter table public.tag_groups add constraint tag_groups_slug_check check (
+  slug ~ '^[a-z0-9][a-z0-9-]{1,39}$'
+  and slug not in ('posts', 'tags', 'authors', 'archive', 'search', 'login', 'signup', 'logout', 'account', 'privacy',
+                   'admin', 'assets', 'brand', 'api', 'auth', 'index', 'static', 'public', '404')
+);
+create index if not exists tag_groups_tags_idx on public.tag_groups using gin (tags);
+
+create or replace function public.touch_tag_group()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at := now();
+  if tg_op = 'UPDATE' then new.created_at := old.created_at; end if;
+  return new;
+end $$;
+drop trigger if exists tag_groups_touch on public.tag_groups;
+create trigger tag_groups_touch before insert or update on public.tag_groups
+  for each row execute function public.touch_tag_group();
+
+-- Visitors (no account) may comment on and like what a tag-group site shows: public, published posts with a tag
+-- from some tag group. Mirrors guestCanEngage() in src/lib/api/local.ts.
+create or replace function public.guest_can_engage(p_post uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.posts p
+    where p.id = p_post and p.status = 'published' and p.visibility = 'public'
+      and exists (select 1 from public.tag_groups g where g.tags && p.tags)
+  )
+$$;
+
+-- Visitor comments: a typed name instead of an account.
+alter table public.comments add column if not exists guest_name text;
+alter table public.comments alter column user_id drop not null;
+alter table public.comments drop constraint if exists comments_author_check;
+alter table public.comments add constraint comments_author_check
+  check (user_id is not null or (guest_name is not null and length(btrim(guest_name)) between 1 and 60));
+
+-- Visitor likes, keyed by a hash of a random secret kept in the visitor's browser.
+-- Written only through guest_toggle_like(), so nobody can remove someone else's like.
+create table if not exists public.guest_likes (
+  post_id      uuid not null references public.posts (id) on delete cascade,
+  visitor_hash text not null check (length(visitor_hash) = 64),
+  created_at   timestamptz not null default now(),
+  primary key (post_id, visitor_hash)
+);
+
+create or replace function public.guest_toggle_like(p_post uuid, p_secret text)
+returns void language plpgsql security definer set search_path = public as $$
+declare h text;
+begin
+  if length(coalesce(p_secret, '')) < 32 then raise exception 'invalid visitor'; end if;
+  if not public.guest_can_engage(p_post) then raise exception 'permission denied'; end if;
+  h := encode(extensions.digest(p_secret, 'sha256'), 'hex');
+  if exists (select 1 from public.guest_likes where post_id = p_post and visitor_hash = h) then
+    delete from public.guest_likes where post_id = p_post and visitor_hash = h;
+  else
+    insert into public.guest_likes (post_id, visitor_hash) values (p_post, h);
+  end if;
+end $$;
+
 -- ───────────────────────── role requests ─────────────────────────
 create table if not exists public.role_requests (
   id             uuid primary key default gen_random_uuid(),
@@ -353,6 +427,8 @@ alter table public.likes    enable row level security;
 alter table public.role_requests enable row level security;
 alter table public.groups enable row level security;
 alter table public.group_members enable row level security;
+alter table public.tag_groups enable row level security;
+alter table public.guest_likes enable row level security;
 
 drop policy if exists "profiles readable" on public.profiles;
 create policy "profiles readable" on public.profiles for select using (true);
@@ -383,6 +459,11 @@ create policy "comments insert" on public.comments for insert
   with check (user_id = auth.uid()
               and public.current_role_name() in ('admin', 'editor', 'reviewer', 'commenter')
               and exists (select 1 from public.posts p where p.id = post_id));
+-- Visitors on a tag-group site: no account, a name instead.
+drop policy if exists "comments insert guest" on public.comments;
+create policy "comments insert guest" on public.comments for insert
+  with check (user_id is null and auth.uid() is null and guest_name is not null and resolved = false
+              and public.guest_can_engage(post_id));
 drop policy if exists "comments update" on public.comments;
 create policy "comments update" on public.comments for update
   using (user_id = auth.uid() or public.current_role_name() in ('admin', 'editor', 'reviewer'));
@@ -398,6 +479,19 @@ create policy "likes insert own" on public.likes for insert
   with check (user_id = auth.uid() and exists (select 1 from public.posts p where p.id = post_id));
 drop policy if exists "likes delete own" on public.likes;
 create policy "likes delete own" on public.likes for delete using (user_id = auth.uid());
+
+drop policy if exists "guest likes read" on public.guest_likes;
+create policy "guest likes read" on public.guest_likes for select
+  using (exists (select 1 from public.posts p where p.id = post_id));
+-- No insert/update/delete policies: changes go through guest_toggle_like().
+
+-- Tag groups: everyone reads (the sites are public); only the admin writes. Mirrors can.manageTagGroups.
+drop policy if exists "tag groups read" on public.tag_groups;
+create policy "tag groups read" on public.tag_groups for select using (true);
+drop policy if exists "tag groups admin write" on public.tag_groups;
+create policy "tag groups admin write" on public.tag_groups for all
+  using (public.current_role_name() = 'admin')
+  with check (public.current_role_name() = 'admin');
 
 drop policy if exists "role requests read own or admin" on public.role_requests;
 create policy "role requests read own or admin" on public.role_requests for select

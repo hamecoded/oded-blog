@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Copy, Heart, Mail, Share2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
+import { useSite } from '../lib/site';
 import type { LikeInfo, Post } from '../lib/types';
 import { absoluteUrl, postPath } from '../lib/util';
 import { Sheet } from './Sheet';
 
 export function LikeButton({ post }: { post: Post }) {
   const { t, user, toast } = useApp();
+  const { group } = useSite();
   const nav = useNavigate();
   const [info, setInfo] = useState<LikeInfo>({ count: 0, liked: false });
 
@@ -22,7 +24,8 @@ export function LikeButton({ post }: { post: Post }) {
       className={`pill${info.liked ? ' liked' : ''}`}
       aria-pressed={info.liked}
       onClick={async () => {
-        if (!user) {
+        // Visitors to a tag-group site like without an account; on the blog itself liking needs one.
+        if (!user && !group) {
           toast(t('loginToLike'));
           return nav('/login', { state: { from: postPath(post.slug) } });
         }
@@ -61,7 +64,9 @@ const BRAND_ICONS = {
 
 export function ShareSheet({ post, open, onClose }: { post: Post; open: boolean; onClose: () => void }) {
   const { t, toast } = useApp();
-  const url = absoluteUrl(postPath(post.slug));
+  const { link } = useSite();
+  // Inside a tag-group site, share the site's own address for the post.
+  const url = absoluteUrl(link(postPath(post.slug)));
   const u = encodeURIComponent(url);
   const txt = encodeURIComponent(post.title);
 

@@ -1,4 +1,4 @@
-import type { OAuthProvider, Post, Profile, Role } from './types';
+import type { Bilingual, Comment, OAuthProvider, Post, Profile, Role, TagGroup, TagGroupConfig } from './types';
 
 /** Role capabilities. Keep in sync with the RLS policies in supabase/schema.sql. */
 export const can = {
@@ -13,6 +13,8 @@ export const can = {
   manageGroups: (p: Profile | null) => !!p && (p.role === 'admin' || p.role === 'editor'),
   editGroup: (p: Profile | null, g: { created_by: string | null }) => !!p && (p.role === 'admin' || g.created_by === p.id),
   export: (p: Profile | null) => !!p && p.role === 'admin',
+  /** Tag groups (sites inside the site). Mirrors the "tag groups" policies in supabase/schema.sql. */
+  manageTagGroups: (p: Profile | null) => !!p && p.role === 'admin',
 };
 
 /**
@@ -165,4 +167,117 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+// ───── Tag groups ─────
+
+/** Tag-group addresses: /<slug>. Lowercase letters, digits and dashes, 2–40 characters. */
+export const SITE_SLUG_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;
+
+/** First path segments the blog itself uses (or the host serves), so no tag group can take them. Keep in step with tag_groups_slug_check in schema.sql. */
+export const RESERVED_SITE_SLUGS = new Set([
+  'posts', 'tags', 'authors', 'archive', 'search', 'login', 'signup', 'logout', 'account', 'privacy', 'admin',
+  'assets', 'brand', 'api', 'auth', 'index', 'static', 'public', '404',
+]);
+
+export function validSiteSlug(slug: string): boolean {
+  return SITE_SLUG_RE.test(slug) && !RESERVED_SITE_SLUGS.has(slug);
+}
+
+const emptyText = (): Bilingual => ({ he: '', en: '' });
+
+export function emptyTagGroupConfig(): TagGroupConfig {
+  return {
+    name: emptyText(),
+    tagline: emptyText(),
+    about: emptyText(),
+    video_url: '',
+    video_heading: emptyText(),
+    backgrounds: [],
+    cta_title: emptyText(),
+    cta_label: emptyText(),
+    cta_url: '',
+    accent: '#e0a458',
+  };
+}
+
+/** Fills in fields missing from a stored config (older rows, hand-edited JSON). */
+export function normalizeTagGroup(g: TagGroup): TagGroup {
+  const base = emptyTagGroupConfig();
+  const c = (g.config ?? {}) as Partial<TagGroupConfig>;
+  const text = (k: keyof TagGroupConfig) => ({ ...(base[k] as Bilingual), ...((c[k] as Bilingual | undefined) ?? {}) });
+  return {
+    ...g,
+    tags: g.tags ?? [],
+    landing: g.landing || 'default',
+    config: {
+      ...base,
+      ...c,
+      name: text('name'),
+      tagline: text('tagline'),
+      about: text('about'),
+      video_heading: text('video_heading'),
+      cta_title: text('cta_title'),
+      cta_label: text('cta_label'),
+      backgrounds: Array.isArray(c.backgrounds) ? c.backgrounds.filter(Boolean) : [],
+    },
+  };
+}
+
+/** The text in `lang`, else in the other language. */
+export function pickText(b: Bilingual | undefined, lang: 'he' | 'en'): string {
+  if (!b) return '';
+  return (b[lang] || b[lang === 'he' ? 'en' : 'he'] || '').trim();
+}
+
+/** Whether a post belongs to a tag group's site: public, published and carrying one of its tags. */
+export function inTagGroup(post: Pick<Post, 'tags' | 'status' | 'visibility'>, group: Pick<TagGroup, 'tags'>): boolean {
+  return post.status === 'published' && (post.visibility ?? 'public') === 'public' && post.tags.some((t) => group.tags.includes(t));
+}
+
+/** Who wrote a comment: the account's name, or the name a visitor typed. */
+export function commentAuthorName(c: Pick<Comment, 'author' | 'guest_name'>): string {
+  return c.author?.display_name ?? c.guest_name ?? '—';
+}
+
+const VISITOR_KEY = 'blog.visitor';
+let memoryVisitor: string | null = null;
+
+/** A random secret that stands for this browser, so a visitor can like (and unlike) without an account. */
+export function visitorSecret(): string {
+  try {
+    let v = localStorage.getItem(VISITOR_KEY);
+    if (!v) {
+      v = `${uid()}${uid()}`.replace(/-/g, '');
+      localStorage.setItem(VISITOR_KEY, v);
+    }
+    return v;
+  } catch {
+    memoryVisitor ??= `${uid()}${uid()}`.replace(/-/g, '');
+    return memoryVisitor;
+  }
+}
+
+export async function sha256Hex(s: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+const GUEST_NAME_KEY = 'blog.guestName';
+
+/** The name a visitor last commented under, to prefill the next comment. */
+export function savedGuestName(): string {
+  try {
+    return localStorage.getItem(GUEST_NAME_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+export function saveGuestName(name: string) {
+  try {
+    localStorage.setItem(GUEST_NAME_KEY, name);
+  } catch {
+    /* storage unavailable */
+  }
 }

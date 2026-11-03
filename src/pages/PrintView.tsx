@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Printer, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { Post } from '../lib/types';
-import { can, formatDate, titleDir } from '../lib/util';
+import type { TagGroup } from '../lib/types';
+import { can, formatDate, pickText, titleDir } from '../lib/util';
 import { PostContent } from '../components/PostContent';
 import { TagChips } from '../components/PostBits';
 import { NotFound } from './NotFound';
@@ -20,16 +21,25 @@ export function PrintView() {
   const allowed = can.export(user);
   const nav = useNavigate();
   const [posts, setPosts] = useState<Post[] | null>(null);
+  // /posts/print?group=<slug>: every post of one tag group (admin → Tag groups → Export).
+  const groupSlug = useSearchParams()[0].get('group');
+  const [group, setGroup] = useState<TagGroup | null>(null);
 
   useEffect(() => {
     if (!allowed) return;
     if (slug) api.getPost(slug).then((p) => setPosts(p ? [p] : []));
+    else if (groupSlug)
+      api.getTagGroup(groupSlug).then(async (g) => {
+        setGroup(g);
+        setPosts(g ? [...(await api.listPosts({ limit: 10000, anyTags: g.tags }))].reverse() : []);
+      });
     else api.listPosts({ limit: 10000 }).then((ps) => setPosts([...ps].reverse()));
-  }, [slug, allowed]);
+  }, [slug, groupSlug, allowed]);
+  const groupName = group ? pickText(group.config.name, prefs.uiLang) || group.slug : '';
 
   useEffect(() => {
     if (!posts?.length) return;
-    document.title = slug ? posts[0].title : t('siteName');
+    document.title = slug ? posts[0].title : groupName || t('siteName');
     let cancelled = false;
     (async () => {
       // Lazy images never load off-screen; force them so every page has its pictures.
@@ -53,7 +63,7 @@ export function PrintView() {
     return () => {
       cancelled = true;
     };
-  }, [posts, slug, t]);
+  }, [posts, slug, t, groupName]);
 
   if (!authReady) return <p className="loading">{t('loading')}</p>;
   if (!allowed) return <p className="empty">{t('forbidden')}</p>;
@@ -73,8 +83,8 @@ export function PrintView() {
       </div>
       {!slug && (
         <header className="print-title">
-          <h1>{t('siteName')}</h1>
-          <p>{t('tagline')}</p>
+          <h1 dir="auto">{groupName || t('siteName')}</h1>
+          <p dir="auto">{group ? pickText(group.config.tagline, prefs.uiLang) : t('tagline')}</p>
         </header>
       )}
       {posts.map((p) => (

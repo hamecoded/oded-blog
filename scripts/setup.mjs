@@ -236,10 +236,16 @@ async function checkDatabase(url, key) {
     return [{ ok: false, msg: `The tables are missing (HTTP ${probe.status}). Run supabase/schema.sql.` }];
   }
   results.push({ ok: true, msg: 'Project reachable, key accepted, tables present' });
-  const latest = await http(`${base}/rest/v1/profiles?select=suspended&limit=1`, { headers });
+  // The newest additions: tag groups (sites inside the site) and visitors' comments and likes.
+  const [users, tagGroups, guests] = await Promise.all([
+    http(`${base}/rest/v1/profiles?select=suspended&limit=1`, { headers }),
+    http(`${base}/rest/v1/tag_groups?select=slug&limit=1`, { headers }),
+    http(`${base}/rest/v1/comments?select=guest_name&limit=1`, { headers }),
+  ]);
+  const latest = { status: [users, tagGroups, guests].every((r) => r.status === 200) ? 200 : 400 };
   results.push(
     latest.status === 200
-      ? { ok: true, msg: 'Schema is the latest version (user management columns present)' }
+      ? { ok: true, msg: 'Schema is the latest version (tag groups and visitor comments present)' }
       : { ok: false, msg: 'Schema is out of date. Re-run supabase/schema.sql (safe, keeps data).' },
   );
   const bucket = await http(`${base}/storage/v1/object/public/media/__setup-probe`);

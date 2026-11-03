@@ -65,6 +65,25 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   uploads to private) or to the bucket. Audio is not uploaded to SoundCloud (its API needs
   Artist Pro plus a server-side secret). SoundCloud, Spotify, Mixcloud and Archive.org
   links can be embedded.
+- **Tag groups ("sites inside the site", 2026-11-02):** the admin creates them in /admin → Tag groups.
+  `/<slug>` is a standalone-looking site: only **public, published** posts that carry **any** of the
+  group's tags, every link kept under `/<slug>` (`useSite().link()` in `src/lib/site.ts`), no blog top bar,
+  floating menu or sign-in, and on post pages only the group's tags and no author link. Routes are a second
+  top-level route `/:site` in `App.tsx` (layout: `src/site/SiteLayout.tsx`); list and post pages are the
+  blog's own, made site-aware through `useSite()`. Addresses that the blog itself uses are reserved
+  (`RESERVED_SITE_SLUGS` in util.ts and `tag_groups_slug_check` in schema.sql; keep them in step).
+  - **Landing page:** the default is `src/site/DefaultLanding.tsx`, a promotional one-pager over a
+    parallax background that shifts image per section (`src/site/blocks.tsx`). Its content is in
+    `tag_groups.config`, with every text in both languages. **Custom landings** are code: add a component in
+    `src/landings/` and register it in `src/landings/index.ts`. The admin then picks it per group.
+  - **Visitors comment with a typed name and like without an account**, but only on tag-group sites. On
+    the main blog commenting and liking still need an account. Comments use `user_id = null` +
+    `guest_name`. Likes go to `guest_likes`, keyed by the hash of a random secret in the visitor's browser
+    and written only by `guest_toggle_like()`. Both are allowed only where `guest_can_engage()` holds
+    (mirrored as `guestCanEngage()` in local.ts). No spam protection yet; the admin deletes comments.
+  - **Export per group** (admin): the archive icon on the group's row. PDF is `/posts/print?group=<slug>`.
+  - Path, not subdomain: GitHub Pages allows one domain per repo. `scripts/prerender.mjs` writes
+    `<slug>.html` and `<slug>/posts/*.html` so these addresses answer 200 and share with the group's name.
 - **Homepage:** no big title. Posts start right under a slim search-and-tags row, as
   compact cards with side thumbnails, so as many posts as possible fit on the first screen.
   Other list pages still use the large cards.
@@ -83,6 +102,12 @@ management, the compact homepage, and the RTL/LTR layouts at phone and desktop w
 - Any deployment: GitHub Pages, Netlify, Cloudflare or Vercel.
 - A real YouTube upload, the `psql` route in setup, and `migrate:media` against real
   projects.
+
+**Tag groups (2026-11-02):** tested in demo mode in the browser: creating a group, the landing page at
+375px and desktop in both languages, a visitor liking and commenting, custom-landing switching, per-group
+exports and the prerendered pages (against a stand-in server). **Not yet run on the live database:** the
+schema.sql additions (`tag_groups`, `guest_likes`, guest comment policy), so run schema.sql before
+deploying this version.
 
 **Live since 2026-10-31** at https://oded.me (GitHub Pages, repo `hamecoded/oded-blog`,
 Supabase project `tbwskzgkmoztdejeiyhz`); `.deploy.json` records the last deploy.

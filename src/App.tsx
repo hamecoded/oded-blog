@@ -1,28 +1,24 @@
-import { useEffect } from 'react';
 import { createBrowserRouter, Link, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { api } from './lib/api';
-import { useApp } from './lib/app';
+import { useApp, usePrintLock } from './lib/app';
 import { AppProvider } from './lib/AppProvider';
 import { can } from './lib/util';
 import { FabProvider } from './components/Fab';
-import { ArchivePage, AuthorPage, Home, SearchPage, TagPage, TagsPage } from './pages/Lists';
+import { ArchivePage, ArticlesPage, AuthorPage, Home, SearchPage, TagPage, TagsPage } from './pages/Lists';
 import { PostView } from './pages/PostView';
 import { PrintView } from './pages/PrintView';
 import { AuthPage, Logout } from './pages/Auth';
 import { AccountPage } from './pages/Account';
 import { NotFound } from './pages/NotFound';
 import { PrivacyPage } from './pages/Privacy';
+import { Landing, SiteLayout } from './site/SiteLayout';
 
 function Layout() {
   const { t, user, toastMsg } = useApp();
   const loc = useLocation();
   const bare = loc.pathname.endsWith('/print');
-  // Exporting is admin-only; also discourage the browser's own Print / Save as PDF.
-  const canExport = can.export(user);
-  useEffect(() => {
-    document.documentElement.classList.toggle('print-locked', !canExport);
-  }, [canExport]);
+  usePrintLock(can.export(user));
   return (
     <FabProvider>
       {!bare && (
@@ -83,6 +79,10 @@ function Layout() {
  *   /search?q=…&tag=…     search            /admin              manage posts, users, role requests
  *   /account              role, password, request a role
  *   /privacy              privacy policy (linked from Google's sign-in setup)
+ *
+ * Tag-group sites (a "site inside the site", src/site): /:site is the group's landing page, and under it
+ *   /:site/posts, /:site/posts/:slug, /:site/tags, /:site/tags/:tag, /:site/search
+ * show only the group's posts. The fixed paths above always win over /:site (see RESERVED_SITE_SLUGS).
  */
 // The editor (TipTap) only loads for writers.
 const editor = () => import('./pages/PostEditor').then((m) => ({ Component: m.PostEditor }));
@@ -109,6 +109,19 @@ const router = createBrowserRouter(
         { path: '/account', element: <AccountPage /> },
         { path: '/privacy', element: <PrivacyPage /> },
         { path: '/admin', lazy: () => import('./pages/Admin').then((m) => ({ Component: m.AdminPage })) },
+        { path: '*', element: <NotFound /> },
+      ],
+    },
+    {
+      path: '/:site',
+      element: <SiteLayout />,
+      children: [
+        { index: true, element: <Landing /> },
+        { path: 'posts', element: <ArticlesPage /> },
+        { path: 'posts/:slug', element: <PostView /> },
+        { path: 'tags', element: <TagsPage /> },
+        { path: 'tags/:tag', element: <TagPage /> },
+        { path: 'search', element: <SearchPage /> },
         { path: '*', element: <NotFound /> },
       ],
     },

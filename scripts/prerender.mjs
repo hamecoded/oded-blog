@@ -106,6 +106,74 @@ async function fetchPosts(url, key) {
   return res.json();
 }
 
+async function fetchTagGroups(url, key) {
+  const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/tag_groups?select=slug,tags,config`, {
+    headers: { apikey: key },
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Tag-group sites (/<slug>): a page for the landing (/<slug>.html and /<slug>/index.html) and for each of the
+ * group's posts (/<slug>/posts/<post>.html), carrying the site's own name instead of the blog's. Besides the
+ * previews, this makes those addresses answer 200 on GitHub Pages rather than going through 404.html.
+ */
+async function prerenderTagGroups(posts) {
+  let groups;
+  try {
+    groups = await fetchTagGroups(sbUrl, sbKey);
+  } catch (e) {
+    console.warn(`prerender: no tag groups (${e.message}) — run supabase/schema.sql again if they're new.`);
+    return;
+  }
+  const text = (b) => (b?.he || b?.en || '').trim();
+  let pages = 0;
+  for (const g of groups) {
+    if (!/^[a-z0-9][a-z0-9-]{1,39}$/.test(g.slug ?? '')) continue;
+    const c = g.config ?? {};
+    const name = text(c.name) || g.slug;
+    const description = clip(text(c.tagline) || text(c.about)) || name;
+    const cover = (c.backgrounds ?? []).find((u) => /^https?:\/\//.test(u));
+    const landing = page(shell, {
+      title: name,
+      description,
+      url: site && `${site}${g.slug}`,
+      image: cover || (site && `${site}${DEFAULT_IMAGE}`),
+      type: 'website',
+      locale: 'he_IL',
+    }).replace(/property="og:site_name" content="[^"]*"/, `property="og:site_name" content="${esc(name)}"`);
+    writeFileSync(join(DIST, `${g.slug}.html`), landing);
+    mkdirSync(join(DIST, g.slug), { recursive: true });
+    writeFileSync(join(DIST, g.slug, 'index.html'), landing);
+    pages++;
+    const tags = g.tags ?? [];
+    for (const p of posts) {
+      if (!p.slug || /[/\\]/.test(p.slug) || p.slug.startsWith('.')) continue;
+      if (!(p.tags ?? []).some((t) => tags.includes(t))) continue;
+      const file = join(DIST, g.slug, 'posts', `${p.slug}.html`);
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(
+        file,
+        page(shell, {
+          title: p.title,
+          docTitle: `${p.title} · ${name}`,
+          description: clip(p.excerpt?.trim() || textOf(p.content_html)) || description,
+          url: site && `${site}${g.slug}/posts/${encodeURIComponent(p.slug)}`,
+          image: imageFor(p, site),
+          type: 'article',
+          locale: p.lang === 'en' ? 'en_US' : 'he_IL',
+        })
+          .replace(/property="og:site_name" content="[^"]*"/, `property="og:site_name" content="${esc(name)}"`)
+          .replace('<html lang="he" dir="rtl"', p.lang === 'en' ? '<html lang="en" dir="ltr"' : '<html lang="he" dir="rtl"'),
+      );
+      pages++;
+    }
+  }
+  if (groups.length) console.log(`prerender: ${pages} page${pages === 1 ? '' : 's'} for ${groups.length} tag group${groups.length === 1 ? '' : 's'}.`);
+}
+
 const shellFile = join(DIST, 'index.html');
 if (!existsSync(shellFile)) {
   console.error('prerender: dist/index.html is missing — run vite build first.');
@@ -163,6 +231,7 @@ if (!sbUrl || !sbKey) {
       );
     }
     console.log(`prerender: social previews for ${count} public post${count === 1 ? '' : 's'}.`);
+    await prerenderTagGroups(posts);
   } catch (e) {
     // Never fail the deploy over previews: the site works the same, links just share generically.
     console.warn(`prerender: could not read posts (${e.message}) — site preview tags only.`);

@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect } from 'react';
 import type { TKey } from './i18n';
 import type { Lang, Profile } from './types';
 
@@ -33,6 +33,13 @@ export function useApp(): AppCtx {
   return c;
 }
 
+/** Exporting is admin-only; also discourage the browser's own Print / Save as PDF for everyone else. */
+export function usePrintLock(allowed: boolean) {
+  useEffect(() => {
+    document.documentElement.classList.toggle('print-locked', !allowed);
+  }, [allowed]);
+}
+
 /** Map API error codes to translated messages. */
 export function errorText(e: unknown, t: AppCtx['t']): string {
   const m = e instanceof Error ? e.message : String(e);
@@ -46,6 +53,9 @@ export function errorText(e: unknown, t: AppCtx['t']): string {
   if (/user\/self/.test(m)) return t('notOnYourself');
   if (m === 'user/username-taken') return t('usernameTaken');
   if (m === 'user/username-invalid') return t('usernameInvalid');
+  if (m === 'tagGroup/slug-taken') return t('tg_slugTaken');
+  if (m === 'tagGroup/slug-invalid') return t('tg_slugInvalid');
+  if (m === 'comment/name-required') return t('guestNameRequired');
   if (/youtubeSignupRequired/.test(m)) return t('yt_noChannel');
   if (/^(youtube\/(denied|popup_closed)|access_denied)$/.test(m)) return t('yt_denied');
   if (/quotaExceeded|uploadLimitExceeded/.test(m)) return t('yt_quota');

@@ -3,24 +3,30 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { Search as SearchIcon, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../lib/app';
+import { useSite } from '../lib/site';
 import type { Post, PostQuery, Profile, TagCount } from '../lib/types';
-import { can, tagPath } from '../lib/util';
+import { can, inTagGroup, tagPath } from '../lib/util';
 import { PostCard } from '../components/PostBits';
 import { usePageTitle } from './usePageTitle';
 
+/** On a tag-group site every list is limited to the group's public posts. */
 function usePosts(q: PostQuery | null, deps: unknown[]) {
   const { user } = useApp();
+  const { group } = useSite();
   const [posts, setPosts] = useState<Post[] | null>(null);
   useEffect(() => {
     if (!q) return;
     let live = true;
     setPosts(null);
-    api.listPosts(q).then((p) => live && setPosts(p)).catch(() => live && setPosts([]));
+    api
+      .listPosts(group ? { ...q, anyTags: group.tags } : q)
+      .then((p) => live && setPosts(group ? p.filter((x) => inTagGroup(x, group)) : p))
+      .catch(() => live && setPosts([]));
     return () => {
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, user?.id]);
+  }, [...deps, user?.id, group?.id]);
   return posts;
 }
 
@@ -37,19 +43,35 @@ function PostGrid({ posts, compact }: { posts: Post[] | null; compact?: boolean 
   );
 }
 
+/** All tags with post counts; on a tag-group site only the group's own tags, counted over its posts. */
 function useTags() {
+  const { group } = useSite();
   const [tags, setTags] = useState<TagCount[]>([]);
   useEffect(() => {
-    api.listTags().then(setTags).catch(() => {});
-  }, []);
+    if (!group) {
+      api.listTags().then(setTags).catch(() => {});
+      return;
+    }
+    api
+      .listPosts({ anyTags: group.tags, limit: 10000 })
+      .then((posts) => {
+        const counts = new Map<string, number>();
+        posts
+          .filter((p) => inTagGroup(p, group))
+          .forEach((p) => p.tags.filter((t) => group.tags.includes(t)).forEach((t) => counts.set(t, (counts.get(t) ?? 0) + 1)));
+        setTags([...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
+      })
+      .catch(() => {});
+  }, [group]);
   return tags;
 }
 
 function TagCloud({ tags, limit, strip }: { tags: TagCount[]; limit?: number; strip?: boolean }) {
+  const { link } = useSite();
   return (
     <div className={`tags ${strip ? 'strip' : 'cloud'}`}>
       {tags.slice(0, limit).map(({ tag, count }) => (
-        <Link key={tag} to={tagPath(tag)} className="tag" dir="auto">
+        <Link key={tag} to={link(tagPath(tag))} className="tag" dir="auto">
           #{tag} <small>{count}</small>
         </Link>
       ))}
@@ -99,6 +121,27 @@ export function Home() {
           <PostGrid posts={drafts} compact />
         </section>
       )}
+    </>
+  );
+}
+
+/** /<site>/posts — every post of a tag-group site, in the compact homepage layout. */
+export function ArticlesPage() {
+  const { t } = useApp();
+  const { link } = useSite();
+  const posts = usePosts({}, []);
+  const tags = useTags();
+  usePageTitle(t('articles'));
+  return (
+    <>
+      <PageHead title={t('articles')} />
+      <div className="home-bar">
+        <Link to={link('/search')} className="home-search" aria-label={t('search')}>
+          <SearchIcon size={16} /> <span>{t('searchPlaceholder')}</span>
+        </Link>
+        <TagCloud tags={tags} limit={12} strip />
+      </div>
+      <PostGrid posts={posts} compact />
     </>
   );
 }

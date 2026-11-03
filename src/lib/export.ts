@@ -169,9 +169,10 @@ export function downloadPostMarkdown(p: Post) {
   downloadBlob(new Blob([postToMarkdown(p)], { type: 'text/markdown;charset=utf-8' }), `${safeFileName(p.slug)}.md`);
 }
 
-export function downloadJsonBackup(posts: Post[]) {
+/** `name`: file name prefix, e.g. a tag group's slug (default "blog-backup"). */
+export function downloadJsonBackup(posts: Post[], name = 'blog-backup') {
   const data = { format: 'bilingual-blog/v1', exported_at: new Date().toISOString(), posts };
-  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `blog-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `${safeFileName(name)}-${new Date().toISOString().slice(0, 10)}.json`);
 }
 
 const EXT: Record<string, string> = {
@@ -180,7 +181,8 @@ const EXT: Record<string, string> = {
 };
 
 /** Full offline archive: HTML + Markdown per post, downloaded media, index and JSON backup. */
-export async function downloadZip(posts: Post[], uiLang: 'he' | 'en', siteName: string) {
+/** `fileName`: the archive's name prefix (default: the site name). */
+export async function downloadZip(posts: Post[], uiLang: 'he' | 'en', siteName: string, fileName = siteName) {
   const { default: JSZip } = await import('jszip');
   const zip = new JSZip();
   const media = new Map<string, string>();
@@ -234,5 +236,5 @@ export async function downloadZip(posts: Post[], uiLang: 'he' | 'en', siteName: 
     `${siteName} — offline archive\n\nindex.html      list of posts (open in any browser)\nall-posts.html  every post in one file (opens in TextEdit / Word)\nposts/*.html    one file per post, metadata in <meta> tags\nmarkdown/*.md   Markdown with YAML front matter\nmedia/          images and videos\nposts.json      full backup, can be restored from the Manage page\n`,
   );
   const blob = await zip.generateAsync({ type: 'blob' });
-  downloadBlob(blob, `${safeFileName(siteName)}-${new Date().toISOString().slice(0, 10)}.zip`);
+  downloadBlob(blob, `${safeFileName(fileName)}-${new Date().toISOString().slice(0, 10)}.zip`);
 }

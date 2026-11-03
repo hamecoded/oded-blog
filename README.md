@@ -64,6 +64,7 @@ Everyone who signs up starts as a **commenter** and can ask the manager for any 
 | Search | `/search?q=…&tag=…`: free text, `#tag` typed in the box, or tag chips. Hebrew niqqud is ignored. |
 | Export (manager only) | **PDF** of one post or all posts. **HTML** (opens in TextEdit). **Markdown**. **ZIP** offline archive. **JSON** backup and restore. For everyone else these buttons are hidden, and the browser's own Print / Save as PDF shows a notice instead of the page. |
 | Post details | Author, publish date, "updated" date, reading time, and draft/published status. |
+| Tag groups (sites inside the site) | In **/admin → Tag groups** the manager creates a group: an address (`/coach`), a set of tags and a landing page. At `oded.me/coach` the blog then looks like a standalone site: only public posts carrying one of the group's tags, every link stays under `/coach`, and there's no blog top bar, floating menu or sign-in. The site opens on a **promotional landing page** (hero with name, tagline and call-to-action button, a welcome YouTube video, an about section, a carousel of the group's posts, its topics, and a closing call to action) over a full-screen **parallax background that shifts image** as each section scrolls into view. Every text is set in Hebrew and English, and the header has a language switch. Visitors can **comment by typing a name** (no account), **like** without an account, and share posts; shared links point to the site's own address. A group can use a **custom landing page** written in code instead of the default (see `src/landings/index.ts`). The manager can **export all of a group's posts** (PDF, ZIP, JSON) from its row. Only the root address reveals the full blog. |
 
 ### URL design
 
@@ -81,7 +82,16 @@ Everyone who signs up starts as a **commenter** and can ask the manager for any 
 /account                  your role, change password, request a role
 /admin                    posts incl. drafts · users & roles · role requests · groups · backup/restore
 /login  /signup
+
+Tag-group sites (each group's own address):
+/:site                    its landing page
+/:site/posts              all its posts
+/:site/posts/:slug        a post, inside the site
+/:site/tags  /:site/tags/:tag  /:site/search
 ```
+
+The fixed paths above always take precedence, so they can't be used as tag-group addresses
+(`RESERVED_SITE_SLUGS` in `src/lib/util.ts` and the `tag_groups_slug_check` constraint).
 
 ---
 
@@ -167,8 +177,10 @@ All tables are in the `public` schema and are created by
 | **Accounts** (email, password hash) | Supabase Auth (`auth.users`) | Managed by Supabase; passwords are bcrypt-hashed. |
 | **Profiles** | `profiles` | `id` (= auth user id), `display_name`, `username`, `role` (`admin`/`editor`/`reviewer`/`commenter`/`reader`), `must_change_password`, `suspended`, `created_at`. Add, reset, suspend and delete go through the admin-only `admin_*` SQL functions, which write to `auth.users` (suspending sets `banned_until`), so the browser never needs the service-role key. |
 | **Posts** | `posts` | One row per post — see the column list below. |
-| **Comments** | `comments` | `post_id`, `user_id`, `parent_id` (replies), `quote` + `prefix` + `suffix` (the highlighted text and 32 characters around it, used to find it again after edits), `body` (plain text), `resolved`, `created_at`. |
+| **Comments** | `comments` | `post_id`, `user_id` (null for a visitor's comment), `guest_name` (the name a visitor typed on a tag-group site), `parent_id` (replies), `quote` + `prefix` + `suffix` (the highlighted text and 32 characters around it, used to find it again after edits), `body` (plain text), `resolved`, `created_at`. |
 | **Likes** | `likes` | (`post_id`, `user_id`) pairs. |
+| **Visitor likes** | `guest_likes` | (`post_id`, `visitor_hash`): the SHA-256 of a random secret kept in the visitor's browser. Written only by `guest_toggle_like()`. Counted together with `likes`. |
+| **Tag groups** | `tag_groups` | `slug` (the address), `tags` (text[]), `landing` (`default` or a custom landing's key), `config` (jsonb: bilingual `name`, `tagline`, `about`, `video_heading`, `cta_title`, `cta_label`, plus `video_url`, `backgrounds` (image URLs), `cta_url`, `accent`). Everyone can read them; only the admin writes. |
 | **Groups** | `groups` + `group_members` | Group `name`, `description`, `created_by` (owner); members as (`group_id`, `user_id`). Only the owner and the admin can see or change a group. |
 | **Role requests** | `role_requests` | `user_id`, `requested_role`, `message`, `status` (`pending`/`approved`/`rejected`), `decided_at`, `decided_by`. |
 | **Uploaded images, audio, recorded video** | Supabase Storage, public bucket **`media`** | Stored as the original files at `media/<YYYY-MM>/<random-uuid>.<ext>`. Images are kept exactly as uploaded (JPEG, PNG, WebP…). Browser recordings are **MP4/M4A** (Safari, recent Chrome) or **WebM** (Firefox, older Chrome). Files are cached for a year. The post HTML references them by their public URL. |
@@ -538,8 +550,10 @@ src/
     youtube.ts             Google sign-in + YouTube resumable upload
     util.ts                roles/permissions, visibility rule, slugs, helpers
   editor/                  TipTap editor, command bar, dialogs, recorder, custom nodes
-  components/              floating menu, sheets, audience picker, comments, share, settings
+  components/              floating menu, sheets, audience picker, comments, share, settings, tag group sheet
   pages/                   home/lists, post, editor, print, account, admin, auth
+  site/                    tag-group sites: layout, default landing page and its blocks, visitor comments
+  landings/                custom landing pages for tag groups (registry in index.ts)
 supabase/schema.sql        database, security policies, storage bucket, prebuilt admin
 scripts/setup.mjs          deployment walkthrough, deploy, checks, media migration
 scripts/spa-fallback.mjs   copies index.html to 404.html after the build
@@ -556,6 +570,11 @@ netlify.toml, vercel.json  host configs
 
 - **Permissions** are enforced in Postgres row-level security, not only in the UI. This
   covers drafts, post audiences, comments, likes, groups, roles and uploads.
+- **Visitor comments and likes** (no account) are accepted only on public, published posts
+  carrying a tag from some tag group (`guest_can_engage()`). There is no spam filter or rate
+  limit; the manager deletes unwanted comments from the post's comment section. A tag-group
+  site hides the blog from casual visitors, but it isn't secret: the root address still
+  shows the full blog.
 - **Post HTML** is sanitized with DOMPurify on save and on display. Iframes are allowed
   only from YouTube, Vimeo, TikTok, Facebook, Instagram, SoundCloud, Spotify, Mixcloud and
   Archive.org.

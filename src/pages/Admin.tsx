@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Ban, Check, FileJson, KeyRound, PenSquare, Pencil, Plus, Search, Trash2, Upload, UserCheck, UserPlus, Users, X } from 'lucide-react';
+import { Archive, Ban, Check, ExternalLink, FileJson, Globe, KeyRound, PenSquare, Pencil, Plus, Search, Trash2, Upload, UserCheck, UserPlus, Users, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import { downloadJsonBackup } from '../lib/export';
-import type { Group, Post, Profile, Role, RoleRequest } from '../lib/types';
+import type { Group, Post, Profile, Role, RoleRequest, TagGroup } from '../lib/types';
 import { GroupSheet } from '../components/Audience';
+import { ExportAllSheet } from '../components/ExportAllSheet';
+import { TagGroupSheet } from '../components/TagGroupSheet';
 import { VIS_ICON } from '../components/visIcons';
 import { PasswordSheet, UserSheet } from '../components/UserSheets';
-import { can, formatDate, normalizeSearch, postPath, ROLES, titleDir } from '../lib/util';
+import { absoluteUrl, can, formatDate, inTagGroup, normalizeSearch, pickText, postPath, ROLES, titleDir } from '../lib/util';
 import { usePageTitle } from './usePageTitle';
 
 /** /admin — posts (incl. drafts) for writers and reviewers, users & roles for the manager. */
@@ -17,10 +19,23 @@ export function AdminPage() {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [users, setUsers] = useState<Profile[] | null>(null);
   const [requests, setRequests] = useState<RoleRequest[]>([]);
-  type Tab = 'posts' | 'users' | 'requests' | 'groups';
+  type Tab = 'posts' | 'users' | 'requests' | 'groups' | 'sites';
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as Tab) || 'posts';
   const setTab = (next: Tab) => setParams(next === 'posts' ? {} : { tab: next }, { replace: true });
+  const [tagGroups, setTagGroups] = useState<TagGroup[] | null>(null);
+  const [editingTagGroup, setEditingTagGroup] = useState<TagGroup | null | undefined>(undefined);
+  const [exportGroup, setExportGroup] = useState<TagGroup | null>(null);
+  // "Edit site" in a tag-group site's footer links here as ?tab=sites&edit=<id>: open that group's sheet.
+  const editParam = params.get('edit');
+  if (editParam && tagGroups && editingTagGroup === undefined) {
+    const g = tagGroups.find((x) => x.id === editParam);
+    if (g) setEditingTagGroup(g);
+  }
+  const closeTagGroupSheet = () => {
+    setEditingTagGroup(undefined);
+    if (editParam) setParams({ tab: 'sites' }, { replace: true });
+  };
   const [groups, setGroups] = useState<Group[]>([]);
   const [editingGroup, setEditingGroup] = useState<Group | null | undefined>(undefined);
   const [userQuery, setUserQuery] = useState('');
@@ -33,6 +48,7 @@ export function AdminPage() {
   const load = () => {
     api.listPosts({ status: 'all', limit: 1000 }).then(setPosts);
     if (can.manageGroups(user)) api.listGroups().then(setGroups).catch(() => {});
+    if (can.manageTagGroups(user)) api.listTagGroups().then(setTagGroups).catch(() => setTagGroups([]));
     if (can.manageUsers(user)) {
       api.listUsers().then(setUsers).catch((e) => toast(errorText(e, t)));
       api.listRoleRequests().then(setRequests).catch(() => {});
@@ -153,6 +169,11 @@ export function AdminPage() {
           <button type="button" className={tab === 'groups' ? 'on' : ''} onClick={() => setTab('groups')}>
             {t('groups')}
           </button>
+          {can.manageTagGroups(user) && (
+            <button type="button" className={tab === 'sites' ? 'on' : ''} onClick={() => setTab('sites')}>
+              {t('tagGroups')}
+            </button>
+          )}
         </div>
       )}
 
@@ -367,6 +388,66 @@ export function AdminPage() {
             ))}
           </ul>
           <GroupSheet open={editingGroup !== undefined} group={editingGroup ?? null} onClose={() => setEditingGroup(undefined)} onSaved={load} />
+        </>
+      )}
+      {tab === 'sites' && can.manageTagGroups(user) && (
+        <>
+          <p className="hint">{t('tg_intro')}</p>
+          <div className="row end">
+            <button type="button" className="btn primary sm" onClick={() => setEditingTagGroup(null)}>
+              <Plus size={16} /> {t('tg_new')}
+            </button>
+          </div>
+          <ul className="admin-list" style={{ marginTop: 10 }}>
+            {tagGroups && !tagGroups.length && <p className="hint">{t('tg_none')}</p>}
+            {tagGroups?.map((g) => {
+              const count = (posts ?? []).filter((p) => inTagGroup(p, g)).length;
+              return (
+                <li key={g.id}>
+                  <span className="avatar" style={{ background: g.config.accent }}>
+                    <Globe size={18} />
+                  </span>
+                  <span className="grow">
+                    <strong dir="auto">{pickText(g.config.name, prefs.uiLang) || g.slug}</strong>
+                    <small className="muted">
+                      <a href={absoluteUrl(`/${g.slug}`)} target="_blank" rel="noopener noreferrer" dir="ltr" className="tg-addr">
+                        {location.host}/{g.slug} <ExternalLink size={12} className="inline-ico" />
+                      </a>{' '}
+                      · {count} {t('tg_postsMatch')}
+                    </small>
+                    <small className="muted" dir="auto">
+                      {g.tags.map((tg) => `#${tg}`).join(' ')}
+                    </small>
+                  </span>
+                  <button type="button" className="icon-btn" aria-label={t('tg_export')} title={t('tg_export')} onClick={() => setExportGroup(g)}>
+                    <Archive size={16} />
+                  </button>
+                  <button type="button" className="icon-btn" aria-label={t('edit')} title={t('edit')} onClick={() => setEditingTagGroup(g)}>
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn danger"
+                    aria-label={t('delete')}
+                    title={t('delete')}
+                    onClick={async () => {
+                      if (!window.confirm(t('tg_confirmDelete'))) return;
+                      try {
+                        await api.deleteTagGroup(g.id);
+                        load();
+                      } catch (e) {
+                        toast(errorText(e, t));
+                      }
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <TagGroupSheet open={editingTagGroup !== undefined} group={editingTagGroup ?? null} posts={posts ?? []} onClose={closeTagGroupSheet} onSaved={load} />
+          <ExportAllSheet open={!!exportGroup} group={exportGroup} onClose={() => setExportGroup(null)} />
         </>
       )}
     </>

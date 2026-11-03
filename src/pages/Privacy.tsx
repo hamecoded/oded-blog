@@ -7,7 +7,7 @@ import { usePageTitle } from './usePageTitle';
 // Google's sign-in setup links here (Google Auth Platform → Branding → privacy policy link). A Meta app would
 // link to /privacy and /privacy#delete (privacy policy / data deletion instructions) if Facebook sign-in returns.
 // The text is long-form, so each language is a block here rather than dictionary entries in i18n.ts.
-const UPDATED = '2026-10-31';
+const UPDATED = '2026-11-02';
 
 const mail = (
   <a href={`mailto:${ADMIN_EMAIL}`} dir="ltr">
@@ -47,6 +47,12 @@ function English() {
       <p>
         Comments, likes and role requests are stored with your account, and so are posts and groups if you write for the
         blog.
+      </p>
+      <p>
+        Some pages of the site let you comment or like without an account. There, the name you type is shown publicly
+        next to your comment, and your browser keeps that name and a random code, so your like counts once and you can
+        take it back. Only a scrambled form of that code is stored on the server. To have such a comment removed, email{' '}
+        {mail}.
       </p>
       <h2>Who can see it</h2>
       <p>
@@ -99,6 +105,11 @@ function Hebrew() {
       </p>
       <h2>מה שאתם מוסיפים</h2>
       <p>תגובות, לייקים ובקשות תפקיד נשמרים עם החשבון שלכם, וכך גם פוסטים וקבוצות אם אתם כותבים בבלוג.</p>
+      <p>
+        בחלק מעמודי האתר אפשר להגיב או לסמן לייק בלי חשבון. שם, השם שאתם כותבים מוצג לכולם ליד התגובה, והדפדפן שלכם שומר
+        את השם הזה וקוד אקראי, כדי שהלייק ייספר פעם אחת ותוכלו לבטל אותו. בשרת נשמרת רק צורה מוצפנת של הקוד. כדי להסיר
+        תגובה כזאת, כתבו אל {mail}.
+      </p>
       <h2>מי רואה מה</h2>
       <p>
         שם התצוגה ושם המשתמש שלכם מופיעים ליד התגובות והפוסטים שלכם. כתובת האימייל גלויה רק למנהל הבלוג. המידע שלכם לא
