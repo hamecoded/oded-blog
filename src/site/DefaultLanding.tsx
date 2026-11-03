@@ -32,7 +32,10 @@ export function DefaultLanding({ group }: { group: TagGroup }) {
   const images = c.backgrounds;
   const Fwd = L === 'he' ? ArrowLeft : ArrowRight;
   const cta = c.cta_url && tx('cta_label') ? { href: c.cta_url, label: tx('cta_label') } : null;
-  const external = (href: string) => /^(https?:|mailto:|tel:)/.test(href);
+  // https:, mailto:, tel:, wa.me… and #anchors are plain links; anything else is a page of this site
+  // ("posts" or "/posts/x"), with or without the leading slash.
+  const external = (href: string) => /^([a-z][a-z0-9+.-]*:|#)/i.test(href);
+  const sitePath = (href: string) => link(href.startsWith('/') ? href : `/${href}`);
 
   let bg = 0;
   return (
@@ -57,11 +60,11 @@ export function DefaultLanding({ group }: { group: TagGroup }) {
           <div className="lp-actions">
             {cta &&
               (external(cta.href) ? (
-                <a className="btn primary lp-btn" href={cta.href} target={cta.href.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer">
+                <a className="btn primary lp-btn" href={cta.href} target={/^https?:/.test(cta.href) ? '_blank' : undefined} rel="noopener noreferrer">
                   {cta.label}
                 </a>
               ) : (
-                <Link className="btn primary lp-btn" to={link(cta.href)}>
+                <Link className="btn primary lp-btn" to={sitePath(cta.href)}>
                   {cta.label}
                 </Link>
               ))}
@@ -131,11 +134,11 @@ export function DefaultLanding({ group }: { group: TagGroup }) {
             <h2 dir="auto">{tx('cta_title') || siteName}</h2>
             {cta &&
               (external(cta.href) ? (
-                <a className="btn primary lp-btn" href={cta.href} target={cta.href.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer">
+                <a className="btn primary lp-btn" href={cta.href} target={/^https?:/.test(cta.href) ? '_blank' : undefined} rel="noopener noreferrer">
                   {cta.label}
                 </a>
               ) : (
-                <Link className="btn primary lp-btn" to={link(cta.href)}>
+                <Link className="btn primary lp-btn" to={sitePath(cta.href)}>
                   {cta.label}
                 </Link>
               ))}

@@ -319,7 +319,8 @@ YouTube thumbnail, else `public/og-default.png`.
 - **Private and restricted posts** get no preview page; they share as the generic site card.
 - **Tag groups** get pages too: `dist/<slug>.html` (and `dist/<slug>/index.html`) for the landing page,
   with the group's name, tagline and first background image, and `dist/<slug>/posts/<post>.html` for each of
-  its posts, under the group's name rather than oded.me's. So `oded.me/coach` answers 200 on GitHub Pages.
+  its posts, under the group's name rather than oded.me's. Its articles, tags and search pages
+  (`dist/<slug>/posts/index.html`, `tags/index.html`, `tags/<tag>.html`, `search.html`) get the group's name too. So `oded.me/coach` answers 200 on GitHub Pages.
   A new tag group gets these pages with the next rebuild; until then its links still work, they just share
   with the generic card.
 - The site address comes from `SITE_URL` (the workflow sets it from a repository variable) or

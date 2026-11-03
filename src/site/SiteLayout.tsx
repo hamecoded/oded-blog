@@ -86,7 +86,7 @@ function SiteHeader() {
   const { t, prefs, setPrefs } = useApp();
   const { link, siteName, base } = useSite();
   const loc = useLocation();
-  const onLanding = loc.pathname.replace(/\/$/, '') === base;
+  const onLanding = loc.pathname.replace(/\/$/, '').toLowerCase() === base;
   const scrolled = useScrolledPast(40);
   return (
     <header className={`tg-header${onLanding ? ' over' : ''}${onLanding && !scrolled ? ' clear' : ''}`}>

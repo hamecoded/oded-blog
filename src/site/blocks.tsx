@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Video } from 'lucide-react';
 import { useApp } from '../lib/app';
 import { useSite } from '../lib/site';
 import type { Post } from '../lib/types';
-import { postPath, titleDir } from '../lib/util';
+import { postImage, postPath, titleDir } from '../lib/util';
 import { videoFromUrl } from '../lib/video';
 import { prefersReducedMotion } from './useLanding';
 
@@ -90,17 +90,20 @@ export function PostCarousel({ posts }: { posts: Post[] }) {
   return (
     <div className="lp-carousel">
       <div className="lp-track" ref={track} tabIndex={0} aria-label={t('articles')}>
-        {posts.map((p) => (
-          <Link key={p.id} to={link(postPath(p.slug))} className="lp-card" lang={p.lang}>
-            <span className="lp-card-img">
-              {p.cover_url ? <img src={p.cover_url} alt="" loading="lazy" /> : <span className="lp-card-letter">{p.title.slice(0, 1)}</span>}
-            </span>
-            <span className="lp-card-body">
-              <strong dir={titleDir(p.title, p.lang)}>{p.title}</strong>
-              {p.excerpt && <span dir={titleDir(p.excerpt, p.lang)}>{p.excerpt}</span>}
-            </span>
-          </Link>
-        ))}
+        {posts.map((p) => {
+          const img = postImage(p);
+          return (
+            <Link key={p.id} to={link(postPath(p.slug))} className="lp-card" lang={p.lang}>
+              <span className="lp-card-img">
+                {img ? <img src={img} alt="" loading="lazy" /> : <span className="lp-card-letter">{p.title.slice(0, 1)}</span>}
+              </span>
+              <span className="lp-card-body">
+                <strong dir={titleDir(p.title, p.lang)}>{p.title}</strong>
+                {p.excerpt && <span dir={titleDir(p.excerpt, p.lang)}>{p.excerpt}</span>}
+              </span>
+            </Link>
+          );
+        })}
       </div>
       {posts.length > 1 && (
         <div className="lp-carousel-nav">

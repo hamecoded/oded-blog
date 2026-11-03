@@ -244,6 +244,19 @@ export function publicInTagGroup(post: Pick<Post, 'tags' | 'status' | 'visibilit
   return inTagGroup(post, group) && (post.visibility ?? 'public') === 'public';
 }
 
+/**
+ * A picture for a post card: its cover, else the first image in it, else its first YouTube video's thumbnail.
+ * Same order as the social previews in scripts/prerender.mjs.
+ */
+export function postImage(post: Pick<Post, 'cover_url' | 'content_html'>): string | null {
+  if (post.cover_url) return post.cover_url;
+  const html = post.content_html ?? '';
+  const img = html.match(/<img[^>]+src="([^"]+)"/i)?.[1];
+  if (img) return img.replace(/&amp;/g, '&');
+  const yt = html.match(/youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})/)?.[1];
+  return yt ? `https://i.ytimg.com/vi/${yt}/hqdefault.jpg` : null;
+}
+
 /** Who wrote a comment: the account's name, or the name a visitor typed. */
 export function commentAuthorName(c: Pick<Comment, 'author' | 'guest_name'>): string {
   return c.author?.display_name ?? c.guest_name ?? '—';

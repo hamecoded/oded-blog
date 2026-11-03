@@ -136,6 +136,7 @@ async function prerenderTagGroups(posts) {
     const name = text(c.name) || g.slug;
     const description = clip(text(c.tagline) || text(c.about)) || name;
     const cover = (c.backgrounds ?? []).find((u) => /^https?:\/\//.test(u));
+    const tags = g.tags ?? [];
     const landing = page(shell, {
       title: name,
       description,
@@ -148,7 +149,30 @@ async function prerenderTagGroups(posts) {
     mkdirSync(join(DIST, g.slug), { recursive: true });
     writeFileSync(join(DIST, g.slug, 'index.html'), landing);
     pages++;
-    const tags = g.tags ?? [];
+    // The site's other pages: articles, tags (each of the group's tags) and search. Without these they'd be
+    // served by 404.html, which carries oded.me's name and image, and share as an empty card. GitHub Pages
+    // redirects /<slug>/posts to /<slug>/posts/ (the folder exists), so the articles page is posts/index.html.
+    const sub = (path, title) =>
+      page(shell, {
+        title: `${title} · ${name}`,
+        description,
+        url: site && `${site}${g.slug}/${path}`,
+        image: cover || (site && `${site}${DEFAULT_IMAGE}`),
+        type: 'website',
+        locale: 'he_IL',
+      }).replace(/property="og:site_name" content="[^"]*"/, `property="og:site_name" content="${esc(name)}"`);
+    const write = (file, html) => {
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, html);
+      pages++;
+    };
+    write(join(DIST, g.slug, 'posts', 'index.html'), sub('posts', 'מאמרים'));
+    write(join(DIST, g.slug, 'search.html'), sub('search', 'חיפוש'));
+    write(join(DIST, g.slug, 'tags', 'index.html'), sub('tags', 'תגיות'));
+    for (const t of tags) {
+      if (!t || /[/\\]/.test(t) || t.startsWith('.')) continue;
+      write(join(DIST, g.slug, 'tags', `${t}.html`), sub(`tags/${encodeURIComponent(t)}`, `#${t}`));
+    }
     for (const p of posts) {
       if (!p.slug || /[/\\]/.test(p.slug) || p.slug.startsWith('.')) continue;
       if (!(p.tags ?? []).some((t) => tags.includes(t))) continue;
