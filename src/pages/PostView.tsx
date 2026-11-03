@@ -18,6 +18,13 @@ import { useFabActions } from '../components/fabActions';
 import { NotFound } from './NotFound';
 import { usePageTitle } from './usePageTitle';
 
+/**
+ * Stable empty list for tag-group sites (no highlights there). A fresh [] on every render would make PostContent
+ * redraw the post each time, and its onOrphans callback re-renders this page, so it would loop forever, reloading
+ * every embedded video before it can play.
+ */
+const NO_COMMENTS: Comment[] = [];
+
 export function PostView() {
   const { slug = '' } = useParams();
   const { t, user, toast, prefs } = useApp();
@@ -122,10 +129,11 @@ export function PostView() {
           ref={contentRef}
           html={post.content_html}
           lang={post.lang}
-          comments={group ? [] : comments}
+          comments={group ? NO_COMMENTS : comments}
           showResolved={showResolved}
           activeComment={active}
-          onOrphans={setOrphans}
+          // Keep the same Set when nothing changed, so a redraw of the post never re-renders this page by itself.
+          onOrphans={(ids) => setOrphans((prev) => (prev.size === ids.size && [...ids].every((x) => prev.has(x)) ? prev : ids))}
           onHighlightClick={(id) => {
             setActive(id);
             setPanel(true);
