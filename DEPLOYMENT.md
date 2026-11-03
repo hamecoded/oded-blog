@@ -94,11 +94,16 @@ Add `-- --dry-run` to any of them (e.g. `npm run setup -- --dry-run`) to see eve
 and file write without anything being changed.
 
 **`npm run deploy:auto`** (or `npm run deploy -- --yes`, `-y`) answers every question with its default:
-it commits all changes, pushes, and watches the workflow to the end, then checks the live site. The commit
-message is written from the changes since the last commit. The subject names up to four changed files
-(`Deploy: Admin.tsx, Lists.tsx, index.css and 2 more`), and the body lists every file as
-Added / Modified / Deleted / Renamed, plus the line count. `.deploy.json`, rewritten on every deploy, is
-listed but kept out of the subject. Plain `npm run deploy` offers the same message; press Enter to keep it.
+it commits all changes, pushes, and watches the workflow to the end, then checks the live site.
+
+**Commit messages** explain the deploy. They're built from the lines under `## Unreleased` in
+[CHANGES.md](CHANGES.md) (`- Fixed: tag picker: taps deleted chosen tags`). The subject is the short part of each
+line (`Fix tag picker; add deploy:auto`), and the body has the full lines, then every changed file as
+Added / Modified / Deleted / Renamed and the line count. The same commit moves those lines under the deploy's
+date in CHANGES.md, so it doubles as the site's history. With nothing under Unreleased, the subject names up
+to four changed files instead (`Deploy: Admin.tsx, Lists.tsx and 2 more`). Plain `npm run deploy` offers
+the same message; press Enter to keep it, or type a subject of your own (the body stays).
+Git and `gh` never open an editor during a deploy.
 It stops instead of guessing when a default isn't safe:
 - **`schema.sql` needs running:** unattended, it can only run through `psql` with `SUPABASE_DB_URL` set. If
   the database already passes the checks for this version, it warns and deploys. If it doesn't, it stops,

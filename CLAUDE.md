@@ -30,7 +30,7 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
 | `npm run build` | Type-check plus production build into `dist/` |
 | `npm run setup` | Guided deploy: `.env`, database, host, smoke test |
 | `npm run deploy` / `npm run deploy:check` | Redeploy / verify everything |
-| `npm run deploy:auto` | Redeploy in one go, no questions (`deploy --yes`); commit message written from the changed files |
+| `npm run deploy:auto` | Redeploy in one go, no questions (`deploy --yes`); commit message built from CHANGES.md → Unreleased |
 | `npm run migrate:media` | Copy uploads after moving Supabase projects |
 
 ## Decisions already made (and why)
@@ -149,5 +149,9 @@ Supabase project `tbwskzgkmoztdejeiyhz`); `.deploy.json` records the last deploy
   render (the `shownFor` pattern in `UserSheets.tsx` and `dialogs.tsx`).
 - **Error codes** like `auth/forbidden` or `user/self` are thrown by the API and turned
   into translated messages in `errorText()` (`src/lib/app.tsx`).
+- **Log every feature or fix in [CHANGES.md](CHANGES.md)** under `## Unreleased`, as you make it:
+  `- Added: <short what>: <details>` (or `Fixed:` / `Changed:` / `Removed:`). The deploy builds the commit
+  message from these lines (subject from the short parts, full lines in the body) and moves them under the
+  deploy's date. Nothing listed → the message only names the changed files.
 - **Verify in the browser pane in demo mode.** Sign in as admin/admin and check
   phone width (375px) as well as desktop.

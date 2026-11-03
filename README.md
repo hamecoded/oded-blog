@@ -558,6 +558,7 @@ supabase/schema.sql        database, security policies, storage bucket, prebuilt
 scripts/setup.mjs          deployment walkthrough, deploy, checks, media migration
 scripts/spa-fallback.mjs   copies index.html to 404.html after the build
 DEPLOYMENT.md              deploying, releasing, migrating, troubleshooting
+CHANGES.md                 what each deploy added or fixed (feeds the commit messages)
 CLAUDE.md                  decisions, current state and conventions; new-Mac setup
 .github/workflows/deploy.yml   GitHub Pages build and deploy
 netlify.toml, vercel.json  host configs

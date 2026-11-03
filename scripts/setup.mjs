@@ -24,6 +24,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const ENV_FILE = join(ROOT, '.env');
 const STATE_FILE = join(ROOT, '.deploy.json');
 const SCHEMA_FILE = join(ROOT, 'supabase', 'schema.sql');
+/** Features and fixes, one line each under "## Unreleased"; the deploy turns them into the commit message. */
+const CHANGES_FILE = join(ROOT, 'CHANGES.md');
 const DEFAULT_ADMIN = 'admin@oded.me';
 const HOSTS = ['github', 'netlify', 'cloudflare', 'vercel'];
 const HOST_NAMES = { github: 'GitHub Pages', netlify: 'Netlify', cloudflare: 'Cloudflare Pages', vercel: 'Vercel' };
@@ -124,6 +126,19 @@ async function choose(question, options, def = 0) {
 }
 
 // ───────────────────────── process / file helpers ─────────────────────────
+/**
+ * Every git and gh command this script starts gets these: git never opens an editor (vi) for a message: a
+ * merge or rebase keeps git's default message (GIT_EDITOR=true is a no-op editor), since the script asks for
+ * the commit message itself. With --yes, gh never prompts either; it fails with a message instead.
+ */
+const NO_EDITOR_ENV = {
+  GIT_EDITOR: 'true',
+  GIT_SEQUENCE_EDITOR: 'true',
+  GIT_MERGE_AUTOEDIT: 'no',
+  GH_EDITOR: 'true',
+  ...(YES ? { GH_PROMPT_DISABLED: '1', GIT_TERMINAL_PROMPT: '0' } : {}),
+};
+
 function have(cmd) {
   return spawnSync(process.platform === 'win32' ? 'where' : 'which', [cmd], { stdio: 'ignore' }).status === 0;
 }
@@ -141,7 +156,7 @@ function run(cmd, args, { env, input, quietArgs } = {}) {
   if (raw) process.stdin.setRawMode(false);
   const res = spawnSync(cmd, args, {
     cwd: ROOT,
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...(cmd === 'git' || cmd === 'gh' ? NO_EDITOR_ENV : {}), ...env },
     input,
     stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
   });
@@ -152,7 +167,7 @@ function run(cmd, args, { env, input, quietArgs } = {}) {
 
 /** Run and capture stdout (for reading state; also runs in dry-run since it changes nothing). */
 function capture(cmd, args, { env } = {}) {
-  const res = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env } });
+  const res = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...(cmd === 'git' || cmd === 'gh' ? NO_EDITOR_ENV : {}), ...env } });
   return { status: res.status ?? 1, stdout: (res.stdout ?? '').trim(), stderr: (res.stderr ?? '').trim() };
 }
 
@@ -662,33 +677,91 @@ async function ensureGitIdentity() {
   return true;
 }
 
+/** The lines under "## Unreleased" in CHANGES.md ("- Added: …", "- Fixed: …"), with continuation lines joined. */
+function unreleasedChanges() {
+  if (!existsSync(CHANGES_FILE)) return [];
+  const lines = readFileSync(CHANGES_FILE, 'utf8').split('\n');
+  const start = lines.findIndex((l) => /^##\s+unreleased\s*$/i.test(l));
+  if (start < 0) return [];
+  const items = [];
+  for (const l of lines.slice(start + 1)) {
+    if (/^##\s/.test(l)) break;
+    if (/^\s*[-*]\s+/.test(l)) items.push(l.replace(/^\s*[-*]\s+/, '').trim());
+    else if (l.trim() && items.length && /^\s+/.test(l)) items[items.length - 1] += ` ${l.trim()}`;
+  }
+  return items.filter(Boolean);
+}
+
 /**
- * A commit message written from what is about to be committed (run after `git add -A`):
- *   Deploy: Admin.tsx, Lists.tsx, index.css and 2 more
- *
- *   Modified: src/pages/Admin.tsx
- *   Added:    src/site/New.tsx
- *   …
- *   5 files changed, 120 insertions(+), 14 deletions(-)
- * .deploy.json (rewritten on every deploy) is listed in the body but left out of the subject.
+ * Moves the Unreleased lines under a dated heading ("## 2026-11-03 17:39"), leaving Unreleased empty for the
+ * next round. Returns the previous file content, to put back if the commit fails.
  */
-function commitMessage() {
+function releaseChanges() {
+  const before = readFileSync(CHANGES_FILE, 'utf8');
+  const lines = before.split('\n');
+  const start = lines.findIndex((l) => /^##\s+unreleased\s*$/i.test(l));
+  let end = lines.findIndex((l, i) => i > start && /^##\s/.test(l));
+  if (end < 0) end = lines.length;
+  const section = lines.slice(start + 1, end).filter((l) => l.trim());
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const next = [...lines.slice(0, start + 1), '', `## ${stamp}`, '', ...section, '', ...lines.slice(end)].join('\n').replace(/\n{3,}/g, '\n\n');
+  writeFile(CHANGES_FILE, next);
+  return before;
+}
+
+/**
+ * The commit message, run after `git add -A`. With lines in CHANGES.md → Unreleased, they explain the commit:
+ *   Fix tag picker deleting chosen tags; add deploy:auto (+1 more)
+ *
+ *   - Fixed: tapping around the tags field in the tag group sheet deleted chosen tags
+ *   - Added: npm run deploy:auto deploys in one go
+ *   - …
+ *
+ *   Files:
+ *   Modified: src/components/TagGroupSheet.tsx
+ *   …
+ * Without them, the subject names the changed files instead. .deploy.json (rewritten on every deploy) is listed
+ * in the body but left out of the subject.
+ */
+function commitMessage(changes = []) {
   const rows = capture('git', ['diff', '--cached', '--name-status', '-M']).stdout.split('\n').filter(Boolean);
-  if (!rows.length) return 'Deploy oded.me blog';
+  if (!rows.length && !changes.length) return 'Deploy oded.me blog';
   const KIND = { M: 'Modified', A: 'Added', D: 'Deleted', R: 'Renamed', C: 'Copied', T: 'Changed type' };
   const files = rows.map((r) => {
     const [code, ...paths] = r.split('\t');
     return { kind: KIND[code[0]] ?? code, path: paths.join(' → '), last: paths[paths.length - 1] };
   });
-  const named = files.filter((f) => f.last !== '.deploy.json');
-  const base = (f) => f.last.split('/').pop();
-  const shown = named.slice(0, 4).map(base);
-  const subject = named.length
-    ? `Deploy: ${shown.join(', ')}${named.length > shown.length ? ` and ${named.length - shown.length} more` : ''}`
-    : 'Deploy oded.me blog (deploy settings only)';
-  const width = Math.max(...files.map((f) => f.kind.length)) + 1;
-  const body = files.map((f) => `${`${f.kind}:`.padEnd(width + 1)}${f.path}`);
+  const clip = (t, n) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+  let subject;
+  if (changes.length) {
+    // Each entry's head (the part before its next colon) as a verb: "Fixed: tag picker: taps deleted tags" →
+    // "Fix tag picker". Joined with "; " when they fit, else the first one and a count.
+    const verb = { added: 'Add', fixed: 'Fix', changed: 'Change', removed: 'Remove', improved: 'Improve' };
+    const heads = changes.map((c, i) => {
+      const m = c.match(/^(\w+):\s*(.*)$/);
+      const kind = m && verb[m[1].toLowerCase()];
+      const rest = (kind ? m[2] : c).split(/:\s|\s[—–]\s/)[0].trim();
+      const v = kind ? (i === 0 ? kind : kind.toLowerCase()) : '';
+      return v ? `${v} ${rest}` : rest;
+    });
+    const joined = heads.join('; ');
+    subject = joined.length <= 90 ? joined : `${clip(heads[0], 76)}${changes.length > 1 ? ` (+${changes.length - 1} more)` : ''}`;
+  } else {
+    const named = files.filter((f) => f.last !== '.deploy.json' && f.last !== 'CHANGES.md');
+    const base = (f) => f.last.split('/').pop();
+    const shown = named.slice(0, 4).map(base);
+    subject = named.length
+      ? `Deploy: ${shown.join(', ')}${named.length > shown.length ? ` and ${named.length - shown.length} more` : ''}`
+      : 'Deploy oded.me blog (deploy settings only)';
+  }
+  const width = files.length ? Math.max(...files.map((f) => f.kind.length)) + 1 : 0;
+  const fileLines = files.map((f) => `${`${f.kind}:`.padEnd(width + 1)}${f.path}`);
   const stat = capture('git', ['diff', '--cached', '--shortstat']).stdout.trim();
+  const body = changes.length
+    ? [...changes.map((c) => `- ${c}`), '', 'Files:', ...fileLines]
+    : fileLines;
   return [subject, '', ...body, ...(stat ? ['', stat] : [])].join('\n');
 }
 
@@ -747,14 +820,20 @@ async function deployGitHub(env, state) {
     say(changes);
     if (await confirm('Commit these changes?', true)) {
       if ((await ensureGitIdentity()) === false) return null;
+      // The features and fixes listed in CHANGES.md explain the commit; they move under today's date in the same commit.
+      const changesList = unreleasedChanges();
+      const changesBefore = changesList.length ? releaseChanges() : null;
+      if (!changesList.length) warn('CHANGES.md has nothing under "Unreleased", so the commit message lists the changed files only.');
       run('git', ['add', '-A']);
-      // Written from the changed files; shown as the default (press Enter to keep it), used as is with --yes.
-      const auto = DRY && isNew ? 'Deploy oded.me blog' : commitMessage();
-      if (YES) say(dim(auto.replace(/^/gm, '    ')));
+      // Shown as the default (press Enter to keep it), used as is with --yes.
+      const auto = DRY && isNew ? 'Deploy oded.me blog' : commitMessage(changesList);
+      say(dim(auto.replace(/^/gm, '    ')));
       const subject = auto.split('\n')[0];
       const typed = await ask('Commit message', subject);
-      const message = typed === subject ? auto : typed;
+      // A typed subject replaces the generated one; the list of changes and files stays in the body.
+      const message = typed === subject ? auto : [typed, ...auto.split('\n').slice(1)].join('\n');
       if (run('git', ['commit', '-m', message]).status !== 0) {
+        if (changesBefore !== null) writeFile(CHANGES_FILE, changesBefore); // keep them under Unreleased for the next try
         fail('The commit failed (see above).');
         return null;
       }
@@ -794,7 +873,7 @@ async function deployGitHub(env, state) {
     run('git', ['fetch', 'origin', 'main']);
     if (capture('git', ['rev-list', '--count', 'HEAD..origin/main']).stdout !== '0') {
       info('GitHub has commits you don’t have yet; bringing them in first.');
-      if (run('git', ['pull', '--rebase', 'origin', 'main']).status !== 0) {
+      if (run('git', ['pull', '--rebase', '--no-edit', 'origin', 'main']).status !== 0) {
         fail('Could not merge the changes from GitHub. Resolve them (git status), then run `npm run deploy`.');
         return null;
       }
