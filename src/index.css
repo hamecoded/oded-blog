@@ -1334,6 +1334,16 @@ legend {
 }
 .seg.tabs {
   margin-bottom: 16px;
+  /* Wrap onto a second line when the tabs don't fit (phones): the page never scrolls sideways, so a
+     single row would leave the last tabs (e.g. Tag groups) out of reach. */
+  display: flex;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 22px;
+}
+.seg.tabs button {
+  white-space: nowrap;
 }
 .menu-list {
   display: flex;
@@ -3040,4 +3050,91 @@ legend {
   background: var(--accent-soft);
   border-radius: 10px;
   padding: 8px 12px;
+}
+
+/* Tags page: links to the tag-group sites. */
+.tg-links {
+  margin-top: 8px;
+}
+.tg-links-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+}
+.tg-link-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 4px solid var(--site-accent, var(--accent));
+  color: var(--text);
+  text-decoration: none !important;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.tg-link-card:hover {
+  border-color: var(--site-accent, var(--accent));
+  transform: translateY(-2px);
+}
+.tg-link-card strong {
+  font-size: 1.1rem;
+}
+.tg-link-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.tg-link-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--site-accent, var(--accent));
+}
+
+/* Tag group sheet: tag suggestions under the field (tap to add). */
+.tg-suggest {
+  margin-top: 2px;
+}
+.tg-suggest .tag {
+  border: 1px dashed var(--border);
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+}
+.tg-suggest .tag small {
+  color: var(--muted);
+}
+
+/* Admin → Tag groups rows: on phones the buttons move to their own line, like the Users list. */
+.tg-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tg-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+}
+@media (max-width: 640px) {
+  .tg-row {
+    flex-wrap: wrap;
+  }
+  .tg-row > .grow {
+    flex: 1 1 calc(100% - 52px);
+    min-width: 0;
+  }
+  .tg-row-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }

@@ -403,7 +403,7 @@ export function AdminPage() {
             {tagGroups?.map((g) => {
               const count = (posts ?? []).filter((p) => publicInTagGroup(p, g)).length;
               return (
-                <li key={g.id}>
+                <li key={g.id} className="tg-row">
                   <span className="avatar" style={{ background: g.config.accent }}>
                     <Globe size={18} />
                   </span>
@@ -415,33 +415,40 @@ export function AdminPage() {
                       </a>{' '}
                       · {count} {t('tg_postsMatch')}
                     </small>
-                    <small className="muted" dir="auto">
-                      {g.tags.map((tg) => `#${tg}`).join(' ')}
+                    {/* One element per tag, each with its own direction, so "#" lands right for Hebrew and English. */}
+                    <small className="muted tg-row-tags">
+                      {g.tags.map((tg) => (
+                        <span key={tg} dir="auto">
+                          #{tg}
+                        </span>
+                      ))}
                     </small>
                   </span>
-                  <button type="button" className="icon-btn" aria-label={t('tg_export')} title={t('tg_export')} onClick={() => setExportGroup(g)}>
-                    <Archive size={16} />
-                  </button>
-                  <button type="button" className="icon-btn" aria-label={t('edit')} title={t('edit')} onClick={() => setEditingTagGroup(g)}>
-                    <Pencil size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-btn danger"
-                    aria-label={t('delete')}
-                    title={t('delete')}
-                    onClick={async () => {
-                      if (!window.confirm(t('tg_confirmDelete'))) return;
-                      try {
-                        await api.deleteTagGroup(g.id);
-                        load();
-                      } catch (e) {
-                        toast(errorText(e, t));
-                      }
-                    }}
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <span className="tg-row-actions">
+                    <button type="button" className="icon-btn" aria-label={t('tg_export')} title={t('tg_export')} onClick={() => setExportGroup(g)}>
+                      <Archive size={16} />
+                    </button>
+                    <button type="button" className="icon-btn" aria-label={t('edit')} title={t('edit')} onClick={() => setEditingTagGroup(g)}>
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn danger"
+                      aria-label={t('delete')}
+                      title={t('delete')}
+                      onClick={async () => {
+                        if (!window.confirm(t('tg_confirmDelete'))) return;
+                        try {
+                          await api.deleteTagGroup(g.id);
+                          load();
+                        } catch (e) {
+                          toast(errorText(e, t));
+                        }
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </span>
                 </li>
               );
             })}

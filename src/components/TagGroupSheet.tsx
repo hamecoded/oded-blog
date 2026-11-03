@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, ImagePlus, Link2, Trash2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
-import type { Bilingual, Post, TagGroup, TagGroupConfig, TagGroupDraft } from '../lib/types';
-import { emptyTagGroupConfig, publicInTagGroup, validSiteSlug } from '../lib/util';
+import type { Bilingual, Post, TagCount, TagGroup, TagGroupConfig, TagGroupDraft } from '../lib/types';
+import { emptyTagGroupConfig, normalizeSearch, publicInTagGroup, validSiteSlug } from '../lib/util';
 import { videoFromUrl } from '../lib/video';
 import { CUSTOM_LANDINGS } from '../landings';
 import { Sheet } from './Sheet';
@@ -33,7 +33,7 @@ export function TagGroupSheet({
   const [draft, setDraft] = useState<TagGroupDraft>(blankDraft);
   const [tagInput, setTagInput] = useState('');
   const [bgInput, setBgInput] = useState('');
-  const [suggest, setSuggest] = useState<string[]>([]);
+  const [suggest, setSuggest] = useState<TagCount[]>([]);
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -50,7 +50,7 @@ export function TagGroupSheet({
   }
 
   useEffect(() => {
-    if (open) api.listTags().then((tc) => setSuggest(tc.map((x) => x.tag))).catch(() => {});
+    if (open) api.listTags().then(setSuggest).catch(() => {});
   }, [open]);
 
   const cfg = draft.config;
@@ -66,6 +66,13 @@ export function TagGroupSheet({
     if (u && !cfg.backgrounds.includes(u)) setCfg({ backgrounds: [...cfg.backgrounds, u] });
     setBgInput('');
   };
+
+  // Suggestions under the field (not a <datalist>: phones, iOS Safari above all, often don't show one, least of
+  // all inside a dialog). Typed text filters them; with nothing typed, the most-used tags.
+  const typed = normalizeSearch(tagInput.replace(/^#/, ''));
+  const suggestions = suggest
+    .filter((s) => !draft.tags.includes(s.tag) && (!typed || normalizeSearch(s.tag).includes(typed)))
+    .slice(0, typed ? 20 : 12);
 
   const slug = draft.slug.trim().toLowerCase();
   const slugOk = validSiteSlug(slug);
@@ -155,8 +162,8 @@ export function TagGroupSheet({
             ))}
             <input
               dir="auto"
-              list="tg-tag-suggest"
               value={tagInput}
+              enterKeyHint="done"
               placeholder={t('addTag')}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={(e) => {
@@ -167,14 +174,26 @@ export function TagGroupSheet({
               }}
               onBlur={() => tagInput && addTag(tagInput)}
             />
-            <datalist id="tg-tag-suggest">
-              {suggest
-                .filter((s) => !draft.tags.includes(s))
-                .map((s) => (
-                  <option key={s} value={s} />
-                ))}
-            </datalist>
           </div>
+          {suggestions.length > 0 && (
+            <div className="tags tg-suggest" role="listbox" aria-label={t('tg_suggested')}>
+              {suggestions.map(({ tag, count }) => (
+                <button
+                  key={tag}
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  className="tag"
+                  dir="auto"
+                  // Keep focus in the field: otherwise its blur handler would first add the half-typed text as a tag.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => addTag(tag)}
+                >
+                  #{tag} <small>{count}</small>
+                </button>
+              ))}
+            </div>
+          )}
           <small className="hint">
             {t('tg_tagsHelp')} · <b>{matching}</b> {t('tg_postsMatch')}
           </small>

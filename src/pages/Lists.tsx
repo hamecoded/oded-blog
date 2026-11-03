@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { Search as SearchIcon, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Search as SearchIcon, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { useApp } from '../lib/app';
 import { useSite } from '../lib/site';
-import type { Post, PostQuery, Profile, TagCount } from '../lib/types';
-import { can, inTagGroup, tagPath } from '../lib/util';
+import type { Post, PostQuery, Profile, TagCount, TagGroup } from '../lib/types';
+import { can, inTagGroup, pickText, tagPath } from '../lib/util';
 import { PostCard } from '../components/PostBits';
 import { usePageTitle } from './usePageTitle';
 
@@ -149,13 +149,61 @@ export function ArticlesPage() {
 
 export function TagsPage() {
   const { t } = useApp();
+  const { group } = useSite();
   const tags = useTags();
   usePageTitle(t('allTags'));
   return (
     <>
       <PageHead title={t('allTags')} />
       <TagCloud tags={tags} />
+      {/* The main blog lists its tag-group sites; a tag-group site never points at the others. */}
+      {!group && <TagGroupLinks />}
     </>
+  );
+}
+
+/** Cards linking to each tag group's site (/<slug>), with its name, tagline and tags. */
+function TagGroupLinks() {
+  const { t, prefs } = useApp();
+  const [groups, setGroups] = useState<TagGroup[]>([]);
+  useEffect(() => {
+    api.listTagGroups().then(setGroups).catch(() => {});
+  }, []);
+  if (!groups.length) return null;
+  const Arrow = prefs.uiLang === 'he' ? ArrowLeft : ArrowRight;
+  return (
+    <section className="tg-links" aria-labelledby="tg-links-title">
+      <h2 id="tg-links-title" className="section-title">
+        {t('tagGroups')}
+      </h2>
+      <div className="tg-links-grid">
+        {groups.map((g) => {
+          const name = pickText(g.config.name, prefs.uiLang) || g.slug;
+          const tagline = pickText(g.config.tagline, prefs.uiLang);
+          return (
+            <Link key={g.id} to={`/${g.slug}`} className="tg-link-card" style={{ '--site-accent': g.config.accent } as React.CSSProperties}>
+              <strong dir="auto">{name}</strong>
+              {tagline && (
+                <span className="muted" dir="auto">
+                  {tagline}
+                </span>
+              )}
+              {/* One element per tag, each with its own direction, so "#" stays on the right side of Hebrew and English tags alike. */}
+              <span className="tg-link-tags">
+                {g.tags.map((tg) => (
+                  <span key={tg} dir="auto">
+                    #{tg}
+                  </span>
+                ))}
+              </span>
+              <span className="tg-link-go">
+                <span dir="ltr">/{g.slug}</span> <Arrow size={16} />
+              </span>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
