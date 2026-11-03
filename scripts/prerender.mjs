@@ -55,15 +55,15 @@ function clip(s, max = 200) {
   return `${cut.slice(0, sp > max * 0.6 ? sp : max)}…`;
 }
 
-/** Best preview image: cover → first image in the post → YouTube thumbnail → the site image. */
-function imageFor(post, site) {
+/** Best preview image: cover → first image in the post → YouTube thumbnail → `fallback` (default: the site image). */
+function imageFor(post, site, fallback) {
   const web = (u) => (u && /^https?:\/\//.test(u) ? u : null);
   if (web(post.cover_url)) return web(post.cover_url);
   const html = post.content_html ?? '';
   for (const m of html.matchAll(/<img[^>]+src="([^"]+)"/gi)) if (web(decode(m[1]))) return decode(m[1]);
   const yt = html.match(/youtube(?:-nocookie)?\.com\/embed\/([\w-]{11})/);
   if (yt) return `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg`;
-  return site ? `${site}${DEFAULT_IMAGE}` : null;
+  return fallback || (site ? `${site}${DEFAULT_IMAGE}` : null);
 }
 
 /** index.html with the given title/description and social tags. */
@@ -161,9 +161,11 @@ async function prerenderTagGroups(posts) {
           docTitle: `${p.title} · ${name}`,
           description: clip(p.excerpt?.trim() || textOf(p.content_html)) || description,
           url: site && `${site}${g.slug}/posts/${encodeURIComponent(p.slug)}`,
-          image: imageFor(p, site),
+          // A post without images of its own shows the group's image, not oded.me's.
+          image: imageFor(p, site, cover),
           type: 'article',
           locale: p.lang === 'en' ? 'en_US' : 'he_IL',
+          extra: [...(p.tags ?? []).filter((t) => tags.includes(t)).slice(0, 6).map((t) => ['article:tag', t])],
         })
           .replace(/property="og:site_name" content="[^"]*"/, `property="og:site_name" content="${esc(name)}"`)
           .replace('<html lang="he" dir="rtl"', p.lang === 'en' ? '<html lang="en" dir="ltr"' : '<html lang="he" dir="rtl"'),

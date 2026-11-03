@@ -64,28 +64,71 @@ const BRAND_ICONS = {
 
 export function ShareSheet({ post, open, onClose }: { post: Post; open: boolean; onClose: () => void }) {
   const { t, toast } = useApp();
-  const { link } = useSite();
+  const { link, group } = useSite();
   // Inside a tag-group site, share the site's own address for the post.
   const url = absoluteUrl(link(postPath(post.slug)));
   const u = encodeURIComponent(url);
-  const txt = encodeURIComponent(post.title);
+  const enc = encodeURIComponent;
+  const summary = post.excerpt.trim();
+  // Hashtags from the post's tags (on a tag-group site only the group's own); spaces aren't allowed in a hashtag.
+  const tags = (group ? post.tags.filter((tg) => group.tags.includes(tg)) : post.tags)
+    .map((tg) => tg.trim().replace(/[\s#]+/g, '_'))
+    .filter(Boolean)
+    .slice(0, 5);
+  const hashtags = tags.map((tg) => `#${tg}`).join(' ');
+  const fullText = [post.title, summary, hashtags].filter(Boolean).join('\n\n');
 
-  const targets: [string, React.ReactNode, string][] = [
-    ['Facebook', BRAND_ICONS.facebook, `https://www.facebook.com/sharer/sharer.php?u=${u}`],
-    ['WhatsApp', BRAND_ICONS.whatsapp, `https://wa.me/?text=${txt}%20${u}`],
-    ['X', BRAND_ICONS.x, `https://x.com/intent/post?url=${u}&text=${txt}`],
-    ['Telegram', BRAND_ICONS.telegram, `https://t.me/share/url?url=${u}&text=${txt}`],
-    ['LinkedIn', BRAND_ICONS.linkedin, `https://www.linkedin.com/sharing/share-offsite/?url=${u}`],
-    ['Reddit', BRAND_ICONS.reddit, `https://www.reddit.com/submit?url=${u}&title=${txt}`],
-    ['Gmail', BRAND_ICONS.gmail, `https://mail.google.com/mail/?view=cm&su=${txt}&body=${u}`],
-    ['Email', BRAND_ICONS.mail, `mailto:?subject=${txt}&body=${u}`],
+  // Whether the post's preview page exists. Facebook and LinkedIn build the shared post only from the page's
+  // Open Graph tags (scripts/prerender.mjs); without that page the link shares as an empty card.
+  const [previewReady, setPreviewReady] = useState<boolean | null>(null);
+  const isPublic = post.status === 'published' && (post.visibility ?? 'public') === 'public';
+  useEffect(() => {
+    if (!open || !isPublic || !import.meta.env.PROD) return;
+    let live = true;
+    fetch(url, { method: 'HEAD', cache: 'no-store' })
+      .then((r) => live && setPreviewReady(r.ok))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [open, url, isPublic]);
+
+  // [name, icon, address, copy text first]. Facebook and LinkedIn take only the address: their rules don't
+  // allow a site to fill in the person's message, so the title, summary and hashtags go to the clipboard to paste.
+  const targets: [string, React.ReactNode, string, boolean?][] = [
+    ['Facebook', BRAND_ICONS.facebook, `https://www.facebook.com/sharer/sharer.php?u=${u}`, true],
+    ['WhatsApp', BRAND_ICONS.whatsapp, `https://wa.me/?text=${enc([`*${post.title}*`, summary, url].filter(Boolean).join('\n\n'))}`],
+    [
+      'X',
+      BRAND_ICONS.x,
+      `https://x.com/intent/post?url=${u}&text=${enc(post.title)}${tags.length ? `&hashtags=${enc(tags.join(','))}` : ''}`,
+    ],
+    ['Telegram', BRAND_ICONS.telegram, `https://t.me/share/url?url=${u}&text=${enc([post.title, summary].filter(Boolean).join('\n\n'))}`],
+    ['LinkedIn', BRAND_ICONS.linkedin, `https://www.linkedin.com/sharing/share-offsite/?url=${u}`, true],
+    ['Reddit', BRAND_ICONS.reddit, `https://www.reddit.com/submit?url=${u}&title=${enc(post.title)}`],
+    ['Gmail', BRAND_ICONS.gmail, `https://mail.google.com/mail/?view=cm&su=${enc(post.title)}&body=${enc([summary, url].filter(Boolean).join('\n\n'))}`],
+    ['Email', BRAND_ICONS.mail, `mailto:?subject=${enc(post.title)}&body=${enc([summary, url].filter(Boolean).join('\n\n'))}`],
   ];
 
   return (
     <Sheet open={open} onClose={onClose} title={t('share')}>
       <div className="share-grid">
-        {targets.map(([name, icon, href]) => (
-          <a key={name} href={href} target="_blank" rel="noopener noreferrer" className={`share-btn s-${name.toLowerCase()}`}>
+        {targets.map(([name, icon, href, copyFirst]) => (
+          <a
+            key={name}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`share-btn s-${name.toLowerCase()}`}
+            onClick={() => {
+              if (!copyFirst) return;
+              // Copied in the click itself (browsers allow it there); the network opens in a new tab as usual.
+              navigator.clipboard
+                ?.writeText(fullText)
+                .then(() => toast(t('shareTextCopied')))
+                .catch(() => {});
+            }}
+          >
             {icon}
             <span>{name}</span>
           </a>
@@ -95,7 +138,7 @@ export function ShareSheet({ post, open, onClose }: { post: Post; open: boolean;
         {'share' in navigator && (
           <button
             type="button"
-            onClick={() => navigator.share({ title: post.title, text: post.excerpt, url }).catch(() => {})}
+            onClick={() => navigator.share({ title: post.title, text: [summary, hashtags].filter(Boolean).join('\n\n'), url }).catch(() => {})}
           >
             <Share2 /> {t('moreApps')}
           </button>
@@ -110,6 +153,11 @@ export function ShareSheet({ post, open, onClose }: { post: Post; open: boolean;
           <Copy /> {t('copyLink')}
         </button>
       </div>
+      {!isPublic ? (
+        <p className="hint">{t('sharePreviewPrivate')}</p>
+      ) : previewReady === false ? (
+        <p className="hint warn-text">{t('sharePreviewPending')}</p>
+      ) : null}
       <p className="hint">{t('shareHint')}</p>
     </Sheet>
   );

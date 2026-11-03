@@ -302,8 +302,16 @@ post, with that post's title, summary, image and address in Open Graph and Twitt
 the link get the normal app. The preview image is the post's cover, else its first image, else its
 YouTube thumbnail, else `public/og-default.png`.
 
-- **New posts:** the GitHub workflow rebuilds every hour, so a new post's preview appears within an
-  hour. To get it at once: `gh workflow run deploy.yml` or `npm run deploy`. Netlify, Cloudflare and
+- **Facebook and LinkedIn take only the link.** Their share buttons accept no title, text or image, and
+  their rules forbid a site from filling in the person's message, so everything in the shared card comes
+  from these Open Graph tags. When someone shares to either of them, the blog copies the title, summary and
+  hashtags to the clipboard to paste in. WhatsApp, X, Telegram, Reddit and email get the title, summary
+  and (on X) hashtags filled in directly.
+- **No page yet means an empty card.** GitHub Pages answers an address with no prerendered page with a
+  404 status, and Facebook then shows an empty link. The share sheet checks for the page and warns when it
+  isn't there yet.
+- **New posts:** the GitHub workflow rebuilds every 15 minutes, so a new post's (or a new tag group's)
+  preview appears within about 15 minutes. To get it at once: `gh workflow run deploy.yml` or `npm run deploy`. Netlify, Cloudflare and
   Vercel deploys need `npm run deploy` after publishing.
 - **Facebook caches previews.** If a link was shared before its page existed, open the
   [Sharing Debugger](https://developers.facebook.com/tools/debug/), paste the post's address and click

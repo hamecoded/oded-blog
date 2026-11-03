@@ -3031,3 +3031,11 @@ legend {
 .example-landing {
   padding-top: 90px;
 }
+
+/* Share sheet: the post's preview page isn't built yet. */
+.hint.warn-text {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-radius: 10px;
+  padding: 8px 12px;
+}

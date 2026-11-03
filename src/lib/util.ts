@@ -230,9 +230,18 @@ export function pickText(b: Bilingual | undefined, lang: 'he' | 'en'): string {
   return (b[lang] || b[lang === 'he' ? 'en' : 'he'] || '').trim();
 }
 
-/** Whether a post belongs to a tag group's site: public, published and carrying one of its tags. */
-export function inTagGroup(post: Pick<Post, 'tags' | 'status' | 'visibility'>, group: Pick<TagGroup, 'tags'>): boolean {
-  return post.status === 'published' && (post.visibility ?? 'public') === 'public' && post.tags.some((t) => group.tags.includes(t));
+/**
+ * Whether a post belongs to a tag group's site: published and carrying one of its tags. Who may read it is
+ * decided as everywhere else (canViewPost / row-level security): the API returns only what the viewer may
+ * see, so a signed-in reader also gets the members-only and restricted posts that are open to them.
+ */
+export function inTagGroup(post: Pick<Post, 'tags' | 'status'>, group: Pick<TagGroup, 'tags'>): boolean {
+  return post.status === 'published' && post.tags.some((t) => group.tags.includes(t));
+}
+
+/** The part of a tag group's site that anonymous visitors see (and can comment on and like): its public posts. */
+export function publicInTagGroup(post: Pick<Post, 'tags' | 'status' | 'visibility'>, group: Pick<TagGroup, 'tags'>): boolean {
+  return inTagGroup(post, group) && (post.visibility ?? 'public') === 'public';
 }
 
 /** Who wrote a comment: the account's name, or the name a visitor typed. */

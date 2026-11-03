@@ -3,16 +3,19 @@ import { CornerDownLeft, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import type { Comment } from '../lib/types';
-import { commentAuthorName, formatDate, savedGuestName, saveGuestName } from '../lib/util';
+import { can, commentAuthorName, formatDate, savedGuestName, saveGuestName } from '../lib/util';
 
 /**
  * Comments on a tag-group site: a plain list under the post, open to visitors who give a name instead of
  * signing in. (The main blog uses the select-to-comment drawer, CommentsPanel, which needs an account.)
  */
 export function PublicComments({ postId, comments, onChanged }: { postId: string; comments: Comment[]; onChanged: () => void }) {
-  const { t, prefs } = useApp();
+  const { t, prefs, user } = useApp();
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const roots = comments.filter((c) => !c.parent_id);
+  // Visitors write under a name. A signed-in account keeps its role: one that may not comment (a reader)
+  // sees the comments but no form.
+  const canWrite = !user || can.comment(user);
 
   return (
     <section className="public-comments" dir={prefs.uiLang === 'he' ? 'rtl' : 'ltr'} aria-labelledby="pc-title">
@@ -29,7 +32,7 @@ export function PublicComments({ postId, comments, onChanged }: { postId: string
               .map((r) => (
                 <CommentItem key={r.id} c={r} reply onChanged={onChanged} />
               ))}
-            {replyTo === c.id ? (
+            {!canWrite ? null : replyTo === c.id ? (
               <CommentForm
                 postId={postId}
                 parentId={c.id}
@@ -47,8 +50,12 @@ export function PublicComments({ postId, comments, onChanged }: { postId: string
           </li>
         ))}
       </ol>
-      <h3 className="pc-form-title">{t('leaveComment')}</h3>
-      <CommentForm postId={postId} onDone={onChanged} />
+      {canWrite && (
+        <>
+          <h3 className="pc-form-title">{t('leaveComment')}</h3>
+          <CommentForm postId={postId} onDone={onChanged} />
+        </>
+      )}
     </section>
   );
 }

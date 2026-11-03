@@ -11,9 +11,10 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-  # Hourly rebuild so newly published posts get their social-preview page (scripts/prerender.mjs).
+  # Rebuild every 15 minutes so newly published posts and new tag groups get their social-preview pages
+  # (scripts/prerender.mjs). Without one, Facebook and LinkedIn show a shared link as an empty card.
   schedule:
-    - cron: '23 * * * *'
+    - cron: '8,23,38,53 * * * *'
 
 permissions:
   contents: read

@@ -66,8 +66,10 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   Artist Pro plus a server-side secret). SoundCloud, Spotify, Mixcloud and Archive.org
   links can be embedded.
 - **Tag groups ("sites inside the site", 2026-11-02):** the admin creates them in /admin → Tag groups.
-  `/<slug>` is a standalone-looking site: only **public, published** posts that carry **any** of the
-  group's tags, every link kept under `/<slug>` (`useSite().link()` in `src/lib/site.ts`), no blog top bar,
+  `/<slug>` is a standalone-looking site: only **published** posts that carry **any** of the
+  group's tags, filtered by the viewer's permissions as everywhere else (`inTagGroup()` checks tags and
+  status; the API/RLS decides visibility, so a signed-in reader also sees members-only and restricted posts
+  open to them; anonymous visitors see the public ones), every link kept under `/<slug>` (`useSite().link()` in `src/lib/site.ts`), no blog top bar,
   floating menu or sign-in, and on post pages only the group's tags and no author link. Routes are a second
   top-level route `/:site` in `App.tsx` (layout: `src/site/SiteLayout.tsx`); list and post pages are the
   blog's own, made site-aware through `useSite()`. Addresses that the blog itself uses are reserved

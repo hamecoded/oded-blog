@@ -9,7 +9,7 @@ import { can, inTagGroup, tagPath } from '../lib/util';
 import { PostCard } from '../components/PostBits';
 import { usePageTitle } from './usePageTitle';
 
-/** On a tag-group site every list is limited to the group's public posts. */
+/** On a tag-group site every list is limited to the group's posts (still only those this viewer may read). */
 function usePosts(q: PostQuery | null, deps: unknown[]) {
   const { user } = useApp();
   const { group } = useSite();
@@ -43,8 +43,9 @@ function PostGrid({ posts, compact }: { posts: Post[] | null; compact?: boolean 
   );
 }
 
-/** All tags with post counts; on a tag-group site only the group's own tags, counted over its posts. */
+/** All tags with post counts; on a tag-group site only the group's own tags, counted over the posts this viewer may see. */
 function useTags() {
+  const { user } = useApp();
   const { group } = useSite();
   const [tags, setTags] = useState<TagCount[]>([]);
   useEffect(() => {
@@ -62,7 +63,7 @@ function useTags() {
         setTags([...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count));
       })
       .catch(() => {});
-  }, [group]);
+  }, [group, user?.id]);
   return tags;
 }
 

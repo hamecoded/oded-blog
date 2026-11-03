@@ -3,7 +3,7 @@ import { ArrowUp, ImagePlus, Link2, Trash2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import type { Bilingual, Post, TagGroup, TagGroupConfig, TagGroupDraft } from '../lib/types';
-import { emptyTagGroupConfig, inTagGroup, validSiteSlug } from '../lib/util';
+import { emptyTagGroupConfig, publicInTagGroup, validSiteSlug } from '../lib/util';
 import { videoFromUrl } from '../lib/video';
 import { CUSTOM_LANDINGS } from '../landings';
 import { Sheet } from './Sheet';
@@ -69,7 +69,7 @@ export function TagGroupSheet({
 
   const slug = draft.slug.trim().toLowerCase();
   const slugOk = validSiteSlug(slug);
-  const matching = posts.filter((p) => inTagGroup(p, draft)).length;
+  const matching = posts.filter((p) => publicInTagGroup(p, draft)).length;
   const videoOk = !cfg.video_url || videoFromUrl(cfg.video_url)?.kind === 'embed';
 
   const bi = (k: TextKey, label: string, multiline = false) => (

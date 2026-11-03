@@ -10,7 +10,7 @@ import { ExportAllSheet } from '../components/ExportAllSheet';
 import { TagGroupSheet } from '../components/TagGroupSheet';
 import { VIS_ICON } from '../components/visIcons';
 import { PasswordSheet, UserSheet } from '../components/UserSheets';
-import { absoluteUrl, can, formatDate, inTagGroup, normalizeSearch, pickText, postPath, ROLES, titleDir } from '../lib/util';
+import { absoluteUrl, can, formatDate, normalizeSearch, publicInTagGroup, pickText, postPath, ROLES, titleDir } from '../lib/util';
 import { usePageTitle } from './usePageTitle';
 
 /** /admin — posts (incl. drafts) for writers and reviewers, users & roles for the manager. */
@@ -401,7 +401,7 @@ export function AdminPage() {
           <ul className="admin-list" style={{ marginTop: 10 }}>
             {tagGroups && !tagGroups.length && <p className="hint">{t('tg_none')}</p>}
             {tagGroups?.map((g) => {
-              const count = (posts ?? []).filter((p) => inTagGroup(p, g)).length;
+              const count = (posts ?? []).filter((p) => publicInTagGroup(p, g)).length;
               return (
                 <li key={g.id}>
                   <span className="avatar" style={{ background: g.config.accent }}>
