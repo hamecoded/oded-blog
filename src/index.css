@@ -4091,6 +4091,9 @@ textarea.pc-input {
   font-size: 0.9rem;
   animation: pt-pulse 1.6s ease-in-out infinite;
 }
+.ps-done {
+  margin-top: 12px;
+}
 .ps-auto {
   margin-top: 14px;
   align-items: flex-start !important;
@@ -4678,6 +4681,138 @@ textarea.pc-input {
   }
 }
 
+/* Phones: the totals (items, cost, value, gain/loss, currency) go after the list, so the list starts right under
+   the toolbar and the item-type filters. */
+@media (max-width: 700px) {
+  .poss-screen {
+    display: flex;
+    flex-direction: column;
+  }
+  .poss-screen > .poss-stats {
+    order: 1;
+    margin: 14px 0 0;
+  }
+}
+
+/* Phones: as little as possible above the list, so more of it shows on the first screen. */
+@media (max-width: 700px) {
+  .container:has(.poss) {
+    padding-top: 6px;
+  }
+  .app-host:has(.poss) .app-host-head {
+    margin: 0 0 8px;
+    gap: 8px;
+  }
+  .app-host:has(.poss) .app-host-head h1 {
+    font-size: 1.15rem;
+  }
+  .app-host:has(.poss) .app-host-head .btn {
+    min-height: 30px;
+    padding: 0 10px;
+  }
+  /* Toolbar: search on its own line, then one row of icon buttons (labels hidden) and Add item. */
+  .poss-bar {
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .poss-search {
+    flex-basis: 100%;
+    min-height: 38px;
+  }
+  .poss-bar .poss-actions {
+    flex: 1;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .poss-bar .poss-actions > .btn.primary {
+    margin-inline-start: auto;
+  }
+  .poss-bar .btn-label,
+  .poss-view button span {
+    display: none;
+  }
+  .poss-bar .btn.ghost {
+    min-height: 34px;
+    padding: 0 10px;
+  }
+  /* Item types: one scrolling row of compact chips (each type's count and value are in the totals below). */
+  .poss-cats {
+    margin-bottom: 8px;
+  }
+  .poss-cats-row {
+    gap: 6px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .poss-cats-row::-webkit-scrollbar {
+    display: none;
+  }
+  button.pc-card,
+  .pc-card {
+    min-width: 0;
+    padding: 6px 14px;
+    border-radius: 999px;
+  }
+  .pc-card .pc-meta {
+    display: none;
+  }
+  .pc-card .pc-name {
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+  /* Categories: one scrolling row too, without the label. */
+  .poss-subcats {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-top: 6px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .poss-subcats::-webkit-scrollbar {
+    display: none;
+  }
+  .poss-subcats-label,
+  .poss-hint,
+  .pt-tip {
+    display: none;
+  }
+  .poss-subcats > * {
+    flex-shrink: 0;
+  }
+  .pt-order {
+    margin-bottom: 6px;
+  }
+  /* Tighter cards: more of them on screen, still easy to tap. (.poss raises these above the card styles below.) */
+  .poss .pcards {
+    gap: 6px;
+  }
+  .poss .pcards li {
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 12px;
+  }
+  .poss .pcard-photo {
+    width: 44px;
+    height: 44px;
+    border-radius: 9px;
+  }
+  .poss .pcard-main {
+    gap: 0;
+    padding: 0;
+    line-height: 1.3;
+  }
+  .poss .pcard-title {
+    font-size: 0.95rem;
+  }
+  .poss .pcard-kind,
+  .poss .pcard-sub {
+    font-size: 0.78rem;
+  }
+  .poss .pcard-grip {
+    height: 40px;
+  }
+}
+
 /* Table / cards switch */
 .poss-view {
   display: inline-flex;
@@ -4850,23 +4985,40 @@ textarea.pc-input {
   object-fit: cover;
   border-radius: 10px;
 }
+/* Fields side by side must be allowed to shrink: text and date inputs have a built-in minimum width that would
+   otherwise push them over their neighbours on a narrow screen. */
 .item-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 .item-row.three {
-  grid-template-columns: 0.7fr 1fr 1fr;
+  grid-template-columns: minmax(0, 0.7fr) repeat(2, minmax(0, 1fr));
 }
 .item-row > label {
   min-width: 0;
 }
+.item-form input:not([type='checkbox']),
+.item-form textarea {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.item-form input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 46px;
+  text-align: start;
+}
 .item-actions {
   position: sticky;
   bottom: 0;
+  z-index: 1;
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  padding: 10px 0 2px;
+  margin-top: 4px;
+  padding: 10px 0 calc(4px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--border);
   background: var(--surface);
 }

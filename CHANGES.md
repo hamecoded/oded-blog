@@ -33,6 +33,11 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 - Changed: Possessions background removal shows its progress on the row's photo too and confirms when done ("Background removed"), so it's visible after closing the photo window; uses @imgly/background-removal 1.7 (model isnet_fp16)
 - Added: Possessions cards view for phones (the default there; Table/Cards switch in the toolbar, remembered per device): one card per item with photo, title, item type · category, author/brand, location and value; tap a card for a form with every field; tick boxes and drag-to-reorder work on cards too
 - Fixed: Possessions on phones: no zooming on this page (pinch, double-tap, or the automatic zoom into fields: inputs use 16px text and the viewport is fixed while the app is open); the table there scrolls sideways only, doesn't drag the page along, and taps no longer leave cells highlighted
+- Changed: Possessions cards view: "Add item" opens the new item's form with the cursor in its title
+- Changed: Possessions on phones: the totals come after the list instead of above it
+- Changed: Possessions on phones: compact header and toolbar (icon buttons), item types and categories as single scrolling rows of chips, no hint lines, so the list starts much higher
+- Fixed: Possessions item form on phones: fields side by side (item type/category, quantity/cost/value, date/condition) overlapped; they now shrink to fit, and the Save bar has its own edge
+- Added: Possessions photo window has a Done button (the main action once there's a photo) to close it after adding a picture
 - Changed: printing is allowed on app pages for every signed-in user (the blog itself still prints for the manager only)
 - Changed: privacy policy mentions the Possessions app
 - Changed: deploy's schema check also looks for the possessions table, so it asks to re-run schema.sql

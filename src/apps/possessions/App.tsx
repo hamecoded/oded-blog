@@ -212,7 +212,9 @@ export default function PossessionsApp() {
       });
       setQ('');
       setRows((rs) => [...(rs ?? []), p]);
-      setEditNew(p.id);
+      // In the cards view the new item opens in its form; in the table its title cell starts in edit mode.
+      if (display === 'cards') setOpenId(p.id);
+      else setEditNew(p.id);
     } catch (e) {
       fail(e);
     }
@@ -373,8 +375,8 @@ export default function PossessionsApp() {
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={pt('search')} aria-label={pt('search')} dir="auto" />
           </label>
           <div className="poss-actions">
-            <button type="button" className="btn ghost sm" onClick={() => setImporting(true)} title={pt('importLong')}>
-              <FileUp size={16} /> {pt('import')}
+            <button type="button" className="btn ghost sm" onClick={() => setImporting(true)} title={pt('importLong')} aria-label={pt('importLong')}>
+              <FileUp size={16} /> <span className="btn-label">{pt('import')}</span>
             </button>
             {all.length > 0 && (
               <div className="poss-view" role="group" aria-label={`${pt('viewTable')} / ${pt('viewCards')}`}>
@@ -397,13 +399,13 @@ export default function PossessionsApp() {
               </div>
             )}
             {all.length > 0 && display === 'table' && (
-              <button type="button" className="btn ghost sm" onClick={() => setColumnsOpen(true)}>
-                <Columns3 size={16} /> {pt('columns')}
+              <button type="button" className="btn ghost sm" onClick={() => setColumnsOpen(true)} aria-label={pt('columns')}>
+                <Columns3 size={16} /> <span className="btn-label">{pt('columns')}</span>
                 {hiddenCount > 0 && <span className="poss-count">{pt('nHidden', { n: hiddenCount })}</span>}
               </button>
             )}
-            <button type="button" className="btn ghost sm" onClick={() => setPrintOpen(true)} disabled={!visible.length}>
-              <Printer size={16} /> {pt('print')}
+            <button type="button" className="btn ghost sm" onClick={() => setPrintOpen(true)} disabled={!visible.length} aria-label={pt('print')}>
+              <Printer size={16} /> <span className="btn-label">{pt('print')}</span>
             </button>
             <button type="button" className="btn primary sm" onClick={add}>
               <Plus size={16} /> {pt('add')}

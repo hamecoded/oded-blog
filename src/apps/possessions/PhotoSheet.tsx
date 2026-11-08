@@ -1,4 +1,4 @@
-import { Camera, ImageUp, Trash2, Undo2, Wand2 } from 'lucide-react';
+import { Camera, Check, ImageUp, Trash2, Undo2, Wand2 } from 'lucide-react';
 import { Sheet } from '../../components/Sheet';
 import type { Possession } from '../../lib/types';
 import { usePt } from './strings';
@@ -52,7 +52,8 @@ export function PhotoSheet({
         <p className="muted ps-none">{pt('photoNone')}</p>
       )}
       <div className="ps-photo-actions">
-        <button type="button" className="btn primary" onClick={onCamera} disabled={working}>
+        {/* Once there's a photo, Done is the main action and taking another becomes secondary. */}
+        <button type="button" className={`btn ${has ? 'ghost' : 'primary'}`} onClick={onCamera} disabled={working}>
           <Camera size={18} /> {busy ? pt('uploading') : pt('takePhoto')}
         </button>
         <button type="button" className="btn ghost" onClick={onChoose} disabled={working}>
@@ -74,6 +75,11 @@ export function PhotoSheet({
           </button>
         )}
       </div>
+      {has && (
+        <button type="button" className="btn primary block ps-done" onClick={onClose} disabled={working}>
+          <Check size={18} /> {pt('photoDone')}
+        </button>
+      )}
       <label className="check ps-auto">
         <input type="checkbox" checked={autoCutOut} onChange={(e) => onAutoCutOut(e.target.checked)} />
         <span>

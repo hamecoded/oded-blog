@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, Check, Trash2 } from 'lucide-react';
 import { Sheet } from '../../components/Sheet';
 import type { Lang, Possession, PossessionDraft } from '../../lib/types';
@@ -48,6 +48,15 @@ export function ItemSheet({
   const [form, setForm] = useState<Form>({});
   const [shownFor, setShownFor] = useState<string | null>(null);
   const [armed, setArmed] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  // A new, still empty item starts with the cursor in its title. Done after the dialog has opened: opening a
+  // dialog moves focus to its first button, which would undo an earlier focus.
+  const isNew = !!item && !item.title;
+  useEffect(() => {
+    if (!isNew) return;
+    const t = setTimeout(() => titleRef.current?.focus(), 60);
+    return () => clearTimeout(t);
+  }, [isNew, item?.id]);
   // Refill the form when a different item opens (compared during render, not in an effect).
   if ((item?.id ?? null) !== shownFor) {
     setShownFor(item?.id ?? null);
@@ -107,6 +116,7 @@ export function ItemSheet({
             list={opts.list?.length ? opts.listId : undefined}
             dir={numeric || f.kind === 'date' ? 'ltr' : 'auto'}
             enterKeyHint="next"
+            ref={key === 'title' ? titleRef : undefined}
           />
         )}
         {opts.list && opts.list.length > 0 && (
