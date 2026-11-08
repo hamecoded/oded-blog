@@ -1,5 +1,16 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { Api, Comment, Group, OAuthProvider, Post, PostDraft, Profile, RoleRequest, TagGroup } from '../types';
+import type {
+  Api,
+  Comment,
+  Group,
+  OAuthProvider,
+  Possession,
+  Post,
+  PostDraft,
+  Profile,
+  RoleRequest,
+  TagGroup,
+} from '../types';
 import {
   emptyTagGroupConfig,
   htmlToText,
@@ -7,6 +18,7 @@ import {
   makeExcerpt,
   normalizeTagGroup,
   OAUTH_PROVIDERS,
+  possessionFields,
   RESERVED_SLUGS,
   sha256Hex,
   slugify,
@@ -409,6 +421,53 @@ export function createSupabaseApi(url: string, key: string): Api {
 
     async decideRoleRequest(id, approve) {
       check(await sb.rpc('decide_role_request', { req_id: id, approve }));
+    },
+
+    // Possessions: row-level security ("possessions own") limits every query to the signed-in user's rows.
+    async listPossessions() {
+      const res = await sb.from('possessions').select('*').order('item_type').order('position');
+      // Table or column missing: schema.sql hasn't been run since the Possessions app (or its latest columns) came.
+      if (res.error && /possessions|schema cache|PGRST20[45]|42P01|42703/i.test(`${res.error.code ?? ''} ${res.error.message}`)) {
+        throw new Error('possessions/missing');
+      }
+      return (check(res) as Possession[]).map((p) => ({ ...p, item_type: p.item_type ?? '', extra: p.extra ?? {} }));
+    },
+
+    async savePossession(p) {
+      if (p.id) {
+        const current = check(await sb.from('possessions').select('*').eq('id', p.id).single()) as Possession;
+        const res = await sb.from('possessions').update(possessionFields(p, current)).eq('id', p.id).select().single();
+        return check(res) as Possession;
+      }
+      return check(await sb.from('possessions').insert(possessionFields(p)).select().single()) as Possession;
+    },
+
+    async addPossessions(rows) {
+      const out: Possession[] = [];
+      const base = Date.now();
+      for (let i = 0; i < rows.length; i += 500) {
+        const chunk = rows.slice(i, i + 500).map((r, j) => possessionFields({ ...r, position: r.position ?? base + i + j }));
+        out.push(...(check(await sb.from('possessions').insert(chunk).select()) as Possession[]));
+      }
+      return out;
+    },
+
+    async deletePossessions(ids) {
+      if (ids.length) check(await sb.from('possessions').delete().in('id', ids));
+    },
+
+    async uploadPossessionImage(file) {
+      // Each user's photos go in possessions/<their id>/ ("media own possessions upload" policy in schema.sql).
+      const { data } = await sb.auth.getUser();
+      if (!data.user) throw new Error('auth/required');
+      const ext = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const path = `possessions/${data.user.id}/${crypto.randomUUID()}.${ext}`;
+      const res = await sb.storage.from(BUCKET).upload(path, file, {
+        cacheControl: '31536000',
+        contentType: file.type || undefined,
+      });
+      if (res.error) throw new Error(res.error.message);
+      return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
     },
   };
   return api;

@@ -1,4 +1,15 @@
-import type { Bilingual, Comment, OAuthProvider, Post, Profile, Role, TagGroup, TagGroupConfig } from './types';
+import type {
+  Bilingual,
+  Comment,
+  OAuthProvider,
+  Possession,
+  PossessionDraft,
+  Post,
+  Profile,
+  Role,
+  TagGroup,
+  TagGroupConfig,
+} from './types';
 
 /** Role capabilities. Keep in sync with the RLS policies in supabase/schema.sql. */
 export const can = {
@@ -13,6 +24,8 @@ export const can = {
   manageGroups: (p: Profile | null) => !!p && (p.role === 'admin' || p.role === 'editor'),
   editGroup: (p: Profile | null, g: { created_by: string | null }) => !!p && (p.role === 'admin' || g.created_by === p.id),
   export: (p: Profile | null) => !!p && p.role === 'admin',
+  /** Apps (/apps): any signed-in user. Each app's data is the user's own ("possessions own" policy in schema.sql). */
+  useApps: (p: Profile | null) => !!p && !p.suspended,
   /** Tag groups (sites inside the site). Mirrors the "tag groups" policies in supabase/schema.sql. */
   manageTagGroups: (p: Profile | null) => !!p && p.role === 'admin',
 };
@@ -176,7 +189,7 @@ export const SITE_SLUG_RE = /^[a-z0-9][a-z0-9-]{1,39}$/;
 
 /** First path segments the blog itself uses (or the host serves), so no tag group can take them. Keep in step with tag_groups_slug_check in schema.sql. */
 export const RESERVED_SITE_SLUGS = new Set([
-  'posts', 'tags', 'authors', 'archive', 'search', 'login', 'signup', 'logout', 'account', 'privacy', 'admin',
+  'posts', 'tags', 'authors', 'archive', 'search', 'login', 'signup', 'logout', 'account', 'privacy', 'admin', 'apps',
   'assets', 'brand', 'api', 'auth', 'index', 'static', 'public', '404',
 ]);
 
@@ -302,4 +315,40 @@ export function saveGuestName(name: string) {
   } catch {
     /* storage unavailable */
   }
+}
+
+const clip = (s: unknown, max: number) => String(s ?? '').trim().slice(0, max);
+const numOrNull = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) ? n : null);
+
+/**
+ * The editable fields of a possession, trimmed and with defaults, as both backends store them. `base` is the
+ * existing row when updating, so fields missing from the draft keep their values.
+ */
+export function possessionFields(d: PossessionDraft, base?: Possession) {
+  const pick = <K extends keyof PossessionDraft>(k: K) => (k in d ? d[k] : base?.[k as keyof Possession]);
+  const extra: Record<string, string> = {};
+  Object.entries((pick('extra') as Record<string, string> | undefined) ?? {}).forEach(([k, v]) => {
+    const key = clip(k, 60);
+    if (key) extra[key] = clip(v, 2000);
+  });
+  const date = clip(pick('date_purchased'), 10);
+  const qty = numOrNull(pick('quantity'));
+  return {
+    item_type: clip(pick('item_type'), 80),
+    category: clip(pick('category'), 80),
+    title: clip(pick('title'), 300),
+    maker: clip(pick('maker'), 200),
+    description: clip(pick('description'), 4000),
+    quantity: qty === null ? 1 : qty,
+    value: numOrNull(pick('value')),
+    cost: numOrNull(pick('cost')),
+    date_purchased: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null,
+    location: clip(pick('location'), 200),
+    condition: clip(pick('condition'), 120),
+    notes: clip(pick('notes'), 4000),
+    image_url: (pick('image_url') as string | null | undefined) || null,
+    // New rows go last: the time in ms, so later rows sort after earlier ones until someone drags them.
+    position: numOrNull(pick('position')) ?? Date.now(),
+    extra,
+  };
 }

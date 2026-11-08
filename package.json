@@ -14,11 +14,13 @@
     "deploy:auto": "node scripts/setup.mjs deploy --yes",
     "deploy:check": "node scripts/setup.mjs check",
     "migrate:media": "node scripts/setup.mjs media",
+    "db:update": "node scripts/setup.mjs schema",
     "lint": "oxlint",
     "preview": "vite preview",
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "@imgly/background-removal": "^1.7.0",
     "@supabase/supabase-js": "^2.118.0",
     "@tiptap/core": "^3.32.0",
     "@tiptap/extension-highlight": "^3.32.0",

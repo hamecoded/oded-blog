@@ -214,7 +214,7 @@ alter table public.tag_groups drop constraint if exists tag_groups_slug_check;
 alter table public.tag_groups add constraint tag_groups_slug_check check (
   slug ~ '^[a-z0-9][a-z0-9-]{1,39}$'
   and slug not in ('posts', 'tags', 'authors', 'archive', 'search', 'login', 'signup', 'logout', 'account', 'privacy',
-                   'admin', 'assets', 'brand', 'api', 'auth', 'index', 'static', 'public', '404')
+                   'admin', 'apps', 'assets', 'brand', 'api', 'auth', 'index', 'static', 'public', '404')
 );
 create index if not exists tag_groups_tags_idx on public.tag_groups using gin (tags);
 
@@ -531,6 +531,57 @@ create policy "group members write" on public.group_members for all
   using (public.owns_group(group_id))
   with check (public.owns_group(group_id));
 
+-- ───────────────────────── possessions (the Possessions app, src/apps/possessions) ─────────────────────────
+-- Each signed-in user's list of things they own. Private: only the owner reads or changes their rows (not even
+-- the admin). Mirrors the owner checks in src/lib/api/local.ts and can.useApps() in src/lib/util.ts.
+create table if not exists public.possessions (
+  id             uuid primary key default gen_random_uuid(),
+  owner_id       uuid not null default auth.uid() references public.profiles (id) on delete cascade,
+  item_type      text not null default '' check (length(item_type) <= 80),  -- what kind of thing: Book, Laptop
+  category       text not null default '' check (length(category) <= 80),   -- a sub-type within it: Health
+  title          text not null default '' check (length(title) <= 300),
+  maker          text not null default '' check (length(maker) <= 200),
+  description    text not null default '' check (length(description) <= 4000),
+  quantity       numeric not null default 1,
+  value          numeric,
+  cost           numeric,
+  date_purchased date,
+  location       text not null default '' check (length(location) <= 200),
+  condition      text not null default '' check (length(condition) <= 120),
+  notes          text not null default '' check (length(notes) <= 4000),
+  image_url      text,
+  position       double precision not null default (extract(epoch from clock_timestamp()) * 1000),
+  extra          jsonb not null default '{}'::jsonb,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+-- Upgrades for projects that ran an earlier version of this table.
+alter table public.possessions add column if not exists item_type text not null default '';
+alter table public.possessions add column if not exists position double precision not null
+  default (extract(epoch from clock_timestamp()) * 1000);
+alter table public.possessions drop constraint if exists possessions_item_type_check;
+alter table public.possessions add constraint possessions_item_type_check check (length(item_type) <= 80);
+drop index if exists public.possessions_owner_idx;
+create index if not exists possessions_owner_type_idx on public.possessions (owner_id, item_type, category);
+
+create or replace function public.touch_possession()
+returns trigger language plpgsql as $$
+begin
+  new.owner_id := coalesce(old.owner_id, new.owner_id);  -- ownership never moves
+  new.created_at := coalesce(old.created_at, new.created_at);
+  new.updated_at := now();
+  return new;
+end $$;
+drop trigger if exists possessions_touch on public.possessions;
+create trigger possessions_touch before insert or update on public.possessions
+  for each row execute function public.touch_possession();
+
+alter table public.possessions enable row level security;
+drop policy if exists "possessions own" on public.possessions;
+create policy "possessions own" on public.possessions for all
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid() and not coalesce((select suspended from public.profiles where id = auth.uid()), false));
+
 -- ───────────────────────── Storage (uploaded images / videos) ─────────────────────────
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('media', 'media', true, 52428800)
@@ -541,6 +592,12 @@ create policy "media public read" on storage.objects for select using (bucket_id
 drop policy if exists "media writers upload" on storage.objects;
 create policy "media writers upload" on storage.objects for insert
   with check (bucket_id = 'media' and public.current_role_name() in ('admin', 'editor'));
+-- Any signed-in user may upload photos of their possessions, only into possessions/<their id>/.
+drop policy if exists "media own possessions upload" on storage.objects;
+create policy "media own possessions upload" on storage.objects for insert
+  with check (bucket_id = 'media' and auth.uid() is not null
+              and (storage.foldername(name))[1] = 'possessions'
+              and (storage.foldername(name))[2] = auth.uid()::text);
 drop policy if exists "media admin delete" on storage.objects;
 create policy "media admin delete" on storage.objects for delete
   using (bucket_id = 'media' and public.current_role_name() = 'admin');

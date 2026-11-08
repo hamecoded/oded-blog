@@ -593,3 +593,16 @@ netlify.toml, vercel.json  host configs
   show the site defaults rather than per-post titles and images.
 - **TikTok and Instagram** have no web share link; on phones, use *More apps* (the native
   share sheet).
+
+## 13. Licences
+
+The blog's own code has no licence file yet. One third-party part has terms worth knowing:
+
+- **Background removal in the Possessions app** uses IMG.LY's
+  [`@imgly/background-removal`](https://github.com/imgly/background-removal-js) (version 1.7), licensed
+  **AGPL-3.0**. It runs in visitors' browsers, so under the AGPL the site's complete source code must be available
+  to its users under AGPL-compatible terms. A public GitHub repository covers availability; adding a `LICENSE`
+  file (AGPL-3.0) and a link to the repository from the site makes it explicit. The library is loaded only when
+  someone uses "Remove background" (`src/apps/possessions/bgremove.ts`), and its model (about 100 MB) downloads
+  from IMG.LY's server on first use. To drop it, delete that file, its import in the Possessions `App.tsx` and the
+  dependency in `package.json`.

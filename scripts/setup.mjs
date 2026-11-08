@@ -5,6 +5,7 @@
 //   npm run deploy                rebuild and redeploy to the host chosen during setup
 //   npm run deploy:auto           the same in one go, with no questions (= npm run deploy -- --yes)
 //   npm run deploy:check          check .env, the Supabase project, the build and (optionally) the live site
+//   npm run db:update             run supabase/schema.sql on the live database now (psql or the SQL editor)
 //   npm run migrate:media         copy uploaded files from an old Supabase project to the current one
 //
 // Add --dry-run to print every command and file write instead of doing it.
@@ -275,16 +276,17 @@ async function checkDatabase(url, key) {
     return [{ ok: false, msg: `The tables are missing (HTTP ${probe.status}). Run supabase/schema.sql.` }];
   }
   results.push({ ok: true, msg: 'Project reachable, key accepted, tables present' });
-  // The newest additions: tag groups (sites inside the site) and visitors' comments and likes.
-  const [users, tagGroups, guests] = await Promise.all([
+  // The newest additions: tag groups (sites inside the site), visitors' comments and likes, the Possessions app.
+  const [users, tagGroups, guests, possessions] = await Promise.all([
     http(`${base}/rest/v1/profiles?select=suspended&limit=1`, { headers }),
     http(`${base}/rest/v1/tag_groups?select=slug&limit=1`, { headers }),
     http(`${base}/rest/v1/comments?select=guest_name&limit=1`, { headers }),
+    http(`${base}/rest/v1/possessions?select=id&limit=1`, { headers }),
   ]);
-  const latest = { status: [users, tagGroups, guests].every((r) => r.status === 200) ? 200 : 400 };
+  const latest = { status: [users, tagGroups, guests, possessions].every((r) => r.status === 200) ? 200 : 400 };
   results.push(
     latest.status === 200
-      ? { ok: true, msg: 'Schema is the latest version (tag groups and visitor comments present)' }
+      ? { ok: true, msg: 'Schema is the latest version (tag groups, visitor comments and possessions present)' }
       : { ok: false, msg: 'Schema is out of date. Re-run supabase/schema.sql (safe, keeps data).' },
   );
   const bucket = await http(`${base}/storage/v1/object/public/media/__setup-probe`);
@@ -1216,6 +1218,29 @@ async function cmdDeploy() {
   }
 }
 
+/**
+ * `npm run db:update`: runs schema.sql on the Supabase project in .env, whatever its state, then checks it.
+ * With SUPABASE_DB_URL set and psql installed it runs straight away; otherwise it asks how (SQL editor or psql).
+ */
+async function cmdSchema() {
+  const state = readState();
+  const env = readEnv();
+  step('Database: run supabase/schema.sql');
+  if (!env.VITE_SUPABASE_URL) {
+    info('Demo mode (no VITE_SUPABASE_URL in .env): there is no database to update.');
+    return;
+  }
+  info(`Supabase project ${projectRef(env.VITE_SUPABASE_URL) ?? env.VITE_SUPABASE_URL}`);
+  const before = await checkDatabase(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
+  if (before[0]?.connection) {
+    report(before);
+    process.exitCode = 1;
+    return;
+  }
+  if (!(await applySchema(env, state))) process.exitCode = 1;
+  else ok(bold('Database updated'));
+}
+
 async function cmdCheck() {
   const state = readState();
   const env = readEnv();
@@ -1337,9 +1362,9 @@ async function cmdMedia() {
   if (await confirm('Open the SQL editor?', true)) openUrl(`https://supabase.com/dashboard/project/${projectRef(url)}/sql/new`);
 }
 
-const COMMANDS = { setup: cmdSetup, deploy: cmdDeploy, check: cmdCheck, media: cmdMedia };
+const COMMANDS = { setup: cmdSetup, deploy: cmdDeploy, check: cmdCheck, media: cmdMedia, schema: cmdSchema };
 if (!COMMANDS[command]) {
-  fail(`Unknown command "${command}". Use: setup, deploy, check or media (plus --dry-run, --yes).`);
+  fail(`Unknown command "${command}". Use: setup, deploy, check, media or schema (plus --dry-run, --yes).`);
   process.exit(1);
 }
 try {

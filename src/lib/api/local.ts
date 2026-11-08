@@ -3,7 +3,19 @@
  * Used automatically when no Supabase keys are configured, so the site runs
  * with zero setup (`npm run dev`) and on any static host for a quick preview.
  */
-import type { Api, Comment, Group, LikeInfo, Post, PostDraft, Profile, Role, RoleRequest, TagGroup } from '../types';
+import type {
+  Api,
+  Comment,
+  Group,
+  LikeInfo,
+  Possession,
+  Post,
+  PostDraft,
+  Profile,
+  Role,
+  RoleRequest,
+  TagGroup,
+} from '../types';
 import {
   ADMIN_EMAIL,
   can,
@@ -15,6 +27,7 @@ import {
   normalizeSearch,
   normalizeTagGroup,
   OAUTH_LABELS,
+  possessionFields,
   OAUTH_PROVIDERS,
   RESERVED_SLUGS,
   sha256Hex,
@@ -40,6 +53,7 @@ interface Db {
   roleRequests: RoleRequest[];
   groups: Group[];
   tagGroups: TagGroup[];
+  possessions: Possession[];
 }
 
 const DB_NAME = 'bilingual-blog';
@@ -140,7 +154,13 @@ export function createLocalApi(): Api {
     if (cache) return cache;
     const stored = await idbGet<Db>('db');
     if (stored) {
-      cache = { ...stored, roleRequests: stored.roleRequests ?? [], groups: stored.groups ?? [], tagGroups: stored.tagGroups ?? [] };
+      cache = {
+        ...stored,
+        roleRequests: stored.roleRequests ?? [],
+        groups: stored.groups ?? [],
+        tagGroups: stored.tagGroups ?? [],
+        possessions: stored.possessions ?? [],
+      };
       if (await ensureAdmin(cache)) await idbSet('db', cache);
     } else {
       const now = Date.now();
@@ -165,6 +185,7 @@ export function createLocalApi(): Api {
         roleRequests: [],
         groups: [],
         tagGroups: [],
+        possessions: [],
       };
       await ensureAdmin(cache);
       await idbSet('db', cache);
@@ -617,6 +638,7 @@ export function createLocalApi(): Api {
       d.comments = d.comments.filter((c) => c.user_id !== userId);
       d.likes = d.likes.filter((l) => l.user_id !== userId);
       d.roleRequests = d.roleRequests.filter((r) => r.user_id !== userId);
+      d.possessions = d.possessions.filter((x) => x.owner_id !== userId);
       d.groups.forEach((g) => {
         g.member_ids = g.member_ids.filter((x) => x !== userId);
         if (g.created_by === userId) g.created_by = null;
@@ -763,6 +785,68 @@ export function createLocalApi(): Api {
       const u = d.users.find((x) => x.id === r.user_id);
       if (approve && u) u.role = r.requested_role;
       await persist();
+    },
+
+    // Possessions: each user sees and changes only their own. Mirrors the "possessions own" policy in schema.sql.
+    async listPossessions() {
+      const u = await requireMe();
+      return (await db()).possessions
+        .filter((x) => x.owner_id === u.id)
+                .map((x) => ({ ...x, item_type: x.item_type ?? '', position: x.position ?? Date.parse(x.created_at) }))
+        .sort((a, b) => a.item_type.localeCompare(b.item_type) || a.position - b.position);
+    },
+
+    async savePossession(p) {
+      const u = await requireMe();
+      if (!can.useApps(u)) throw new Error('auth/forbidden');
+      const d = await db();
+      const now = new Date().toISOString();
+      const existing = p.id ? d.possessions.find((x) => x.id === p.id) : undefined;
+      if (p.id && (!existing || existing.owner_id !== u.id)) throw new Error('auth/forbidden');
+      const saved: Possession = {
+        id: existing?.id ?? uid(),
+        owner_id: u.id,
+        ...possessionFields(p, existing),
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+      };
+      if (existing) d.possessions[d.possessions.indexOf(existing)] = saved;
+      else d.possessions.push(saved);
+      await persist();
+      return saved;
+    },
+
+    async addPossessions(rows) {
+      const u = await requireMe();
+      if (!can.useApps(u)) throw new Error('auth/forbidden');
+      const d = await db();
+      const now = new Date().toISOString();
+      const base = Date.now();
+      const saved = rows.map(
+        (r, i): Possession => ({
+          id: uid(),
+          owner_id: u.id,
+          ...possessionFields({ ...r, position: r.position ?? base + i }),
+          created_at: now,
+          updated_at: now,
+        }),
+      );
+      d.possessions.push(...saved);
+      await persist();
+      return saved;
+    },
+
+    async deletePossessions(ids) {
+      const u = await requireMe();
+      const d = await db();
+      const drop = new Set(ids);
+      d.possessions = d.possessions.filter((x) => !(drop.has(x.id) && x.owner_id === u.id));
+      await persist();
+    },
+
+    async uploadPossessionImage(file) {
+      await requireMe();
+      return api.uploadMedia(file);
     },
   };
   return api;

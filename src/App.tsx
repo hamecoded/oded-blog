@@ -1,5 +1,5 @@
 import { createBrowserRouter, Link, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { LayoutGrid, Search } from 'lucide-react';
 import { api } from './lib/api';
 import { useApp, usePrintLock } from './lib/app';
 import { AppProvider } from './lib/AppProvider';
@@ -12,13 +12,15 @@ import { AuthPage, Logout } from './pages/Auth';
 import { AccountPage } from './pages/Account';
 import { NotFound } from './pages/NotFound';
 import { PrivacyPage } from './pages/Privacy';
+import { AppHostPage, AppsPage } from './pages/Apps';
 import { Landing, SiteLayout } from './site/SiteLayout';
 
 function Layout() {
   const { t, user, toastMsg } = useApp();
   const loc = useLocation();
   const bare = loc.pathname.endsWith('/print');
-  usePrintLock(can.export(user));
+  // Printing the blog is for the manager; apps print the user's own data, so they may print.
+  usePrintLock(can.export(user) || (!!user && loc.pathname.startsWith('/apps/')));
   return (
     <FabProvider>
       {!bare && (
@@ -34,6 +36,11 @@ function Layout() {
             <Link to="/search" aria-label={t('search')} className="icon-link">
               <Search size={20} />
             </Link>
+            {user && (
+              <Link to="/apps" aria-label={t('apps')} title={t('apps')} className="icon-link">
+                <LayoutGrid size={20} />
+              </Link>
+            )}
             {user ? (
               <Link
                 to="/account"
@@ -79,6 +86,7 @@ function Layout() {
  *   /search?q=…&tag=…     search            /admin              manage posts, users, role requests
  *   /account              role, password, request a role
  *   /privacy              privacy policy (linked from Google's sign-in setup)
+ *   /apps, /apps/:app     app store and one app, signed-in users only (apps live in src/apps/<app>/)
  *
  * Tag-group sites (a "site inside the site", src/site): /:site is the group's landing page, and under it
  *   /:site/posts, /:site/posts/:slug, /:site/tags, /:site/tags/:tag, /:site/search
@@ -108,6 +116,8 @@ const router = createBrowserRouter(
         { path: '/logout', element: <Logout /> },
         { path: '/account', element: <AccountPage /> },
         { path: '/privacy', element: <PrivacyPage /> },
+        { path: '/apps', element: <AppsPage /> },
+        { path: '/apps/:app', element: <AppHostPage /> },
         { path: '/admin', lazy: () => import('./pages/Admin').then((m) => ({ Component: m.AdminPage })) },
         { path: '*', element: <NotFound /> },
       ],

@@ -181,6 +181,44 @@ export interface TagGroup {
 
 export type TagGroupDraft = Pick<TagGroup, 'slug' | 'tags' | 'landing' | 'config'> & { id?: string };
 
+/**
+ * One thing a user owns, in the Possessions app (src/apps/possessions). Private to its owner: see the
+ * "possessions own" policy in supabase/schema.sql and the owner checks in api/local.ts.
+ */
+export interface Possession {
+  id: string;
+  owner_id: string;
+  /** What kind of thing it is ("Book", "Laptop"). The app's top-level filter. */
+  item_type: string;
+  /** A sub-type within the item type ("Health" for a book). Filtered once an item type is chosen. */
+  category: string;
+  title: string;
+  /** Author, brand, artist or manufacturer. */
+  maker: string;
+  description: string;
+  quantity: number;
+  /** What it's worth now. */
+  value: number | null;
+  /** What was paid for it. */
+  cost: number | null;
+  /** 'YYYY-MM-DD' */
+  date_purchased: string | null;
+  location: string;
+  condition: string;
+  notes: string;
+  image_url: string | null;
+  /** The owner's own order within the item type (rows are dragged into place); lower comes first. */
+  position: number;
+  /** Spreadsheet columns that don't match a field above, kept as they were ("ISBN", "Publisher"). */
+  extra: Record<string, string>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type PossessionDraft = Partial<Omit<Possession, 'id' | 'owner_id' | 'created_at' | 'updated_at'>> & {
+  id?: string;
+};
+
 export interface Api {
   mode: 'supabase' | 'local';
   // auth
@@ -240,4 +278,13 @@ export interface Api {
   /** Admin only: all requests, pending first. */
   listRoleRequests(): Promise<RoleRequest[]>;
   decideRoleRequest(id: string, approve: boolean): Promise<void>;
+  // possessions app (signed-in users, each sees only their own)
+  listPossessions(): Promise<Possession[]>;
+  /** Creates (no id) or updates one; returns the saved row. */
+  savePossession(p: PossessionDraft): Promise<Possession>;
+  /** Creates many at once (spreadsheet import). */
+  addPossessions(rows: PossessionDraft[]): Promise<Possession[]>;
+  deletePossessions(ids: string[]): Promise<void>;
+  /** Uploads a photo into the user's own folder and returns its URL. */
+  uploadPossessionImage(file: File): Promise<string>;
 }

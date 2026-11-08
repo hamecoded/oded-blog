@@ -31,6 +31,7 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
 | `npm run setup` | Guided deploy: `.env`, database, host, smoke test |
 | `npm run deploy` / `npm run deploy:check` | Redeploy / verify everything |
 | `npm run deploy:auto` | Redeploy in one go, no questions (`deploy --yes`); commit message built from CHANGES.md → Unreleased |
+| `npm run db:update` | Run `supabase/schema.sql` on the live database now (psql with `SUPABASE_DB_URL`, else asks), then check it |
 | `npm run migrate:media` | Copy uploads after moving Supabase projects |
 
 ## Decisions already made (and why)
@@ -87,6 +88,27 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   - **Export per group** (admin): the archive icon on the group's row. PDF is `/posts/print?group=<slug>`.
   - Path, not subdomain: GitHub Pages allows one domain per repo. `scripts/prerender.mjs` writes
     `<slug>.html` and `<slug>/posts/*.html` so these addresses answer 200 and share with the group's name.
+- **Apps (2026-11-08):** a grid icon in the top bar, shown only to signed-in users, leads to `/apps`, an
+  app-store page; `/apps/<id>` opens one app inside the blog's frame. Both pages ask anyone signed out to sign in.
+  Each app is a folder `src/apps/<id>/` with `app.ts` (store listing: name, tagline, description, icon, image,
+  category, tags, status, version, updated, url, featured) and `App.tsx` (lazy-loaded), discovered by
+  `import.meta.glob` in `src/apps/registry.ts`; `_template/` is skipped and is the starting point. See
+  `src/apps/README.md`. `apps` is a reserved tag-group slug. Printing is unlocked on `/apps/*` (apps print the
+  user's own data). App texts live in the app's own `strings.ts` (typed `he: typeof en`), not in i18n.ts.
+- **Possessions app (2026-11-08, `src/apps/possessions`):** each user's private inventory. Table `possessions` +
+  "possessions own" RLS (owner only, not even the admin), photos uploaded to `media/possessions/<uid>/` (bucket is
+  public: unlisted URLs, said so in the privacy policy). Two levels: `item_type` ("Book") drives the filter
+  cards and is what an import asks for first (an item-type column overrides it per row); `category` ("Health")
+  is a sub-type within it, shown as chips once an item type is chosen, and its dropdown offers only that item
+  type's categories. Column order/visibility is a per-browser preference (`columns.ts`, localStorage); title and item
+  type are pinned first (`PINNED`, fixed widths that the sticky offsets in index.css depend on). Columns a spreadsheet has beyond the fixed fields go in `extra`
+  (jsonb) and show as their own columns. Spreadsheets are read in the browser (`spreadsheet.ts`: xlsx via jszip,
+  CSV/TSV), no extra dependency. Api methods: `listPossessions`, `savePossession`, `addPossessions`,
+  `deletePossessions`, `uploadPossessionImage`, in both backends.
+  Photos are shrunk to ≤1200px WebP/JPEG before upload (`shrinkImage`, also drops GPS metadata). Background
+  removal uses `@imgly/background-removal` 1.7 (AGPL-3.0, README §13), lazy-loaded from `bgremove.ts`; model
+  "isnet_fp16", fetched from IMG.LY's CDN (`VITE_BG_REMOVAL_PATH` can point at a self-hosted copy). Rows have a
+  `position` (own order within an item type; default sort; dragged by the row grip).
 - **Homepage:** no big title. Posts start right under a slim search-and-tags row, as
   compact cards with side thumbnails, so as many posts as possible fit on the first screen.
   Other list pages still use the large cards.
@@ -111,6 +133,11 @@ management, the compact homepage, and the RTL/LTR layouts at phone and desktop w
 exports and the prerendered pages (against a stand-in server). **Not yet run on the live database:** the
 schema.sql additions (`tag_groups`, `guest_likes`, guest comment policy), so run schema.sql before
 deploying this version.
+
+**Possessions (2026-11-08):** tested in demo mode in a headless browser at 1280px and 375px in Hebrew: Excel and CSV
+import with review, editing, adding, deleting, photos, category filters, the location dropdown, reload, and the
+printed PDF. **Not yet run on the live database:** the `possessions` table, its policy and the storage upload policy
+in schema.sql.
 
 **Live since 2026-10-31** at https://oded.me (GitHub Pages, repo `hamecoded/oded-blog`,
 Supabase project `tbwskzgkmoztdejeiyhz`); `.deploy.json` records the last deploy.

@@ -7,7 +7,7 @@ import { usePageTitle } from './usePageTitle';
 // Google's sign-in setup links here (Google Auth Platform → Branding → privacy policy link). A Meta app would
 // link to /privacy and /privacy#delete (privacy policy / data deletion instructions) if Facebook sign-in returns.
 // The text is long-form, so each language is a block here rather than dictionary entries in i18n.ts.
-const UPDATED = '2026-11-02';
+const UPDATED = '2026-11-08';
 
 const mail = (
   <a href={`mailto:${ADMIN_EMAIL}`} dir="ltr">
@@ -54,6 +54,12 @@ function English() {
         take it back. Only a scrambled form of that code is stored on the server. To have such a comment removed, email{' '}
         {mail}.
       </p>
+      <p>
+        Signed-in users can keep a private list of things they own in the Possessions app, including spreadsheets they
+        import and photos they add. Only you can see your list; not other users and not the blog's manager. Photos are
+        stored at a long, random web address that isn't listed anywhere, but anyone who has that exact address can open
+        the photo.
+      </p>
       <h2>Who can see it</h2>
       <p>
         Your display name and username appear next to your comments and posts. Your email address is visible only to the
@@ -67,7 +73,7 @@ function English() {
       </p>
       <h2 id="delete">Deleting your data</h2>
       <p>
-        To delete your account, email {mail}. Deleting it removes your account, comments, likes and role requests. Posts
+        To delete your account, email {mail}. Deleting it removes your account, comments, likes, role requests and possessions list. Posts
         you wrote stay on the blog under the manager's name unless you ask for them to be removed too.
       </p>
       <h2>Changes</h2>
@@ -110,6 +116,11 @@ function Hebrew() {
         את השם הזה וקוד אקראי, כדי שהלייק ייספר פעם אחת ותוכלו לבטל אותו. בשרת נשמרת רק צורה מוצפנת של הקוד. כדי להסיר
         תגובה כזאת, כתבו אל {mail}.
       </p>
+      <p>
+        משתמשים מחוברים יכולים לנהל באפליקציית "רכוש" רשימה פרטית של דברים שבבעלותם, כולל גיליונות שהם מייבאים ותמונות
+        שהם מוסיפים. רק אתם רואים את הרשימה שלכם: לא משתמשים אחרים ולא מנהל הבלוג. התמונות נשמרות בכתובת אינטרנט ארוכה
+        ואקראית שלא מופיעה בשום מקום, אבל מי שיש לו את הכתובת המדויקת יכול לפתוח את התמונה.
+      </p>
       <h2>מי רואה מה</h2>
       <p>
         שם התצוגה ושם המשתמש שלכם מופיעים ליד התגובות והפוסטים שלכם. כתובת האימייל גלויה רק למנהל הבלוג. המידע שלכם לא
@@ -122,7 +133,7 @@ function Hebrew() {
       </p>
       <h2 id="delete">מחיקת המידע</h2>
       <p>
-        כדי למחוק את החשבון, כתבו אל {mail}. המחיקה מסירה את החשבון, התגובות, הלייקים ובקשות התפקיד. פוסטים שכתבתם נשארים
+        כדי למחוק את החשבון, כתבו אל {mail}. המחיקה מסירה את החשבון, התגובות, הלייקים, בקשות התפקיד ורשימת הרכוש. פוסטים שכתבתם נשארים
         בבלוג בשם המנהל, אלא אם תבקשו להסיר גם אותם.
       </p>
       <h2>שינויים</h2>

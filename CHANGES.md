@@ -7,6 +7,35 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-08 03:41
+
+- Added: apps: a grid icon in the top bar, for signed-in users, opens /apps, an app-store page built automatically from src/apps (one folder per app, each with an app.ts listing: name, tagline, description, icon, cover image, category, tags, status, version, date, external link); /apps/<app> opens one. First entry: a to-do list, marked Coming soon
+- Added: Possessions app (/apps/possessions): each signed-in user's private list of things they own. Import Excel/CSV in steps (say the category first, e.g. Book; an item-type column overrides it per row; match columns; review and edit every row before adding), edit cells in place, add and delete rows, category cards to show/hide categories, location with a dropdown of places used before, a photo per item, totals in a chosen currency, and a printable list grouped by category
+- Added: Possessions import of workbooks with several sheets: all sheets come in together; untick a sheet to ignore it entirely, give a sheet its own category, and match each sheet's columns
+- Changed: Possessions has two levels: item type (Book) and category within it (Health). Item-type cards filter; choosing one shows its categories as chips to hide or show; imports ask for the item type and take categories from a category/genre column; the printed list groups by item type, then category
+- Added: Possessions table columns can be dragged to reorder and hidden from the header on hover (desktop); a Columns menu shows, hides and reorders them on any device and remembers the layout in the browser
+- Fixed: Possessions: editing a cell (an item type, say) re-sorted the table at once, so the row jumped and the next click or typing landed on another row; rows now keep their place until you sort, filter or search
+- Fixed: Possessions: picking from a dropdown could click through to the cell underneath, and an edit could save twice
+- Changed: Possessions dropdowns (item type, category, location) are a floating card with a label, accent border and icons, and offer what you typed first as "Use …", so they can't be mistaken for table rows
+- Added: Possessions multi-edit: ⌘/Ctrl-click or Shift-click cells in a column and type once to change them all; or tick rows and use "Set a field" in the selection bar
+- Fixed: Possessions: a dropdown floated over the toolbar and page header when the table scrolled; it now hides while its cell is scrolled out of view and always fits on screen
+- Added: Possessions "Set a field" can set several fields at once (+ Field)
+- Added: Possessions photos from the camera: phones open their camera app, computers get a live webcam preview with a shutter button; the photo sheet offers Take a photo, Choose a file and Remove
+- Fixed: Possessions printed list zig-zagged when Hebrew and English items were mixed (each line aligned to its own language); every line now follows the page's direction, with mixed text isolated inline
+- Changed: Possessions table pins Item type next to Title (fixed widths, always first, stays in view when scrolling sideways; on phones only Title is pinned); it's no longer in the Columns menu
+- Added: Possessions rows can be dragged into your own order within an item type (grip ⠿, mouse or touch, or ↑/↓ on the focused grip); the order is saved (new `position` column) and is the default sort, with "Back to your order" after sorting by a column
+- Changed: Possessions photos are made small before upload: at most 1200px, WebP (JPEG where the browser can't write WebP), and their metadata, including GPS position, is dropped (a 4.9 MB phone photo becomes about 70 KB)
+- Added: Possessions photo background removal (IMG.LY @imgly/background-removal 1.7, AGPL-3.0, runs in the browser; the model, about 100 MB, downloads from IMG.LY on first use): "Remove background" with Undo in the photo sheet, and an option to do it automatically for new photos
+- Changed: Possessions shows "the database isn't ready, run npm run db:update" instead of a raw error when the live database lacks the possessions table
+- Added: Possessions print options: group the printed list by any column (item type then category, category, author/brand, location, condition, year purchased, quantity, a spreadsheet's own columns, or no grouping) and include photos or not; remembered in the browser
+- Fixed: Possessions item-type dropdown hid behind the pinned item-type cells of the rows below; dropdowns now render above the table (in the page, or the open dialog)
+- Added: Possessions category chips have "Hide all" next to "Show all", to start from nothing and turn on just the categories wanted
+- Changed: Possessions background removal shows its progress on the row's photo too and confirms when done ("Background removed"), so it's visible after closing the photo window; uses @imgly/background-removal 1.7 (model isnet_fp16)
+- Changed: printing is allowed on app pages for every signed-in user (the blog itself still prints for the manager only)
+- Changed: privacy policy mentions the Possessions app
+- Changed: deploy's schema check also looks for the possessions table, so it asks to re-run schema.sql
+- Added: `npm run db:update`: runs supabase/schema.sql on the live database straight away (psql with SUPABASE_DB_URL, or asks: SQL editor or psql), then checks it
+
 ## 2026-11-04 01:34
 
 - Fixed: tag group sheet saving half-filled settings: Enter (a phone keyboard's Go key) submitted the form, saving and closing the sheet mid-way; it now moves to the next field, and only Save saves
