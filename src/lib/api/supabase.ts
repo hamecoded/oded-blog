@@ -54,6 +54,11 @@ export function createSupabaseApi(url: string, key: string): Api {
   async function loadProfile(userId: string | undefined): Promise<Profile | null> {
     if (!userId) return (profileCache = null);
     const { data } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle();
+    // Suspended or on hold: a session may still exist (issued before the hold); end it.
+    if ((data as Profile | null)?.suspended) {
+      await sb.auth.signOut();
+      return (profileCache = null);
+    }
     return (profileCache = (data as Profile) ?? null);
   }
 
@@ -83,21 +88,32 @@ export function createSupabaseApi(url: string, key: string): Api {
       return () => data.subscription.unsubscribe();
     },
 
-    async signUp(email, password, displayName) {
+    async signUp(email, password, displayName, captchaToken) {
       const res = await sb.auth.signUp({
         email,
         password,
         options: {
           data: { display_name: displayName },
           emailRedirectTo: `${location.origin}${import.meta.env.BASE_URL}`,
+          captchaToken,
         },
       });
-      if (res.error) throw new Error(res.error.message);
+      if (res.error) throw new Error(/captcha/i.test(res.error.message) ? 'auth/captcha' : res.error.message);
+      // A machine-made looking name is created on hold by the database (handle_new_user in schema.sql).
+      const uid = res.data.user?.id;
+      if (uid) {
+        const { data } = await sb.from('profiles').select('suspended').eq('id', uid).maybeSingle();
+        if (data?.suspended) {
+          if (res.data.session) await sb.auth.signOut();
+          throw new Error('auth/held');
+        }
+      }
       return { needsConfirmation: !res.data.session };
     },
 
-    async signIn(email, password) {
-      const res = await sb.auth.signInWithPassword({ email: loginEmail(email), password });
+    async signIn(email, password, captchaToken) {
+      const res = await sb.auth.signInWithPassword({ email: loginEmail(email), password, options: { captchaToken } });
+      if (res.error && /captcha/i.test(res.error.message)) throw new Error('auth/captcha');
       if (res.error) throw new Error(/banned/i.test(res.error.message) ? 'auth/suspended' : 'auth/invalid');
     },
 

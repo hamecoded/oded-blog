@@ -352,3 +352,31 @@ export function possessionFields(d: PossessionDraft, base?: Possession) {
     extra,
   };
 }
+
+/**
+ * True when a name looks machine-made, like "cdBcejzKTYXUYQrtNTbE": one long run of Latin letters (10+) with
+ * few vowels, long consonant clusters and capitals scattered inside. Real names, Hebrew names, spaced names,
+ * camelCase and ordinary e-mail names don't match. Mirrors public.looks_machine_made() in supabase/schema.sql,
+ * which holds such sign-ups for the admin; keep the two in step.
+ */
+export function looksMachineMade(text: string | null | undefined): boolean {
+  for (const w of (text ?? '').split(/[\s._+-]+/)) {
+    if (w.length < 10 || !/^[A-Za-z0-9]+$/.test(w)) continue;
+    const letters = w.replace(/[^A-Za-z]/g, '').length;
+    const vowels = w.replace(/[^AEIOUaeiou]/g, '').length;
+    const switches = (w.match(/[a-z](?=[A-Z])/g) ?? []).length;
+    const run = Math.max(0, ...(w.match(/[B-DF-HJ-NP-TV-Zb-df-hj-np-tv-z]+/g) ?? []).map((m) => m.length));
+    const score = (letters > 0 && vowels / letters < 0.25 ? 1 : 0) + (switches >= 3 ? 1 : 0) + (run >= 5 ? 1 : 0);
+    if (score >= 2 && (switches >= 3 || w.length >= 14)) return true;
+  }
+  return false;
+}
+
+/**
+ * An account that needs the admin's look: held at sign-up, or (older accounts) a machine-made name or e-mail.
+ * Never one the admin has approved.
+ */
+export function needsReview(p: Pick<Profile, 'display_name' | 'username' | 'email' | 'review_reason'>): boolean {
+  if (p.review_reason === 'approved') return false;
+  return !!p.review_reason || looksMachineMade(p.display_name) || looksMachineMade(p.email?.split('@')[0]);
+}

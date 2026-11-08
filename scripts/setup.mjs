@@ -311,6 +311,7 @@ function buildEnv(env, state) {
     VITE_GOOGLE_CLIENT_ID: env.VITE_GOOGLE_CLIENT_ID ?? '',
     VITE_OAUTH_PROVIDERS: env.VITE_OAUTH_PROVIDERS ?? '',
     VITE_ADMIN_EMAIL: env.VITE_ADMIN_EMAIL ?? '',
+    VITE_TURNSTILE_SITE_KEY: env.VITE_TURNSTILE_SITE_KEY ?? '',
     VITE_BASE: state.base ?? '/',
   };
 }
@@ -500,6 +501,7 @@ function saveEnv(env) {
     VITE_GOOGLE_CLIENT_ID: env.VITE_GOOGLE_CLIENT_ID,
     VITE_OAUTH_PROVIDERS: env.VITE_OAUTH_PROVIDERS,
     VITE_ADMIN_EMAIL: env.VITE_ADMIN_EMAIL,
+    VITE_TURNSTILE_SITE_KEY: env.VITE_TURNSTILE_SITE_KEY,
   });
   ok('Saved .env (git-ignored; holds only public values)');
 }
@@ -857,6 +859,7 @@ async function deployGitHub(env, state) {
   }
   if (env.VITE_OAUTH_PROVIDERS) run('gh', ['variable', 'set', 'VITE_OAUTH_PROVIDERS', '--repo', full, '--body', env.VITE_OAUTH_PROVIDERS]);
   if (env.VITE_ADMIN_EMAIL) run('gh', ['variable', 'set', 'VITE_ADMIN_EMAIL', '--repo', full, '--body', env.VITE_ADMIN_EMAIL]);
+  if (env.VITE_TURNSTILE_SITE_KEY) run('gh', ['variable', 'set', 'VITE_TURNSTILE_SITE_KEY', '--repo', full, '--body', env.VITE_TURNSTILE_SITE_KEY]);
   if (state.domain) run('gh', ['variable', 'set', 'VITE_BASE', '--repo', full, '--body', '/']);
   run('gh', ['variable', 'set', 'SITE_URL', '--repo', full, '--body', state.siteUrl]);
 

@@ -29,6 +29,11 @@ export interface Profile {
   suspended?: boolean;
   /** Admin-only field. */
   last_sign_in_at?: string | null;
+  /**
+   * Why a new account is on hold for the admin to check ('name': its name looks machine-made), or 'approved' once
+   * the admin has checked it. Held accounts are suspended; approving lifts both. Admin-only field.
+   */
+  review_reason?: string | null;
 }
 
 export interface NewUser {
@@ -224,8 +229,12 @@ export interface Api {
   // auth
   currentUser(): Promise<Profile | null>;
   onAuthChange(cb: (p: Profile | null) => void): () => void;
-  signUp(email: string, password: string, displayName: string): Promise<{ needsConfirmation: boolean }>;
-  signIn(email: string, password: string): Promise<void>;
+  /**
+   * `captchaToken` comes from the Cloudflare Turnstile check on the sign-up/sign-in form (when configured).
+   * A sign-up whose name looks machine-made is created on hold: it throws 'auth/held'.
+   */
+  signUp(email: string, password: string, displayName: string, captchaToken?: string): Promise<{ needsConfirmation: boolean }>;
+  signIn(email: string, password: string, captchaToken?: string): Promise<void>;
   /** The configured sign-in services that actually work right now (live: switched on in Supabase). */
   oauthProviders(): Promise<OAuthProvider[]>;
   /** Leaves the page for the provider; on return the session is picked up from the URL. `returnTo` is an app path. */

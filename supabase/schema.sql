@@ -26,6 +26,40 @@ create table if not exists public.profiles (
 -- Upgrades for projects created with an earlier version of this file.
 alter table public.profiles add column if not exists must_change_password boolean not null default false;
 alter table public.profiles add column if not exists suspended boolean not null default false;
+-- Why a new account is on hold for the admin ('name': it looks machine-made; see looks_machine_made below), or
+-- 'approved' once the admin has checked it.
+alter table public.profiles add column if not exists review_reason text;
+
+-- True when a name looks machine-made, like "cdBcejzKTYXUYQrtNTbE": a 10+ letter run of Latin letters with few
+-- vowels, long consonant clusters and capitals scattered inside. Mirrors looksMachineMade() in src/lib/util.ts.
+create or replace function public.looks_machine_made(t text)
+returns boolean language plpgsql immutable as $$
+declare
+  w text;
+  letters int;
+  vowels int;
+  switches int;
+  longest int;
+  score int;
+begin
+  foreach w in array regexp_split_to_array(coalesce(t, ''), '[[:space:]._+-]+') loop
+    if length(w) < 10 or w !~ '^[A-Za-z0-9]+$' then
+      continue;
+    end if;
+    letters := length(regexp_replace(w, '[^A-Za-z]', '', 'g'));
+    vowels := length(regexp_replace(w, '[^AEIOUaeiou]', '', 'g'));
+    select count(*) into switches from regexp_matches(w, '[a-z](?=[A-Z])', 'g');
+    select coalesce(max(length(m[1])), 0) into longest
+      from regexp_matches(w, '([B-DF-HJ-NP-TV-Zb-df-hj-np-tv-z]+)', 'g') as m;
+    score := (case when letters > 0 and vowels::numeric / letters < 0.25 then 1 else 0 end)
+           + (case when switches >= 3 then 1 else 0 end)
+           + (case when longest >= 5 then 1 else 0 end);
+    if score >= 2 and (switches >= 3 or length(w) >= 14) then
+      return true;
+    end if;
+  end loop;
+  return false;
+end $$;
 alter table public.profiles alter column role set default 'commenter';
 alter table public.profiles drop constraint if exists profiles_role_check;
 alter table public.profiles add constraint profiles_role_check
@@ -43,6 +77,12 @@ declare
   base text := coalesce(regexp_replace(lower(split_part(new.email, '@', 1)), '[^a-z0-9]', '', 'g'), '');
   uname text;
   n int := 1;
+  shown text := coalesce(
+    nullif(new.raw_user_meta_data ->> 'display_name', ''),
+    nullif(new.raw_user_meta_data ->> 'full_name', ''),
+    nullif(new.raw_user_meta_data ->> 'name', ''));
+  -- A machine-made looking name or e-mail: create the account on hold (suspended) for the admin to approve.
+  held boolean := public.looks_machine_made(shown) or public.looks_machine_made(split_part(new.email, '@', 1));
 begin
   if base = '' then base := 'user'; end if;
   uname := base;
@@ -50,18 +90,11 @@ begin
     n := n + 1;
     uname := base || n;
   end loop;
-  insert into public.profiles (id, display_name, username, role)
-  values (
-    new.id,
-    coalesce(
-      nullif(new.raw_user_meta_data ->> 'display_name', ''),
-      nullif(new.raw_user_meta_data ->> 'full_name', ''),
-      nullif(new.raw_user_meta_data ->> 'name', ''),
-      base
-    ),
-    uname,
-    'commenter'
-  );
+  insert into public.profiles (id, display_name, username, role, suspended, review_reason)
+  values (new.id, coalesce(shown, base), uname, 'commenter', held, case when held then 'name' end);
+  if held then
+    update auth.users set banned_until = 'infinity'::timestamptz where id = new.id;
+  end if;
   return new;
 end $$;
 
@@ -78,8 +111,8 @@ begin
      and coalesce(public.current_role_name(), '') <> 'admin' then
     raise exception 'only admins can change roles';
   end if;
-  if new.suspended is distinct from old.suspended and auth.uid() is not null
-     and coalesce(public.current_role_name(), '') <> 'admin' then
+  if (new.suspended is distinct from old.suspended or new.review_reason is distinct from old.review_reason)
+     and auth.uid() is not null and coalesce(public.current_role_name(), '') <> 'admin' then
     raise exception 'only admins can suspend accounts';
   end if;
   new.id := old.id;
@@ -328,10 +361,10 @@ $$;
 drop function if exists public.admin_list_users();
 create or replace function public.admin_list_users()
 returns table (id uuid, display_name text, username text, role text, created_at timestamptz, email text,
-               must_change_password boolean, suspended boolean, last_sign_in_at timestamptz)
+               must_change_password boolean, suspended boolean, last_sign_in_at timestamptz, review_reason text)
 language sql stable security definer set search_path = public as $$
   select p.id, p.display_name, p.username, p.role, p.created_at, u.email::text,
-         p.must_change_password, p.suspended, u.last_sign_in_at
+         p.must_change_password, p.suspended, u.last_sign_in_at, p.review_reason
   from public.profiles p join auth.users u on u.id = p.id
   where public.current_role_name() = 'admin'
   order by p.created_at
@@ -398,7 +431,10 @@ begin
   if p_suspended then
     delete from auth.sessions where user_id = p_user;
   end if;
-  update public.profiles set suspended = p_suspended where id = p_user;
+  -- Lifting a suspension also approves the account: 'approved' keeps it off the admin's review list for good.
+  update public.profiles set suspended = p_suspended,
+         review_reason = case when p_suspended then review_reason else 'approved' end
+   where id = p_user;
 end $$;
 
 -- Comments, likes, group memberships and role requests go with the account; posts move to the acting admin.

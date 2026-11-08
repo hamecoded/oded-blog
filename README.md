@@ -274,6 +274,7 @@ environment variables).
 | `VITE_SUPABASE_ANON_KEY` | For a live site | `sb_publishable_…` or `eyJhbGci…` | Supabase publishable (anon) key. It's public by design. |
 | `VITE_GOOGLE_CLIENT_ID` | Optional | `123…apps.googleusercontent.com` | Enables **Upload to YouTube**. |
 | `VITE_OAUTH_PROVIDERS` | Optional | `google` | Sign-in buttons below the email form (`google`, `facebook`, `apple`, `github`). Default `google`; `none` for email only. Each must be enabled in Supabase (§8.1 step 5). |
+| `VITE_TURNSTILE_SITE_KEY` | Optional | `0x4AAAAAAABkMYinukE8nzY` | Cloudflare Turnstile "are you human" check on sign-up and sign-in (§8.8). |
 | `VITE_ADMIN_EMAIL` | Optional | `admin@oded.me` | The email that the `admin` sign-in shortcut maps to. It must match the SQL file. |
 | `VITE_BASE` | Optional | `/` or `/my-blog/` | The path the site is served under. The GitHub workflow sets it automatically. |
 
@@ -480,6 +481,30 @@ the browser and is inserted into the post.
 - [ ] Default admin password changed
 - [ ] (Optional) custom domain, plus `VITE_BASE=/` for GitHub Pages
 - [ ] (Optional) `VITE_GOOGLE_CLIENT_ID` set and the site's origin authorized in Google Cloud
+- [ ] (Optional) bot check: `VITE_TURNSTILE_SITE_KEY` deployed, then CAPTCHA switched on in Supabase (§8.8)
+
+### 8.8 Keeping bots out (optional, recommended)
+
+Two layers, both free:
+
+1. **Held sign-ups (always on, nothing to set up).** When a new account's name or e-mail looks machine-made
+   (a long run of random letters like `cdBcejzKTYXUYQrtNTbE`), the database creates it **suspended and waiting
+   for approval** (`looks_machine_made()` and `handle_new_user()` in `schema.sql`). The person is told the
+   account needs a check. In **/admin → Users** a warning lists these accounts, together with older accounts
+   whose names look the same; **Approve** lets a real person in, **Delete all** removes the rest in one go. An
+   approved account is never flagged again.
+2. **Cloudflare Turnstile**: an "are you human" check on the sign-up and sign-in forms, usually invisible. Supabase
+   checks the answer on its side, so bots that skip the website are stopped too. Order matters, because once
+   CAPTCHA is on in Supabase every password sign-in needs it:
+   1. [dash.cloudflare.com](https://dash.cloudflare.com) → **Turnstile** → **Add widget**. Hostnames: `oded.me`
+      (and `localhost` for testing). Widget mode: **Managed**. Copy the **site key** and the **secret key**.
+   2. Put the site key in `VITE_TURNSTILE_SITE_KEY` (`npm run setup` stores it in `.env` and as a GitHub
+      variable; by hand: repo Settings → Secrets and variables → Actions → **Variables**), and deploy. The forms
+      now show the check.
+   3. Supabase → **Authentication** → **Attack Protection** → **Enable CAPTCHA protection** → provider
+      **Turnstile** → paste the **secret key** → Save.
+   Sign-in with Google doesn't go through the check (Google already vets its accounts); the name check above
+   still applies to it. Accounts the manager creates in /admin don't need it either.
 
 ---
 

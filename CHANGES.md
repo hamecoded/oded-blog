@@ -38,6 +38,10 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 - Changed: Possessions on phones: compact header and toolbar (icon buttons), item types and categories as single scrolling rows of chips, no hint lines, so the list starts much higher
 - Fixed: Possessions item form on phones: fields side by side (item type/category, quantity/cost/value, date/condition) overlapped; they now shrink to fit, and the Save bar has its own edge
 - Added: Possessions photo window has a Done button (the main action once there's a photo) to close it after adding a picture
+- Added: sign-ups with machine-made names or e-mails (like cdBcejzKTYXUYQrtNTbE) are created on hold (suspended, waiting for approval), checked in the database (looks_machine_made in schema.sql) and the demo backend alike; the person is told the account needs a check
+- Added: /admin → Users: count on the tab, a warning with "Show them" and "Delete all", a "Needs review" filter, and Approve / Delete on each flagged account (older accounts with such names too); approved accounts are never flagged again
+- Added: optional Cloudflare Turnstile "are you human" check on sign-up and sign-in (VITE_TURNSTILE_SITE_KEY; README §8.8), plus a hidden honeypot field and a minimum fill time on sign-up
+- Changed: privacy policy mentions Turnstile and held sign-ups
 - Changed: printing is allowed on app pages for every signed-in user (the blog itself still prints for the manager only)
 - Changed: privacy policy mentions the Possessions app
 - Changed: deploy's schema check also looks for the possessions table, so it asks to re-run schema.sql

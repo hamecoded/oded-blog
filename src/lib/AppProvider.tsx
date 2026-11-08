@@ -65,7 +65,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setPrefs = useCallback((p: Partial<Prefs>) => setPrefsState((cur) => ({ ...cur, ...p })), []);
   const resetPrefs = useCallback(() => setPrefsState((cur) => ({ ...DEFAULT_PREFS, uiLang: cur.uiLang })), []);
-  const t = useCallback((k: TKey) => DICTS[prefs.uiLang][k] ?? k, [prefs.uiLang]);
+  // `t('deletedUsers', { n: 3 })` fills {n} in the text.
+  const t = useCallback(
+    (k: TKey, vars?: Record<string, string | number>) => {
+      const text = DICTS[prefs.uiLang][k] ?? k;
+      return vars ? text.replace(/\{(\w+)\}/g, (_, v: string) => String(vars[v] ?? '')) : text;
+    },
+    [prefs.uiLang],
+  );
 
   const toast = useCallback((msg: string) => {
     setToastMsg(msg);

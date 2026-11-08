@@ -19,7 +19,7 @@ export interface AppCtx {
   prefs: Prefs;
   setPrefs: (p: Partial<Prefs>) => void;
   resetPrefs: () => void;
-  t: (k: TKey) => string;
+  t: (k: TKey, vars?: Record<string, string | number>) => string;
   toast: (msg: string) => void;
   toastMsg: string | null;
   refreshUser: () => Promise<void>;
@@ -50,6 +50,8 @@ export function errorText(e: unknown, t: AppCtx['t']): string {
   if (m === 'media/too-large') return t('ed_tooLarge');
   if (m === 'request/pending') return t('requestPending');
   if (m === 'auth/suspended') return t('accountSuspended');
+  if (m === 'auth/held') return t('accountHeld');
+  if (m === 'auth/captcha') return t('captchaFailed');
   if (/user\/self/.test(m)) return t('notOnYourself');
   if (m === 'user/username-taken') return t('usernameTaken');
   if (m === 'user/username-invalid') return t('usernameInvalid');

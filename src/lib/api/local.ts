@@ -23,6 +23,7 @@ import {
   emptyTagGroupConfig,
   htmlToText,
   loginEmail,
+  looksMachineMade,
   makeExcerpt,
   normalizeSearch,
   normalizeTagGroup,
@@ -111,7 +112,7 @@ function writeSession(id: string | null) {
 }
 
 function publicProfile(u: LocalUser): Profile {
-  const { email: _e, pw: _p, suspended: _s, last_sign_in_at: _l, ...rest } = u;
+  const { email: _e, pw: _p, suspended: _s, last_sign_in_at: _l, review_reason: _r, ...rest } = u;
   return rest;
 }
 
@@ -288,6 +289,8 @@ export function createLocalApi(): Api {
       const e = email.trim().toLowerCase();
       if (d.users.some((u) => u.email === e)) throw new Error('auth/exists');
       const username = uniqueUsername(d, e);
+      // Mirrors handle_new_user() in schema.sql: a machine-made looking name or e-mail is created on hold.
+      const held = looksMachineMade(displayName) || looksMachineMade(e.split('@')[0]);
       const user: LocalUser = {
         id: uid(),
         email: e,
@@ -297,9 +300,11 @@ export function createLocalApi(): Api {
         role: 'commenter',
         created_at: new Date().toISOString(),
         last_sign_in_at: new Date().toISOString(),
+        ...(held ? { suspended: true, review_reason: 'name', last_sign_in_at: null } : {}),
       };
       d.users.push(user);
       await persist();
+      if (held) throw new Error('auth/held');
       sessionId = user.id;
       writeSession(user.id);
       emit(publicProfile(user));
@@ -626,6 +631,8 @@ export function createLocalApi(): Api {
     async setSuspended(userId, suspended) {
       const { u } = await otherUser(userId);
       u.suspended = suspended;
+      // Lifting a suspension also approves an account that was on hold (as admin_set_suspended does).
+      if (!suspended) u.review_reason = 'approved';
       await persist();
     },
 

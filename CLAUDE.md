@@ -109,6 +109,13 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   removal uses `@imgly/background-removal` 1.7 (AGPL-3.0, README §13), lazy-loaded from `bgremove.ts`; model
   "isnet_fp16", fetched from IMG.LY's CDN (`VITE_BG_REMOVAL_PATH` can point at a self-hosted copy). Rows have a
   `position` (own order within an item type; default sort; dragged by the row grip).
+- **Bot defences (2026-11-08):** `looksMachineMade()` (util.ts) and `public.looks_machine_made()` (schema.sql) are
+  the same heuristic; keep them in step. `handle_new_user()` creates matching sign-ups suspended with
+  `profiles.review_reason = 'name'` (and bans them in auth.users); approving (unsuspending) sets it to `'approved'`,
+  which `needsReview()` never flags again. /admin → Users lists held accounts and older look-alikes. Optional
+  Cloudflare Turnstile on sign-up/sign-in (`VITE_TURNSTILE_SITE_KEY`, `src/lib/captcha.ts`,
+  `components/Turnstile.tsx`); Supabase verifies the token once CAPTCHA is switched on there (README §8.8: deploy the
+  key first). `t()` now fills `{name}` placeholders: `t('deletedUsers', { n })`.
 - **Homepage:** no big title. Posts start right under a slim search-and-tags row, as
   compact cards with side thumbnails, so as many posts as possible fit on the first screen.
   Other list pages still use the large cards.

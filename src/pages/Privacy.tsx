@@ -8,6 +8,7 @@ import { usePageTitle } from './usePageTitle';
 // link to /privacy and /privacy#delete (privacy policy / data deletion instructions) if Facebook sign-in returns.
 // The text is long-form, so each language is a block here rather than dictionary entries in i18n.ts.
 const UPDATED = '2026-11-08';
+// 2026-11-08: Cloudflare Turnstile on sign-up/sign-in; sign-ups with machine-made names are held for review.
 
 const mail = (
   <a href={`mailto:${ADMIN_EMAIL}`} dir="ltr">
@@ -38,6 +39,11 @@ function English() {
         <li>your role (for example reader or commenter) and any role you request;</li>
         <li>when you signed up and last signed in.</li>
       </ul>
+      <p>
+        To keep automated sign-ups out, the sign-up and sign-in forms may run Cloudflare Turnstile, a check that you're
+        a person: Cloudflare sees your IP address and browser details for that check, under its own privacy policy. A
+        new account whose name looks machine-made waits for the manager's approval before it can be used.
+      </p>
       <p>
         If you sign up with email, your password is stored only in hashed form. If you sign in with Google, the blog
         receives your name, email address and profile picture from Google. It never receives your Google password, does
@@ -104,6 +110,11 @@ function Hebrew() {
         <li>התפקיד שלכם (למשל קורא או מגיב) וכל תפקיד שביקשתם;</li>
         <li>מתי נרשמתם ומתי התחברתם לאחרונה.</li>
       </ul>
+      <p>
+        כדי למנוע הרשמות אוטומטיות, טופסי ההרשמה והכניסה עשויים להפעיל את Cloudflare Turnstile, בדיקה שאתם בני אדם:
+        Cloudflare רואה לשם כך את כתובת ה-IP ופרטי הדפדפן, לפי מדיניות הפרטיות שלו. חשבון חדש ששמו נראה כאילו נוצר
+        במכונה ממתין לאישור המנהל לפני שאפשר להשתמש בו.
+      </p>
       <p>
         בהרשמה עם אימייל, הסיסמה נשמרת רק בצורה מוצפנת (hash). בכניסה עם Google, הבלוג מקבל מ-Google את השם,
         כתובת האימייל ותמונת הפרופיל שלכם. הוא לא מקבל את הסיסמה שלכם שם, לא רואה את אנשי הקשר שלכם ואף פעם לא מפרסם דבר

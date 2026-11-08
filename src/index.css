@@ -5022,3 +5022,43 @@ textarea.pc-input {
   border-top: 1px solid var(--border);
   background: var(--surface);
 }
+
+/* ───────── Admin: accounts to review (machine-made names, held sign-ups) ───────── */
+.review-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, #f59e0b 55%, var(--border));
+  border-radius: 12px;
+  background: color-mix(in srgb, #f59e0b 12%, var(--surface));
+  font-size: 0.9rem;
+}
+.review-bar .grow {
+  flex: 1 1 220px;
+}
+.badge.warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: color-mix(in srgb, #f59e0b 22%, var(--surface));
+  color: var(--text);
+}
+.count.warn {
+  background: #f59e0b;
+  color: #1f2330;
+}
+
+/* Sign-up bot defences: the honeypot field is off screen for people; the Turnstile box shows only when needed. */
+.trap-field {
+  position: absolute !important;
+  inset-inline-start: -10000px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.turnstile:empty {
+  display: none;
+}

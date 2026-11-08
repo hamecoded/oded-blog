@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Archive, Ban, Check, ExternalLink, FileJson, Globe, KeyRound, PenSquare, Pencil, Plus, Search, Trash2, Upload, UserCheck, UserPlus, Users, X } from 'lucide-react';
+import { Archive, Ban, Bot, Check, ExternalLink, FileJson, Globe, KeyRound, PenSquare, Pencil, Plus, Search, Trash2, Upload, UserCheck, UserPlus, Users, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import { downloadJsonBackup } from '../lib/export';
@@ -10,7 +10,7 @@ import { ExportAllSheet } from '../components/ExportAllSheet';
 import { TagGroupSheet } from '../components/TagGroupSheet';
 import { VIS_ICON } from '../components/visIcons';
 import { PasswordSheet, UserSheet } from '../components/UserSheets';
-import { absoluteUrl, can, formatDate, normalizeSearch, publicInTagGroup, pickText, postPath, ROLES, titleDir } from '../lib/util';
+import { absoluteUrl, can, formatDate, needsReview, normalizeSearch, publicInTagGroup, pickText, postPath, ROLES, titleDir } from '../lib/util';
 import { usePageTitle } from './usePageTitle';
 
 /** /admin — posts (incl. drafts) for writers and reviewers, users & roles for the manager. */
@@ -39,7 +39,9 @@ export function AdminPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [editingGroup, setEditingGroup] = useState<Group | null | undefined>(undefined);
   const [userQuery, setUserQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState<Role | ''>('');
+  /** A role, '' for everyone, or 'review' for accounts that look automated or are on hold. */
+  const [roleFilter, setRoleFilter] = useState<Role | '' | 'review'>('');
+  const [armDeleteAll, setArmDeleteAll] = useState(false);
   const [editingUser, setEditingUser] = useState<Profile | null | undefined>(undefined);
   const [pwUser, setPwUser] = useState<Profile | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -93,8 +95,31 @@ export function AdminPage() {
     }
   }
 
+  // Accounts that need a look: held at sign-up for a machine-made name, or older ones whose name or e-mail looks
+  // like that. Never yourself or another manager.
+  const suspicious = (users ?? []).filter((u) => u.id !== user?.id && u.role !== 'admin' && needsReview(u));
+
+  async function deleteSuspicious() {
+    setArmDeleteAll(false);
+    let n = 0;
+    for (const u of suspicious) {
+      try {
+        await api.deleteUser(u.id);
+        n++;
+      } catch (e) {
+        toast(errorText(e, t));
+        break;
+      }
+    }
+    toast(t('deletedUsers', { n }));
+    setRoleFilter('');
+    load();
+  }
+
   const shownUsers = (users ?? []).filter((u) => {
-    if (roleFilter && u.role !== roleFilter) return false;
+    if (roleFilter === 'review') {
+      if (!suspicious.includes(u)) return false;
+    } else if (roleFilter && u.role !== roleFilter) return false;
     const q = normalizeSearch(userQuery).replace(/^@/, '');
     return !q || normalizeSearch(`${u.display_name} ${u.email ?? ''} ${u.username}`).includes(q);
   });
@@ -159,6 +184,11 @@ export function AdminPage() {
             <>
               <button type="button" className={tab === 'users' ? 'on' : ''} onClick={() => setTab('users')}>
                 {t('users')}
+                {suspicious.length > 0 && (
+                  <span className="count warn" title={t('reviewCount', { n: suspicious.length })}>
+                    {suspicious.length}
+                  </span>
+                )}
               </button>
               <button type="button" className={tab === 'requests' ? 'on' : ''} onClick={() => setTab('requests')}>
                 {t('requests')}
@@ -219,8 +249,9 @@ export function AdminPage() {
               <Search size={18} className="muted" />
               <input type="search" value={userQuery} placeholder={t('searchUsers')} aria-label={t('searchUsers')} onChange={(e) => setUserQuery(e.target.value)} />
             </label>
-            <select value={roleFilter} aria-label={t('role')} onChange={(e) => setRoleFilter(e.target.value as Role | '')}>
+            <select value={roleFilter} aria-label={t('role')} onChange={(e) => setRoleFilter(e.target.value as Role | '' | 'review')}>
               <option value="">{t('allRoles')}</option>
+              {suspicious.length > 0 && <option value="review">{t('needsReviewFilter', { n: suspicious.length })}</option>}
               {ROLES.map((r) => (
                 <option key={r} value={r}>
                   {t(`role_${r}`)}
@@ -231,6 +262,25 @@ export function AdminPage() {
               <UserPlus size={18} /> {t('addUser')}
             </button>
           </div>
+          {suspicious.length > 0 && (
+            <div className="review-bar" role="status">
+              <Bot size={20} aria-hidden />
+              <span className="grow">{t('reviewBar', { n: suspicious.length })}</span>
+              {roleFilter !== 'review' && (
+                <button type="button" className="btn ghost sm" onClick={() => setRoleFilter('review')}>
+                  {t('showThem')}
+                </button>
+              )}
+              <button
+                type="button"
+                className={`btn sm ${armDeleteAll ? 'primary danger-fill' : 'ghost danger'}`}
+                onClick={() => (armDeleteAll ? void deleteSuspicious() : setArmDeleteAll(true))}
+                onBlur={() => setArmDeleteAll(false)}
+              >
+                <Trash2 size={15} /> {armDeleteAll ? t('sureDeleteAll', { n: suspicious.length }) : t('deleteAll', { n: suspicious.length })}
+              </button>
+            </div>
+          )}
           <ul className="admin-list">
             {users && !shownUsers.length && <p className="hint">{t('noUsersMatch')}</p>}
             {shownUsers.map((u) => {
@@ -242,7 +292,16 @@ export function AdminPage() {
                     <strong dir="auto">
                       {u.display_name}
                       {self && <span className="badge ok">{t('you')}</span>}
-                      {u.suspended && <span className="badge status-rejected">{t('suspended')}</span>}
+                      {u.review_reason && u.review_reason !== 'approved' ? (
+                        <span className="badge status-rejected">{t('onHold')}</span>
+                      ) : (
+                        u.suspended && <span className="badge status-rejected">{t('suspended')}</span>
+                      )}
+                      {suspicious.includes(u) && (
+                        <span className="badge warn" title={t('looksAutomatedHelp')}>
+                          <Bot size={12} /> {t('looksAutomated')}
+                        </span>
+                      )}
                       {u.must_change_password && <span className="badge">{t('tempPasswordBadge')}</span>}
                     </strong>
                     <small className="muted" dir="ltr">
@@ -269,7 +328,26 @@ export function AdminPage() {
                     <button type="button" className="icon-btn" aria-label={t('edit')} title={t('edit')} onClick={() => setEditingUser(u)}>
                       <Pencil size={16} />
                     </button>
-                    {!self && (
+                    {!self && suspicious.includes(u) && (
+                      <>
+                        <button
+                          type="button"
+                          className="btn sm ghost"
+                          onClick={() => userAction(() => api.setSuspended(u.id, false), t('approved'))}
+                          title={t('approveHelp')}
+                        >
+                          <Check size={15} /> {t('approve')}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn sm ghost danger"
+                          onClick={() => userAction(() => api.deleteUser(u.id), t('userDeleted'))}
+                        >
+                          <Trash2 size={15} /> {t('delete')}
+                        </button>
+                      </>
+                    )}
+                    {!self && !suspicious.includes(u) && (
                       <>
                         <button type="button" className="icon-btn" aria-label={t('resetPassword')} title={t('resetPassword')} onClick={() => setPwUser(u)}>
                           <KeyRound size={16} />
