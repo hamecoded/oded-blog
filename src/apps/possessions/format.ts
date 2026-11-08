@@ -96,3 +96,25 @@ export function saveAutoCutOut(on: boolean) {
     /* storage unavailable */
   }
 }
+
+export type View = 'table' | 'cards';
+const VIEW_KEY = 'possessions.view';
+
+/** Table or cards, remembered per browser; phones start with cards. */
+export function loadView(): View {
+  try {
+    const v = localStorage.getItem(VIEW_KEY);
+    if (v === 'table' || v === 'cards') return v;
+  } catch {
+    /* storage unavailable */
+  }
+  return window.matchMedia('(max-width: 700px)').matches ? 'cards' : 'table';
+}
+
+export function saveView(v: View) {
+  try {
+    localStorage.setItem(VIEW_KEY, v);
+  } catch {
+    /* storage unavailable */
+  }
+}

@@ -31,6 +31,8 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 - Fixed: Possessions item-type dropdown hid behind the pinned item-type cells of the rows below; dropdowns now render above the table (in the page, or the open dialog)
 - Added: Possessions category chips have "Hide all" next to "Show all", to start from nothing and turn on just the categories wanted
 - Changed: Possessions background removal shows its progress on the row's photo too and confirms when done ("Background removed"), so it's visible after closing the photo window; uses @imgly/background-removal 1.7 (model isnet_fp16)
+- Added: Possessions cards view for phones (the default there; Table/Cards switch in the toolbar, remembered per device): one card per item with photo, title, item type · category, author/brand, location and value; tap a card for a form with every field; tick boxes and drag-to-reorder work on cards too
+- Fixed: Possessions on phones: no zooming on this page (pinch, double-tap, or the automatic zoom into fields: inputs use 16px text and the viewport is fixed while the app is open); the table there scrolls sideways only, doesn't drag the page along, and taps no longer leave cells highlighted
 - Changed: printing is allowed on app pages for every signed-in user (the blog itself still prints for the manager only)
 - Changed: privacy policy mentions the Possessions app
 - Changed: deploy's schema check also looks for the possessions table, so it asks to re-run schema.sql

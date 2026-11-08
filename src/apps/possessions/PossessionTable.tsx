@@ -1,10 +1,11 @@
-import { useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useRef, useState, type MouseEvent } from 'react';
 import { ArrowDown, ArrowUp, Camera, EyeOff, GripVertical, Trash2, X } from 'lucide-react';
 import type { Lang, Possession, PossessionDraft } from '../../lib/types';
 import { Cell } from './Cell';
 import { columnLabel, moveColumn, orderedColumns, type ColumnLayout } from './columns';
 import { FIELDS, type FieldDef } from './fields';
 import { count, day, money, type Currency } from './format';
+import { useRowDrag } from './rowDrag';
 import { usePt } from './strings';
 
 export interface SortState {
@@ -95,52 +96,8 @@ export function PossessionTable({
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [pick, setPick] = useState<CellPick | null>(null);
-  /** A row being dragged by its grip, and where it would land. */
-  const [rowDrag, setRowDrag] = useState<{ id: string; over: string | null; after: boolean } | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
-  const canDrag = !!onMoveRow && !!reorder;
-
-  const startRowDrag = (p: Possession) => (e: PointerEvent<HTMLButtonElement>) => {
-    if (!canDrag || e.button !== 0) return;
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setRowDrag({ id: p.id, over: null, after: false });
-  };
-  const moveRowDrag = (p: Possession) => (e: PointerEvent<HTMLButtonElement>) => {
-    if (!rowDrag || rowDrag.id !== p.id) return;
-    const box = wrap.current;
-    if (!box) return;
-    // Scroll the table when the pointer nears its top or bottom edge.
-    const r = box.getBoundingClientRect();
-    if (e.clientY < r.top + 50) box.scrollTop -= 14;
-    else if (e.clientY > r.bottom - 30) box.scrollTop += 14;
-    let over: string | null = null;
-    let after = false;
-    for (const tr of box.querySelectorAll<HTMLTableRowElement>('tbody tr[data-id]')) {
-      const tb = tr.getBoundingClientRect();
-      if (e.clientY >= tb.top && e.clientY < tb.bottom) {
-        const target = rows.find((x) => x.id === tr.dataset.id);
-        // Only within the same item type.
-        if (target && target.id !== p.id && target.item_type === p.item_type) {
-          over = target.id;
-          after = e.clientY > tb.top + tb.height / 2;
-        }
-        break;
-      }
-    }
-    if (over !== rowDrag.over || after !== rowDrag.after) setRowDrag({ id: p.id, over, after });
-  };
-  const endRowDrag = () => {
-    if (rowDrag?.over) onMoveRow!(rowDrag.id, rowDrag.over, rowDrag.after);
-    setRowDrag(null);
-  };
-  /** ↑/↓ on a focused grip: one place up or down within the item type. */
-  const keyMove = (p: Possession, dir: -1 | 1) => {
-    const same = rows.filter((r) => r.item_type === p.item_type);
-    const i = same.findIndex((r) => r.id === p.id);
-    const target = same[i + dir];
-    if (target && canDrag) onMoveRow!(p.id, target.id, dir === 1);
-  };
+  const { drag: rowDrag, canDrag, gripProps, itemClass } = useRowDrag(rows, wrap, onMoveRow, !!reorder);
   const allOn = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const order = orderedColumns(extraKeys, layout);
   const columns = order.filter((id) => !layout?.hidden.includes(id));
@@ -342,13 +299,7 @@ export function PossessionTable({
               key={p.id}
               data-id={p.id}
               className={
-                [
-                  selected.has(p.id) && 'is-selected',
-                  rowDrag?.id === p.id && 'is-dragged',
-                  rowDrag?.over === p.id && (rowDrag.after ? 'drop-below' : 'drop-above'),
-                ]
-                  .filter(Boolean)
-                  .join(' ') || undefined
+                [selected.has(p.id) && 'is-selected', itemClass(p.id)].filter(Boolean).join(' ') || undefined
               }
             >
               <td className="pt-check sticky-a">
@@ -358,17 +309,7 @@ export function PossessionTable({
                     className={`pt-rowgrip${canDrag ? '' : ' off'}`}
                     title={canDrag ? pt('dragRow') : reorderHint}
                     aria-label={`${pt('dragRow')}: ${p.title}`}
-                    aria-disabled={!canDrag}
-                    onPointerDown={startRowDrag(p)}
-                    onPointerMove={moveRowDrag(p)}
-                    onPointerUp={endRowDrag}
-                    onPointerCancel={() => setRowDrag(null)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                        e.preventDefault();
-                        keyMove(p, e.key === 'ArrowUp' ? -1 : 1);
-                      }
-                    }}
+                    {...gripProps(p)}
                   >
                     <GripVertical size={15} />
                   </button>

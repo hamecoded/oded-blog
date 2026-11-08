@@ -193,7 +193,6 @@ function Combo({
 
   // Keep the card next to the input while anything scrolls. Also measure again on the next frame: focusing the
   // input can scroll it into view, and a measurement taken at focus time would be stale.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const frame = requestAnimationFrame(() => place());
     const onScroll = () => place();
@@ -204,6 +203,8 @@ function Combo({
       window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onScroll);
     };
+    // Set up once per open dropdown; place() reads the input's position fresh every time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

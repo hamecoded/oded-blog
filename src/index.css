@@ -3606,6 +3606,8 @@ button.pc-card.on {
 /* The table */
 .pt-wrap {
   overflow: auto;
+  /* Scrolling inside the table doesn't drag the page along (or bounce it) at the edges. */
+  overscroll-behavior: contain;
   /* Cells scrolled into view (keyboard, focus) land beside the pinned columns, not under them. */
   scroll-padding-inline-start: 480px;
   max-height: calc(100dvh - 140px);
@@ -3640,8 +3642,10 @@ button.pc-card.on {
 .pt tbody tr:last-child td {
   border-bottom: 0;
 }
-.pt tbody tr:hover td {
-  background: color-mix(in srgb, var(--surface-2) 55%, var(--surface));
+@media (hover: hover) {
+  .pt tbody tr:hover td {
+    background: color-mix(in srgb, var(--surface-2) 55%, var(--surface));
+  }
 }
 .pt tbody tr.is-selected td {
   background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface));
@@ -3895,8 +3899,10 @@ button.pc-card.on {
   content: '—';
   color: var(--border);
 }
-.pc-cell:hover {
-  background: color-mix(in srgb, var(--accent-soft) 50%, transparent);
+@media (hover: hover) {
+  .pc-cell:hover {
+    background: color-mix(in srgb, var(--accent-soft) 50%, transparent);
+  }
 }
 .pc-cell:focus-visible {
   outline: 2px solid var(--accent);
@@ -3985,8 +3991,14 @@ textarea.pc-input {
   color: #fff;
 }
 
-/* Phones: pin only the checkbox and a narrower title, so there's room to scroll the rest. */
+/* Phones: pin only the checkbox and a narrower title, so there's room to scroll the rest. The table scrolls
+   sideways only; the page does the scrolling up and down, so a swipe moves one thing at a time. */
 @media (max-width: 600px) {
+  .pt-wrap {
+    max-height: none;
+    overflow-y: visible;
+    overscroll-behavior-x: contain;
+  }
   .pt-wrap {
     scroll-padding-inline-start: 210px;
   }
@@ -4650,4 +4662,211 @@ textarea.pc-input {
   background: var(--accent);
   border-style: solid;
   color: #fff;
+}
+
+/* ───────── App: possessions (phones) ───────── */
+/* No zooming on this page: no pinch or double-tap zoom on the app, and fields use 16px text so iPhones don't zoom
+   into them when tapped (App.tsx also sets the viewport while the app is open). */
+.poss {
+  touch-action: pan-x pan-y;
+}
+@media (max-width: 700px) {
+  .poss input:not([type='checkbox']):not([type='radio']),
+  .poss select,
+  .poss textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Table / cards switch */
+.poss-view {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.poss-view button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.poss-view button.on {
+  background: var(--accent);
+  color: #fff;
+}
+@media (max-width: 420px) {
+  .poss-view button span {
+    display: none;
+  }
+}
+
+/* Cards */
+.pcards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pcards li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.pcards li.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface));
+}
+.pcards li.is-dragged {
+  opacity: 0.5;
+}
+.pcards li.drop-above {
+  box-shadow: 0 -3px 0 var(--accent);
+}
+.pcards li.drop-below {
+  box-shadow: 0 3px 0 var(--accent);
+}
+.pcards.is-row-dragging,
+.pcards.is-row-dragging * {
+  user-select: none;
+  cursor: grabbing !important;
+}
+.pcard-grip {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 44px;
+  margin-inline: -4px -2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  touch-action: none;
+  cursor: grab;
+}
+.pcard-check {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+}
+.pcard-photo {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.pcard-photo:has(img) {
+  border-style: solid;
+}
+.pcard-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pcard-photo.busy {
+  animation: pt-pulse 1s ease-in-out infinite;
+}
+.pcard-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.pcard-title {
+  max-width: 100%;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pcard-kind {
+  font-size: 0.82rem;
+  color: var(--accent);
+}
+.pcard-sub {
+  max-width: 100%;
+  font-size: 0.8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pcard-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+/* Item form (cards view) */
+.item-photo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.item-photo img {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.item-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.item-row.three {
+  grid-template-columns: 0.7fr 1fr 1fr;
+}
+.item-row > label {
+  min-width: 0;
+}
+.item-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0 2px;
+  background: var(--surface);
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowDownUp, Columns3, Eye, EyeOff, FileUp, PackageOpen, Plus, Printer, Search, Trash2, X } from 'lucide-react';
+import { ArrowDownUp, Columns3, Eye, EyeOff, FileUp, LayoutList, PackageOpen, Plus, Printer, Search, Table2, Trash2, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { errorText, useApp } from '../../lib/app';
 import type { Possession, PossessionDraft } from '../../lib/types';
@@ -13,12 +13,17 @@ import {
   count,
   loadAutoCutOut,
   loadCurrency,
+  loadView,
   money,
   saveAutoCutOut,
   saveCurrency,
+  saveView,
   shrinkImage,
   type Currency,
+  type View,
 } from './format';
+import { ItemCards } from './ItemCards';
+import { ItemSheet } from './ItemSheet';
 import { ImportSheet } from './ImportSheet';
 import { PhotoSheet } from './PhotoSheet';
 import { PossessionTable, type SortState } from './PossessionTable';
@@ -79,6 +84,10 @@ export default function PossessionsApp() {
   const [undoCut, setUndoCut] = useState<{ id: string; url: string } | null>(null);
   const [autoCutOut, setAutoCutOut] = useState(loadAutoCutOut);
   const [printOpen, setPrintOpen] = useState(false);
+  /** Table or cards (phones start with cards). */
+  const [display, setDisplayState] = useState<View>(loadView);
+  /** The item open in the form (cards view). */
+  const [openId, setOpenId] = useState<string | null>(null);
   const [printOptions, setPrintOptions] = useState<PrintOptions>(loadPrintOptions);
   const photoTarget = useRef<string | null>(null);
 
@@ -99,6 +108,19 @@ export default function PossessionsApp() {
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void reload(), [user?.id]);
+
+  // This page doesn't zoom on phones (pinch, double-tap, or the automatic zoom into a focused field); the
+  // page's normal viewport setting comes back when the app closes.
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    if (!meta) return;
+    const before = meta.content;
+    const fit = /viewport-fit=cover/.test(before) ? ', viewport-fit=cover' : '';
+    meta.content = `width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no${fit}`;
+    return () => {
+      meta.content = before;
+    };
+  }, []);
 
   const setLayout = (l: ColumnLayout) => {
     setLayoutState(l);
@@ -355,6 +377,26 @@ export default function PossessionsApp() {
               <FileUp size={16} /> {pt('import')}
             </button>
             {all.length > 0 && (
+              <div className="poss-view" role="group" aria-label={`${pt('viewTable')} / ${pt('viewCards')}`}>
+                {(['table', 'cards'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={display === v ? 'on' : undefined}
+                    aria-pressed={display === v}
+                    onClick={() => {
+                      setDisplayState(v);
+                      saveView(v);
+                    }}
+                    title={v === 'table' ? pt('viewTable') : pt('viewCards')}
+                  >
+                    {v === 'table' ? <Table2 size={16} /> : <LayoutList size={16} />}
+                    <span>{v === 'table' ? pt('viewTable') : pt('viewCards')}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {all.length > 0 && display === 'table' && (
               <button type="button" className="btn ghost sm" onClick={() => setColumnsOpen(true)}>
                 <Columns3 size={16} /> {pt('columns')}
                 {hiddenCount > 0 && <span className="poss-count">{pt('nHidden', { n: hiddenCount })}</span>}
@@ -534,36 +576,58 @@ export default function PossessionsApp() {
             {visible.length === 0 ? (
               <p className="empty">{type !== null && cats.length > 0 && hiddenCats.size === cats.length ? pt('allHidden') : pt('noMatch')}</p>
             ) : (
-              <PossessionTable
-                rows={visible}
-                extraKeys={extraKeys}
-                itemTypes={typeNames}
-                categoriesFor={categoriesFor}
-                locations={locations}
-                sort={sort}
-                onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : 1 }))}
-                selected={selected}
-                onSelect={(ids, on) => {
-                  setArmBulk(false);
-                  setSelected((s) => {
-                    const next = new Set(s);
-                    ids.forEach((id) => (on ? next.add(id) : next.delete(id)));
-                    return next;
-                  });
-                }}
-                onSave={save}
-                onDelete={(id) => void remove([id])}
-                onPhoto={(p) => setPhotoId(p.id)}
-                busyId={uploading ?? cutting?.id ?? null}
-                currency={currency}
-                lang={lang}
-                editNew={editNew}
-                layout={layout}
-                onLayout={setLayout}
-                onMoveRow={moveRow}
-                reorder={sort.key === OWN_ORDER}
-                reorderHint={pt('orderHint')}
-              />
+              display === 'cards' ? (
+                <ItemCards
+                  rows={visible}
+                  selected={selected}
+                  onSelect={(ids, on) => {
+                    setArmBulk(false);
+                    setSelected((s) => {
+                      const next = new Set(s);
+                      ids.forEach((id) => (on ? next.add(id) : next.delete(id)));
+                      return next;
+                    });
+                  }}
+                  onOpen={(p) => setOpenId(p.id)}
+                  onPhoto={(p) => setPhotoId(p.id)}
+                  busyId={uploading ?? cutting?.id ?? null}
+                  currency={currency}
+                  lang={lang}
+                  onMoveRow={moveRow}
+                  reorder={sort.key === OWN_ORDER}
+                />
+              ) : (
+                <PossessionTable
+                  rows={visible}
+                  extraKeys={extraKeys}
+                  itemTypes={typeNames}
+                  categoriesFor={categoriesFor}
+                  locations={locations}
+                  sort={sort}
+                  onSort={(key) => setSort((s) => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : 1 }))}
+                  selected={selected}
+                  onSelect={(ids, on) => {
+                    setArmBulk(false);
+                    setSelected((s) => {
+                      const next = new Set(s);
+                      ids.forEach((id) => (on ? next.add(id) : next.delete(id)));
+                      return next;
+                    });
+                  }}
+                  onSave={save}
+                  onDelete={(id) => void remove([id])}
+                  onPhoto={(p) => setPhotoId(p.id)}
+                  busyId={uploading ?? cutting?.id ?? null}
+                  currency={currency}
+                  lang={lang}
+                  editNew={editNew}
+                  layout={layout}
+                  onLayout={setLayout}
+                  onMoveRow={moveRow}
+                  reorder={sort.key === OWN_ORDER}
+                  reorderHint={pt('orderHint')}
+                />
+              )
             )}
           </>
         )}
@@ -639,6 +703,17 @@ export default function PossessionsApp() {
         order={orderedColumns(extraKeys, layout)}
         layout={layout}
         onLayout={setLayout}
+        lang={lang}
+      />
+      <ItemSheet
+        item={all.find((r) => r.id === openId) ?? null}
+        onClose={() => setOpenId(null)}
+        onSave={save}
+        onDelete={(id) => void remove([id])}
+        onPhoto={(p) => setPhotoId(p.id)}
+        itemTypes={typeNames}
+        categoriesFor={categoriesFor}
+        locations={locations}
         lang={lang}
       />
       <PhotoSheet
