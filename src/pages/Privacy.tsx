@@ -66,6 +66,10 @@ function English() {
         stored at a long, random web address that isn't listed anywhere, but anyone who has that exact address can open
         the photo.
       </p>
+      <p>
+        The To-do list app keeps each signed-in user's tasks, including any contacts, notes and comments you add to them.
+        Only you can see them; not other users and not the blog's manager.
+      </p>
       <h2>Who can see it</h2>
       <p>
         Your display name and username appear next to your comments and posts. Your email address is visible only to the
@@ -79,7 +83,7 @@ function English() {
       </p>
       <h2 id="delete">Deleting your data</h2>
       <p>
-        To delete your account, email {mail}. Deleting it removes your account, comments, likes, role requests and possessions list. Posts
+        To delete your account, email {mail}. Deleting it removes your account, comments, likes, role requests, possessions list and tasks. Posts
         you wrote stay on the blog under the manager's name unless you ask for them to be removed too.
       </p>
       <h2>Changes</h2>
@@ -132,6 +136,10 @@ function Hebrew() {
         שהם מוסיפים. רק אתם רואים את הרשימה שלכם: לא משתמשים אחרים ולא מנהל הבלוג. התמונות נשמרות בכתובת אינטרנט ארוכה
         ואקראית שלא מופיעה בשום מקום, אבל מי שיש לו את הכתובת המדויקת יכול לפתוח את התמונה.
       </p>
+      <p>
+        אפליקציית "רשימת משימות" שומרת את המשימות של כל משתמש מחובר, כולל אנשי קשר, הערות ותגובות שמוסיפים להן. רק אתם רואים
+        אותן: לא משתמשים אחרים ולא מנהל הבלוג.
+      </p>
       <h2>מי רואה מה</h2>
       <p>
         שם התצוגה ושם המשתמש שלכם מופיעים ליד התגובות והפוסטים שלכם. כתובת האימייל גלויה רק למנהל הבלוג. המידע שלכם לא
@@ -144,7 +152,7 @@ function Hebrew() {
       </p>
       <h2 id="delete">מחיקת המידע</h2>
       <p>
-        כדי למחוק את החשבון, כתבו אל {mail}. המחיקה מסירה את החשבון, התגובות, הלייקים, בקשות התפקיד ורשימת הרכוש. פוסטים שכתבתם נשארים
+        כדי למחוק את החשבון, כתבו אל {mail}. המחיקה מסירה את החשבון, התגובות, הלייקים, בקשות התפקיד, רשימת הרכוש והמשימות. פוסטים שכתבתם נשארים
         בבלוג בשם המנהל, אלא אם תבקשו להסיר גם אותם.
       </p>
       <h2>שינויים</h2>

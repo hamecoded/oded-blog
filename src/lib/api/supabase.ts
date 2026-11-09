@@ -10,6 +10,7 @@ import type {
   Profile,
   RoleRequest,
   TagGroup,
+  Todo,
 } from '../types';
 import {
   emptyTagGroupConfig,
@@ -22,6 +23,7 @@ import {
   RESERVED_SLUGS,
   sha256Hex,
   slugify,
+  todoFields,
   USERNAME_RE,
   validSiteSlug,
   visitorSecret,
@@ -484,6 +486,29 @@ export function createSupabaseApi(url: string, key: string): Api {
       });
       if (res.error) throw new Error(res.error.message);
       return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+    },
+
+    // To-dos: row-level security ("todos own") limits every query to the signed-in user's rows.
+    async listTodos() {
+      const res = await sb.from('todos').select('*').order('position');
+      // Table missing: schema.sql hasn't been run since the To-do app came.
+      if (res.error && /todos|schema cache|PGRST20[45]|42P01|42703/i.test(`${res.error.code ?? ''} ${res.error.message}`)) {
+        throw new Error('todos/missing');
+      }
+      // Rows saved before a column existed come back with nulls: fill them in the same way saving would.
+      return (check(res) as Todo[]).map((x) => ({ ...x, ...todoFields(x, x) }));
+    },
+
+    async saveTodo(t) {
+      if (t.id) {
+        const current = check(await sb.from('todos').select('*').eq('id', t.id).single()) as Todo;
+        return check(await sb.from('todos').update(todoFields(t, current)).eq('id', t.id).select().single()) as Todo;
+      }
+      return check(await sb.from('todos').insert(todoFields(t)).select().single()) as Todo;
+    },
+
+    async deleteTodos(ids) {
+      if (ids.length) check(await sb.from('todos').delete().in('id', ids));
     },
   };
   return api;

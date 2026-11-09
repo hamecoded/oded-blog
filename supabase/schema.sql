@@ -618,6 +618,84 @@ create policy "possessions own" on public.possessions for all
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid() and not coalesce((select suspended from public.profiles where id = auth.uid()), false));
 
+-- ───────────────────────── todos (the To-do app, src/apps/todo) ─────────────────────────
+-- Each signed-in user's tasks. Private: only the owner reads or changes their rows (not even the admin).
+-- Mirrors the owner checks in src/lib/api/local.ts and can.useApps() in src/lib/util.ts; field rules mirror
+-- todoFields() in util.ts. `day` is the day list a task is on (null: the general pool). A task with no root_id
+-- is a root purpose; its children are its steps and theirs its actions (root_id), each chained to its
+-- siblings by prev_id / next_id. A list is every task naming it in `lists`; `tags` group tasks.
+create table if not exists public.todos (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null default auth.uid() references public.profiles (id) on delete cascade,
+  title       text not null default '' check (length(title) <= 300),
+  description text not null default '' check (length(description) <= 4000),
+  status      text not null default 'discovered',
+  priority    smallint not null default 0 check (priority between 0 and 3),
+  urgency     smallint not null default 0 check (urgency between 0 and 3),
+  complexity  smallint not null default 0 check (complexity between 0 and 5),
+  due_date    date,
+  remind_on   date,
+  day         date,
+  depends_on  uuid[] not null default '{}',
+  root_id     uuid references public.todos (id) on delete set null,
+  prev_id     uuid references public.todos (id) on delete set null,
+  next_id     uuid references public.todos (id) on delete set null,
+  position    double precision not null default (extract(epoch from clock_timestamp()) * 1000),
+  done_at     timestamptz,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+-- Added after the first draft of the table: safe to run again.
+alter table public.todos add column if not exists type          text not null default 'achieving';
+alter table public.todos add column if not exists estimate_date date;
+alter table public.todos add column if not exists deadline      date;
+alter table public.todos add column if not exists tags          text[] not null default '{}';
+alter table public.todos add column if not exists lists         text[] not null default '{}';
+-- Named values, people involved, comments and history: arrays of small objects (see TodoDatum, TodoContact,
+-- TodoComment, TodoLogEntry in src/lib/types.ts; todoFields() caps their sizes).
+alter table public.todos add column if not exists data          jsonb not null default '[]';
+alter table public.todos add column if not exists contacts      jsonb not null default '[]';
+alter table public.todos add column if not exists comments      jsonb not null default '[]';
+alter table public.todos add column if not exists log           jsonb not null default '[]';
+alter table public.todos drop constraint if exists todos_json_check;
+alter table public.todos add constraint todos_json_check check (
+  jsonb_typeof(data) = 'array' and jsonb_typeof(contacts) = 'array' and jsonb_typeof(comments) = 'array'
+  and jsonb_typeof(log) = 'array' and pg_column_size(comments) + pg_column_size(log) + pg_column_size(data) < 2000000);
+alter table public.todos alter column status set default 'discovered';
+alter table public.todos drop constraint if exists todos_status_check;
+update public.todos set status = case status
+  when 'todo' then 'defined' when 'doing' then 'inprogress' when 'waiting' then 'onhold'
+  when 'done' then 'completed' when 'dropped' then 'quit' else status end
+  where status in ('todo', 'doing', 'waiting', 'done', 'dropped');
+alter table public.todos add constraint todos_status_check
+  check (status in ('discovered', 'researched', 'defined', 'blocked', 'onhold', 'inprogress', 'completed', 'quit'));
+alter table public.todos drop constraint if exists todos_type_check;
+alter table public.todos add constraint todos_type_check check (type in
+  ('understanding', 'learning', 'achieving', 'decisions', 'checking', 'opportunities', 'enrichments', 'planning'));
+alter table public.todos drop constraint if exists todos_labels_check;
+alter table public.todos add constraint todos_labels_check
+  check (coalesce(array_length(tags, 1), 0) <= 30 and coalesce(array_length(lists, 1), 0) <= 30);
+create index if not exists todos_owner_day_idx on public.todos (owner_id, day);
+create index if not exists todos_root_idx on public.todos (root_id);
+
+create or replace function public.touch_todo()
+returns trigger language plpgsql as $$
+begin
+  new.owner_id := coalesce(old.owner_id, new.owner_id);  -- ownership never moves
+  new.created_at := coalesce(old.created_at, new.created_at);
+  new.updated_at := now();
+  return new;
+end $$;
+drop trigger if exists todos_touch on public.todos;
+create trigger todos_touch before insert or update on public.todos
+  for each row execute function public.touch_todo();
+
+alter table public.todos enable row level security;
+drop policy if exists "todos own" on public.todos;
+create policy "todos own" on public.todos for all
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid() and not coalesce((select suspended from public.profiles where id = auth.uid()), false));
+
 -- ───────────────────────── Storage (uploaded images / videos) ─────────────────────────
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('media', 'media', true, 52428800)

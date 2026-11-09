@@ -9,6 +9,7 @@ import type {
   Group,
   LikeInfo,
   Possession,
+  Todo,
   Post,
   PostDraft,
   Profile,
@@ -29,6 +30,7 @@ import {
   normalizeTagGroup,
   OAUTH_LABELS,
   possessionFields,
+  todoFields,
   OAUTH_PROVIDERS,
   RESERVED_SLUGS,
   sha256Hex,
@@ -55,6 +57,7 @@ interface Db {
   groups: Group[];
   tagGroups: TagGroup[];
   possessions: Possession[];
+  todos: Todo[];
 }
 
 const DB_NAME = 'bilingual-blog';
@@ -161,6 +164,7 @@ export function createLocalApi(): Api {
         groups: stored.groups ?? [],
         tagGroups: stored.tagGroups ?? [],
         possessions: stored.possessions ?? [],
+        todos: stored.todos ?? [],
       };
       if (await ensureAdmin(cache)) await idbSet('db', cache);
     } else {
@@ -187,6 +191,7 @@ export function createLocalApi(): Api {
         groups: [],
         tagGroups: [],
         possessions: [],
+        todos: [],
       };
       await ensureAdmin(cache);
       await idbSet('db', cache);
@@ -646,6 +651,7 @@ export function createLocalApi(): Api {
       d.likes = d.likes.filter((l) => l.user_id !== userId);
       d.roleRequests = d.roleRequests.filter((r) => r.user_id !== userId);
       d.possessions = d.possessions.filter((x) => x.owner_id !== userId);
+      d.todos = d.todos.filter((x) => x.owner_id !== userId);
       d.groups.forEach((g) => {
         g.member_ids = g.member_ids.filter((x) => x !== userId);
         if (g.created_by === userId) g.created_by = null;
@@ -854,6 +860,44 @@ export function createLocalApi(): Api {
     async uploadPossessionImage(file) {
       await requireMe();
       return api.uploadMedia(file);
+    },
+
+    // To-dos: each user sees and changes only their own. Mirrors the "todos own" policy in schema.sql.
+    async listTodos() {
+      const u = await requireMe();
+      // Rows from an older version of the app are brought up to date as they're read.
+      return (await db()).todos
+        .filter((x) => x.owner_id === u.id)
+        .map((x) => ({ ...x, ...todoFields(x, x) }))
+        .sort((a, b) => a.position - b.position);
+    },
+
+    async saveTodo(t) {
+      const u = await requireMe();
+      if (!can.useApps(u)) throw new Error('auth/forbidden');
+      const d = await db();
+      const now = new Date().toISOString();
+      const existing = t.id ? d.todos.find((x) => x.id === t.id) : undefined;
+      if (t.id && (!existing || existing.owner_id !== u.id)) throw new Error('auth/forbidden');
+      const saved: Todo = {
+        id: existing?.id ?? uid(),
+        owner_id: u.id,
+        ...todoFields(t, existing),
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+      };
+      if (existing) d.todos[d.todos.indexOf(existing)] = saved;
+      else d.todos.push(saved);
+      await persist();
+      return saved;
+    },
+
+    async deleteTodos(ids) {
+      const u = await requireMe();
+      const d = await db();
+      const drop = new Set(ids);
+      d.todos = d.todos.filter((x) => !(drop.has(x.id) && x.owner_id === u.id));
+      await persist();
     },
   };
   return api;

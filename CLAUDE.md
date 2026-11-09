@@ -109,6 +109,14 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   removal uses `@imgly/background-removal` 1.7 (AGPL-3.0, README §13), lazy-loaded from `bgremove.ts`; model
   "isnet_fp16", fetched from IMG.LY's CDN (`VITE_BG_REMOVAL_PATH` can point at a self-hosted copy). Rows have a
   `position` (own order within an item type; default sort; dragged by the row grip).
+- **To-do app (2026-11-09, `src/apps/todo`):** table `todos` + "todos own" RLS (owner only). A task's `day` is the day
+  list it's on (null: the pool); Today shows only `day = today`, so every day starts clean, and open tasks with an
+  earlier `day` are leftovers for the morning review (`ReviewSheet`, once a day, remembered in localStorage).
+  Workflow by depth: no `root_id` = purpose, its children = steps, theirs = actions, chained by `prev_id`/`next_id`
+  (an open previous sibling locks the next). `data`, `contacts`, `comments`, `log` are jsonb arrays cleaned by
+  `todoFields()`; App.tsx `update()` appends stage/day moves to `log` (`logFor()` in model.ts). Game layer is canvas:
+  `Hud.tsx` (level/XP/streak/today ring), `QuestMap.tsx` (steps as a road), `fx.ts` + `FxLayer.tsx` (bursts, +XP,
+  confetti). Canvas colours come from the `--st-*` / `--ty-*` / `--tg-*` tokens on `.todo` in index.css.
 - **Bot defences (2026-11-08):** `looksMachineMade()` (util.ts) and `public.looks_machine_made()` (schema.sql) are
   the same heuristic; keep them in step. `handle_new_user()` creates matching sign-ups suspended with
   `profiles.review_reason = 'name'` (and bans them in auth.users); approving (unsuspending) sets it to `'approved'`,
@@ -145,6 +153,11 @@ deploying this version.
 import with review, editing, adding, deleting, photos, category filters, the location dropdown, reload, and the
 printed PDF. **Not yet run on the live database:** the `possessions` table, its policy and the storage upload policy
 in schema.sql.
+
+**To-do (2026-11-09):** tested in demo mode in a headless browser at 375px (Hebrew) and 1280px (English): quick add
+with #tags/@lists/!, completing with effects, the task sheet (type, stage, contacts, comments, steps, log), quests and
+the map, lists, the next-day review with a swipe, pool and done. **Not yet run on the live database:** the `todos`
+table and its policy in schema.sql.
 
 **Live since 2026-10-31** at https://oded.me (GitHub Pages, repo `hamecoded/oded-blog`,
 Supabase project `tbwskzgkmoztdejeiyhz`); `.deploy.json` records the last deploy.

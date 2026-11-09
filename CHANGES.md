@@ -7,6 +7,12 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-09 10:14
+
+- Added: To-do app (/apps/todo), played as a game: each day starts with a clean Today list; unfinished tasks from earlier days come up the next morning as a swipeable card stack (keep today, or save to the pool after refining priority and urgency and setting a remind-me date; or mark done / quit); pooled tasks come back on their reminder date. XP, levels, a streak and today's ring on a canvas HUD, particle bursts and confetti on completing. Tabs at the bottom: Today, Pool, Quests, Lists, Done
+- Added: To-do tasks have a type (understanding, learning, achieving, decisions, checking, opportunities, enrichment, planning), stage (discovered, researched, defined, in progress, completed; blocked, on hold, quit), due, estimated and deadline dates, priority, urgency, complexity, tags, lists, dependencies, data values, contacts, comments and a log (stage and day moves are logged automatically)
+- Added: To-do quests: a root purpose broken into steps and steps into actions (root, previous and next task), drawn as a road on a canvas with locked and current steps and a trophy; lists are the tasks naming the same list, grouped by tag
+
 ## 2026-11-08 03:41
 
 - Added: apps: a grid icon in the top bar, for signed-in users, opens /apps, an app-store page built automatically from src/apps (one folder per app, each with an app.ts listing: name, tagline, description, icon, cover image, category, tags, status, version, date, external link); /apps/<app> opens one. First entry: a to-do list, marked Coming soon

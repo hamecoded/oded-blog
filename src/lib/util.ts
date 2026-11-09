@@ -9,6 +9,11 @@ import type {
   Role,
   TagGroup,
   TagGroupConfig,
+  Todo,
+  TodoDraft,
+  TodoLogEntry,
+  TodoStatus,
+  TodoType,
 } from './types';
 
 /** Role capabilities. Keep in sync with the RLS policies in supabase/schema.sql. */
@@ -350,6 +355,107 @@ export function possessionFields(d: PossessionDraft, base?: Possession) {
     // New rows go last: the time in ms, so later rows sort after earlier ones until someone drags them.
     position: numOrNull(pick('position')) ?? Date.now(),
     extra,
+  };
+}
+
+export const TODO_STATUSES: TodoStatus[] = ['discovered', 'researched', 'defined', 'blocked', 'onhold', 'inprogress', 'completed', 'quit'];
+export const TODO_TYPES: TodoType[] = [
+  'achieving',
+  'learning',
+  'understanding',
+  'decisions',
+  'checking',
+  'opportunities',
+  'enrichments',
+  'planning',
+];
+const LOG_KINDS = ['created', 'status', 'day', 'note'] as const;
+
+/** An array of small objects from a jsonb column: each one's string fields clipped, empty ones dropped, at most `max` (the newest). */
+function records<T>(v: unknown, max: number, make: (o: Record<string, unknown>) => T | null): T[] {
+  const out = (Array.isArray(v) ? v : [])
+    .map((x) => (x && typeof x === 'object' ? make(x as Record<string, unknown>) : null))
+    .filter((x): x is T => x !== null);
+  return out.slice(-max);
+}
+const stamp = (v: unknown) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? v : new Date().toISOString());
+/** Statuses from the app's first draft, read as their nearest new ones. */
+const OLD_TODO_STATUS: Record<string, TodoStatus> = { todo: 'defined', doing: 'inprogress', waiting: 'onhold', done: 'completed', dropped: 'quit' };
+
+/** Tags and list names: trimmed, no leading # or @, no repeats (ignoring case), at most 30 of 60 characters. */
+export function cleanLabels(v: unknown): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  (Array.isArray(v) ? v : []).forEach((x) => {
+    const s = String(x ?? '').replace(/^[#@]+/, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    if (s && !seen.has(s.toLowerCase())) {
+      seen.add(s.toLowerCase());
+      out.push(s);
+    }
+  });
+  return out.slice(0, 30);
+}
+
+/** A to-do draft cleaned up for saving, on top of `base` (the stored row) when updating. Both backends use it. */
+export function todoFields(d: TodoDraft, base?: Todo) {
+  const pick = <K extends keyof TodoDraft>(k: K) => (k in d ? d[k] : base?.[k as keyof Todo]);
+  const level = (k: 'priority' | 'urgency' | 'complexity', max: number) => {
+    const n = Math.round(Number(pick(k) ?? 0));
+    return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : 0;
+  };
+  const date = (k: 'due_date' | 'estimate_date' | 'deadline' | 'remind_on' | 'day') => {
+    const v = clip(pick(k), 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+  };
+  const ref = (k: 'root_id' | 'prev_id' | 'next_id') => (pick(k) as string | null | undefined) || null;
+  const raw = String(pick('status') ?? '');
+  const status: TodoStatus = TODO_STATUSES.includes(raw as TodoStatus) ? (raw as TodoStatus) : (OLD_TODO_STATUS[raw] ?? 'discovered');
+  const ty = pick('type') as TodoType | undefined;
+  const deps = [...new Set(((pick('depends_on') as string[] | undefined) ?? []).filter((x) => typeof x === 'string' && x))];
+  return {
+    title: clip(pick('title'), 300),
+    description: clip(pick('description'), 4000),
+    type: ty && TODO_TYPES.includes(ty) ? ty : ('achieving' as TodoType),
+    status,
+    priority: level('priority', 3),
+    urgency: level('urgency', 3),
+    complexity: level('complexity', 5),
+    due_date: date('due_date'),
+    estimate_date: date('estimate_date'),
+    deadline: date('deadline'),
+    remind_on: date('remind_on'),
+    day: date('day'),
+    tags: cleanLabels(pick('tags')),
+    lists: cleanLabels(pick('lists')),
+    depends_on: deps.slice(0, 50),
+    root_id: ref('root_id'),
+    prev_id: ref('prev_id'),
+    next_id: ref('next_id'),
+    position: numOrNull(pick('position')) ?? Date.now(),
+    // Stamped when it's completed, cleared when it's reopened.
+    done_at: status === 'completed' ? (pick('done_at') as string | null | undefined) || new Date().toISOString() : null,
+    data: records(pick('data'), 50, (o) => {
+      const key = clip(o.key, 80).trim();
+      const value = clip(o.value, 2000);
+      return key || value.trim() ? { key, value } : null;
+    }),
+    contacts: records(pick('contacts'), 30, (o) => {
+      const c = { name: clip(o.name, 120).trim(), phone: clip(o.phone, 40).trim(), email: clip(o.email, 200).trim(), note: clip(o.note, 500) };
+      return c.name || c.phone || c.email ? c : null;
+    }),
+    comments: records(pick('comments'), 200, (o) => {
+      const text = clip(o.text, 4000).trim();
+      return text ? { at: stamp(o.at), text } : null;
+    }),
+    log: records(pick('log'), 300, (o) => {
+      const kind = LOG_KINDS.find((k) => k === o.kind);
+      if (!kind) return null;
+      const e: TodoLogEntry = { at: stamp(o.at), kind };
+      if ('from' in o) e.from = o.from == null ? null : clip(o.from, 20);
+      if ('to' in o) e.to = o.to == null ? null : clip(o.to, 20);
+      if (o.text) e.text = clip(o.text, 2000);
+      return kind === 'note' && !e.text?.trim() ? null : e;
+    }),
   };
 }
 

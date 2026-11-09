@@ -2,20 +2,20 @@ import { ListTodo } from 'lucide-react';
 import type { AppManifest } from '../types';
 import cover from './cover.svg';
 
-// Placeholder for a future project. To build it: add App.tsx next to this file and remove `status: 'soon'`.
 const app: AppManifest = {
   name: { en: 'To-do list', he: 'רשימת משימות' },
-  tagline: { en: 'Plan your day', he: 'לתכנן את היום' },
+  tagline: { en: 'A fresh list every day', he: 'רשימה חדשה בכל יום' },
   description: {
-    en: 'Keep track of what needs doing and tick things off as you go.',
-    he: 'מעקב אחרי מה שצריך לעשות, וסימון משימות שהושלמו.',
+    en: 'A clean list every morning, a pool with reminders for the rest, and big purposes played as quests of steps and actions. Earn XP, level up, keep the streak.',
+    he: 'רשימה נקייה בכל בוקר, מאגר עם תזכורות לכל השאר, ומטרות גדולות שמשחקים כמסעות של שלבים ופעולות. צוברים נקודות, עולים רמה ושומרים על הרצף.',
   },
   icon: ListTodo,
   image: cover,
   colors: ['#10b981', '#0ea5e9'],
   category: { en: 'Productivity', he: 'פרודוקטיביות' },
-  tags: ['tasks', 'lists'],
-  status: 'soon',
+  tags: ['tasks', 'quests', 'lists'],
+  version: '1.0',
+  updated: '2026-11-09',
   order: 10,
 };
 

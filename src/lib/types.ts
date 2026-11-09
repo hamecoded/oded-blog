@@ -224,6 +224,106 @@ export type PossessionDraft = Partial<Omit<Possession, 'id' | 'owner_id' | 'crea
   id?: string;
 };
 
+/**
+ * Where a task stands in its workflow: discovered → researched → defined → in progress → completed, with
+ * blocked and on hold as pauses along the way. 'completed' and 'quit' close it.
+ */
+export type TodoStatus = 'discovered' | 'researched' | 'defined' | 'blocked' | 'onhold' | 'inprogress' | 'completed' | 'quit';
+
+/** What a task is for: understanding something, learning something, or getting something done. */
+export type TodoType =
+  | 'understanding'
+  | 'learning'
+  | 'achieving'
+  | 'decisions'
+  | 'checking'
+  | 'opportunities'
+  | 'enrichments'
+  | 'planning';
+
+/** A named value kept on a task ("Budget: 400", "Order no.: 1182"). */
+export interface TodoDatum {
+  key: string;
+  value: string;
+}
+/** Someone the task involves. Every field is optional except the name. */
+export interface TodoContact {
+  name: string;
+  phone: string;
+  email: string;
+  note: string;
+}
+export interface TodoComment {
+  at: string;
+  text: string;
+}
+/**
+ * The task's history: written by the app when it's created, changes stage or moves between day lists and the
+ * pool (`from` / `to`), plus notes the user adds (kind 'note', `text`).
+ */
+export interface TodoLogEntry {
+  at: string;
+  kind: 'created' | 'status' | 'day' | 'note';
+  from?: string | null;
+  to?: string | null;
+  text?: string;
+}
+
+/**
+ * One task in the To-do app (src/apps/todo). Private to its owner: see the "todos own" policy in
+ * supabase/schema.sql and the owner checks in api/local.ts.
+ * Tasks form a workflow by depth: a task with no root_id is a root purpose, its children (root_id = it) are its
+ * steps, and a step's children are its actions.
+ */
+export interface Todo {
+  id: string;
+  owner_id: string;
+  title: string;
+  description: string;
+  type: TodoType;
+  status: TodoStatus;
+  /** How much it matters: 0 not set, 1 low, 2 medium, 3 high. */
+  priority: number;
+  /** How soon it has to happen: 0 not set, 1 can wait, 2 soon, 3 urgent. */
+  urgency: number;
+  /** How big it is: 0 not set, 1–5 = XS, S, M, L, XL. */
+  complexity: number;
+  /** 'YYYY-MM-DD': when it's planned to be done. */
+  due_date: string | null;
+  /** 'YYYY-MM-DD': when it's estimated it will actually be done. */
+  estimate_date: string | null;
+  /** 'YYYY-MM-DD': the latest it can be done. */
+  deadline: string | null;
+  /** 'YYYY-MM-DD': from that day on, a pooled task is offered again on the Today screen. */
+  remind_on: string | null;
+  /** The day list it's on ('YYYY-MM-DD'). null: the general pool. */
+  day: string | null;
+  /** Labels to group by. */
+  tags: string[];
+  /** Named lists it belongs to: a list is simply every task that names it. */
+  lists: string[];
+  /** Tasks that have to be finished first. */
+  depends_on: string[];
+  /** The task this one was derived from (null: a root purpose). */
+  root_id: string | null;
+  /** The sibling before and after it among its root's children. */
+  prev_id: string | null;
+  next_id: string | null;
+  /** Lower comes first among equals. */
+  position: number;
+  /** When it was completed. */
+  done_at: string | null;
+  /** Named values, people involved, comments and history (newest last). */
+  data: TodoDatum[];
+  contacts: TodoContact[];
+  comments: TodoComment[];
+  log: TodoLogEntry[];
+  created_at: string;
+  updated_at: string;
+}
+
+export type TodoDraft = Partial<Omit<Todo, 'id' | 'owner_id' | 'created_at' | 'updated_at'>> & { id?: string };
+
 export interface Api {
   mode: 'supabase' | 'local';
   // auth
@@ -296,4 +396,9 @@ export interface Api {
   deletePossessions(ids: string[]): Promise<void>;
   /** Uploads a photo into the user's own folder and returns its URL. */
   uploadPossessionImage(file: File): Promise<string>;
+  // to-do app (signed-in users, each sees only their own)
+  listTodos(): Promise<Todo[]>;
+  /** Creates (no id) or updates one; returns the saved row. */
+  saveTodo(t: TodoDraft): Promise<Todo>;
+  deleteTodos(ids: string[]): Promise<void>;
 }
