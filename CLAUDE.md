@@ -117,13 +117,27 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   `todoFields()`; App.tsx `update()` appends stage/day moves to `log` (`logFor()` in model.ts). Game layer is canvas:
   `Hud.tsx` (level/XP/streak/today ring), `QuestMap.tsx` (steps as a road), `fx.ts` + `FxLayer.tsx` (bursts, +XP,
   confetti). Canvas colours come from the `--st-*` / `--ty-*` / `--tg-*` tokens on `.todo` in index.css.
+  Order within a parent is changed only through `relink()` (drag in `StepList.tsx`, grip + arrow keys); moving to
+  another parent goes through `reparent()` (the "Part of" picker), which caps nesting at purpose → step → action.
+  The pool is an outline (`nestTasks()`); its nested rows are dragged by `useOutlineDrag()` (outlineDrag.ts), which
+  drops a task before/after a sibling (`placeStep()` in App.tsx), carrying the rows shown under it.
+  Tasks with subtasks never sit on Today or come up as leftovers (`parents` in App.tsx); "Today" on one sends its
+  `nextLeaf()`, and a task on a day list hands its place to its first subtask (`create()`).
+- **No page zoom on phones (2026-11-11):** `maximum-scale=1, user-scalable=no` in index.html, `touch-action:
+  pan-x pan-y` on `html`, and Safari's `gesturestart`/`gesturechange` cancelled in main.tsx. Form fields use 16px
+  text so focusing them doesn't zoom either.
+- **Phone testing (2026-11-11):** `npm run dev:phone` = demo mode on the Wi-Fi (the script blanks the Supabase and Turnstile
+  keys; Turnstile can't run on a LAN IP and Supabase CAPTCHA would refuse live sign-in there).
+  A plain-http address isn't a secure context, so `crypto.randomUUID` / `crypto.subtle` are missing: always use `uid()`
+  and `sha256Hex()` from util.ts, which fall back to `getRandomValues` and a built-in SHA-256.
 - **Bot defences (2026-11-08):** `looksMachineMade()` (util.ts) and `public.looks_machine_made()` (schema.sql) are
   the same heuristic; keep them in step. `handle_new_user()` creates matching sign-ups suspended with
   `profiles.review_reason = 'name'` (and bans them in auth.users); approving (unsuspending) sets it to `'approved'`,
   which `needsReview()` never flags again. /admin → Users lists held accounts and older look-alikes. Optional
   Cloudflare Turnstile on sign-up/sign-in (`VITE_TURNSTILE_SITE_KEY`, `src/lib/captcha.ts`,
   `components/Turnstile.tsx`); Supabase verifies the token once CAPTCHA is switched on there (README §8.8: deploy the
-  key first). `t()` now fills `{name}` placeholders: `t('deletedUsers', { n })`.
+  key first). `captcha.ts` switches Turnstile off in demo mode and on local hosts (localhost, IPs, `.local`),
+  where the widget can't run. `t()` now fills `{name}` placeholders: `t('deletedUsers', { n })`.
 - **Homepage:** no big title. Posts start right under a slim search-and-tags row, as
   compact cards with side thumbnails, so as many posts as possible fit on the first screen.
   Other list pages still use the large cards.

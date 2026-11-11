@@ -86,7 +86,10 @@ export function LabelField({
   suggest,
   prefix,
   placeholder,
+  hint,
 }: {
+  /** One line under the field saying what it's for. */
+  hint?: string;
   label: string;
   values: string[];
   onChange: (v: string[]) => void;
@@ -95,13 +98,20 @@ export function LabelField({
   placeholder: string;
 }) {
   const [text, setText] = useState('');
+  /** The highlighted suggestion while typing (-1: none, Enter adds the typed text). */
+  const [active, setActive] = useState(-1);
   const id = `todo-sug-${prefix === '#' ? 'tags' : 'lists'}`;
   const add = (raw: string) => {
     const v = raw.replace(/^[#@]+/, '').trim();
     setText('');
+    setActive(-1);
     if (v && !values.some((x) => x.toLowerCase() === v.toLowerCase())) onChange([...values, v]);
   };
-  const free = suggest.filter((s) => !values.some((v) => v.toLowerCase() === s.toLowerCase())).slice(0, 8);
+  const unused = suggest.filter((s) => !values.some((v) => v.toLowerCase() === s.toLowerCase()));
+  const free = unused.slice(0, 8);
+  // While typing: the names in use that contain what's typed, in the app's own dropdown (not the browser's).
+  const typed = text.replace(/^[#@]+/, '').trim().toLowerCase();
+  const matches = typed ? unused.filter((s) => s.toLowerCase().includes(typed)).slice(0, 6) : [];
   return (
     <div className="todo-labels">
       <span className="todo-field-l">{label}</span>
@@ -117,16 +127,29 @@ export function LabelField({
         ))}
         <input
           value={text}
-          list={id}
+          role="combobox"
+          aria-expanded={matches.length > 0}
+          aria-controls={id}
+          aria-autocomplete="list"
+          aria-activedescendant={active >= 0 ? `${id}-${active}` : undefined}
           onChange={(e) => {
             const v = e.target.value;
+            setActive(-1);
             if (/[,\n]$/.test(v)) add(v.slice(0, -1));
             else setText(v);
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && matches.length) {
               e.preventDefault();
-              add(text);
+              const n = matches.length;
+              setActive((a) => (e.key === 'ArrowDown' ? (a + 1) % n : (a - 1 + n) % n));
+            } else if (e.key === 'Escape' && matches.length) {
+              e.preventDefault();
+              e.stopPropagation(); // clear the suggestions, don't close the sheet
+              setText('');
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              add(active >= 0 && matches[active] ? matches[active] : text);
             } else if (e.key === 'Backspace' && !text && values.length) onChange(values.slice(0, -1));
           }}
           onBlur={() => text.trim() && add(text)}
@@ -135,12 +158,27 @@ export function LabelField({
           dir="auto"
           enterKeyHint="enter"
         />
-        <datalist id={id}>
-          {suggest.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
+        {matches.length > 0 && (
+          <ul className="todo-ac" role="listbox" id={id}>
+            {matches.map((s, i) => (
+              <li key={s} id={`${id}-${i}`} role="option" aria-selected={i === active}>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  className={i === active ? 'is-active' : undefined}
+                  onPointerDown={(e) => e.preventDefault()} // keep focus in the field, so its blur doesn't add the half-typed text
+                  onClick={() => add(s)}
+                  dir="auto"
+                >
+                  <span className="muted">{prefix}</span>
+                  {s}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
+      {hint && <span className="muted small">{hint}</span>}
       {free.length > 0 && (
         <div className="todo-sugs">
           {free.map((s) => (

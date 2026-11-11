@@ -63,6 +63,7 @@
   box-sizing: border-box;
 }
 html {
+  touch-action: pan-x pan-y;
   overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
@@ -5254,7 +5255,7 @@ body:has(.todo-nav) .fab {
   border-color: var(--accent);
   box-shadow: 0 3px 0 color-mix(in srgb, var(--accent) 45%, transparent);
 }
-.todo .todo-add input {
+.todo .todo-add input:not([type='checkbox']):not([type='radio']) {
   flex: 1;
   border: 0;
   background: transparent;
@@ -5264,6 +5265,14 @@ body:has(.todo-nav) .fab {
 }
 .todo-add .icon-btn.sm {
   margin: 0;
+}
+.todo .todo-add-go {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--accent) 55%, #000);
+  animation: todo-pop 0.15s ease-out;
 }
 .todo-hint {
   margin: 4px 4px 0;
@@ -5474,6 +5483,111 @@ body:has(.todo-nav) .fab {
   margin-inline-start: auto;
   flex-shrink: 0;
 }
+/* Sort / group dropdowns: a chip that opens a card of choices. */
+.todo-picker {
+  position: relative;
+}
+.todo-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.todo-picker-btn > svg:first-child {
+  color: var(--accent);
+}
+.todo-picker-btn:active {
+  transform: translateY(1px);
+}
+.todo-picker.is-open .todo-picker-btn {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.todo-picker-chev {
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+.todo-picker.is-open .todo-picker-chev {
+  transform: rotate(180deg);
+}
+.todo-picker-val {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.todo-picker-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  min-width: 180px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  border-bottom-width: 3px;
+  background: var(--surface);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.22);
+  animation: todo-menu 0.14s ease-out;
+  transform-origin: top;
+}
+@keyframes todo-menu {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.97);
+  }
+}
+.todo-picker-h {
+  padding: 4px 10px 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.todo-picker-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+.todo-picker-menu button:hover,
+.todo-picker-menu button:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+.todo-picker-menu button.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+@media (max-width: 420px) {
+  .todo-picker-val {
+    max-width: 84px;
+  }
+}
 .todo .todo-select select {
   min-height: 32px;
   width: auto;
@@ -5551,6 +5665,42 @@ body:has(.todo-nav) .fab {
 }
 .todo-row.is-step {
   margin-inline-start: 0;
+}
+/* Outline (pool): steps indented under their parent, a guide line linking them, a smaller orb. */
+.todo-list.is-outline {
+  gap: 5px;
+}
+.todo-row.is-nested {
+  --indent: 22px;
+  margin-inline-start: calc(var(--lvl, 1) * var(--indent));
+  overflow: visible;
+  background: color-mix(in srgb, var(--surface-2) 45%, var(--surface));
+  border-bottom-width: 2px;
+  padding-block: 5px;
+}
+.todo-row.is-nested::before {
+  border-start-start-radius: 16px;
+  border-end-start-radius: 16px;
+}
+.todo-row.is-nested .todo-check {
+  width: 34px;
+  height: 34px;
+}
+.todo-row.is-nested > .todo-guide {
+  position: absolute;
+  inset-inline-start: calc(-1 * var(--indent) + 6px);
+  top: -7px;
+  width: calc(var(--indent) - 6px);
+  height: calc(50% + 6px);
+  border-inline-start: 2px solid var(--tg-track);
+  border-bottom: 2px solid var(--tg-track);
+  border-end-start-radius: 10px;
+  pointer-events: none;
+}
+@media (max-width: 420px) {
+  .todo-row.is-nested {
+    --indent: 20px;
+  }
 }
 @keyframes todo-pop {
   from {
@@ -5706,7 +5856,39 @@ body:has(.todo-nav) .fab {
 }
 .todo-acts {
   display: flex;
+  align-items: center;
   gap: 2px;
+}
+/* "Today": moves a pooled or reminded task onto today's list. A labelled pill, not a bare arrow. */
+.todo-today-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tg-gold) 55%, var(--border));
+  background: color-mix(in srgb, var(--tg-gold) 14%, var(--surface));
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.todo-today-btn svg {
+  color: var(--tg-gold-deep);
+}
+.todo-today-btn.to-pool {
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.todo-today-btn.to-pool svg {
+  color: var(--muted);
+}
+.todo-today-btn:active {
+  transform: translateY(1px);
 }
 .todo-acts .icon-btn.sm,
 .todo-row > .icon-btn.sm {
@@ -5742,7 +5924,7 @@ body:has(.todo-nav) .fab {
   border: 2px dashed color-mix(in srgb, var(--accent) 50%, var(--border));
   color: var(--accent);
 }
-.todo .todo-newquest input {
+.todo .todo-newquest input:not([type='checkbox']):not([type='radio']) {
   flex: 1;
   border: 0;
   background: transparent;
@@ -5963,6 +6145,19 @@ body:has(.todo-nav) .fab {
 .todo-crumb .icon-btn.sm {
   margin: 0;
 }
+/* Crumb and title stay pinned under the sheet's header while the form scrolls. */
+.todo-sheet-top {
+  position: sticky;
+  top: var(--sheet-head-h, 52px);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: -4px -18px 0;
+  padding: 4px 18px 6px;
+  background: var(--surface);
+  box-shadow: 0 6px 8px -8px rgb(0 0 0 / 0.35);
+}
 .todo-title-row {
   display: flex;
   align-items: flex-start;
@@ -6166,6 +6361,12 @@ body:has(.todo-nav) .fab {
   gap: 5px;
   min-width: 0;
 }
+.todo-note {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
 .todo-field-l,
 .todo-field > span:first-child {
   font-size: 0.78rem;
@@ -6174,8 +6375,33 @@ body:has(.todo-nav) .fab {
 }
 .todo-dates {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+/* Safari gives date fields a wide built-in minimum: let them shrink to their column. */
+.todo input[type='date'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 42px;
+}
+.todo input[type='date']::-webkit-date-and-time-value {
+  text-align: start;
+}
+/* On phones the three dates stack, each a row: name, then the field. */
+@media (max-width: 560px) {
+  .todo-dates {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .todo-dates .todo-field {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: center;
+    gap: 8px;
+  }
 }
 .todo .todo-dates input {
   padding: 8px 6px;
@@ -6251,7 +6477,7 @@ body:has(.todo-nav) .fab {
 .todo-labels-box:focus-within {
   border-color: var(--accent);
 }
-.todo .todo-labels-box input {
+.todo .todo-labels-box input:not([type='checkbox']):not([type='radio']) {
   flex: 1;
   min-width: 120px;
   min-height: 32px;
@@ -6303,6 +6529,70 @@ body:has(.todo-nav) .fab {
 }
 .todo-sec .muted.small {
   margin: 0;
+}
+.todo .todo-grip {
+  margin: 0;
+  width: 36px;
+  height: 40px;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+}
+.todo-list.is-sorting .todo-grip {
+  cursor: grabbing;
+}
+.todo-list.is-sorting .todo-row {
+  transition: transform 0.16s ease-out;
+  user-select: none;
+}
+/* Pool outline: fold / unfold what's under a task. Shut, the chevron points along the reading direction and the
+   number of hidden rows shows next to it. */
+.todo-fold-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.todo-fold-btn svg {
+  transition: transform 0.18s;
+}
+.todo-fold-btn.is-shut {
+  border-color: var(--border);
+  background: var(--surface-2);
+  color: var(--accent);
+}
+.todo-fold-btn.is-shut svg {
+  transform: rotate(-90deg);
+}
+[dir='rtl'] .todo-fold-btn.is-shut svg {
+  transform: rotate(90deg);
+}
+/* Pool outline: a line where the dragged step will land. */
+.todo-list.is-outline .todo-row.drop-before {
+  box-shadow: 0 -5px 0 -2px var(--accent);
+}
+.todo-list.is-outline .todo-row.drop-after {
+  box-shadow: 0 5px 0 -2px var(--accent);
+}
+.todo-list.is-sorting .todo-row.is-dragging {
+  z-index: 2;
+  transition: none;
+  border-color: var(--accent);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.22);
+  animation: none;
+}
+.todo-parent h3 {
+  gap: 6px;
 }
 .todo-step-move {
   display: flex;
@@ -6692,6 +6982,391 @@ body:has(.todo-nav) .fab {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+/* Level badge on the HUD canvas: an invisible button over it opens the levels sheet. */
+.todo-hud-wrap {
+  position: relative;
+}
+.todo-hud-level {
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  width: 58px;
+  height: 100%;
+  border: 0;
+  border-radius: 14px;
+  background: none;
+  cursor: pointer;
+}
+.todo-hud-level:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.todo-hud-level:active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* Levels sheet */
+.todo-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 8px;
+}
+.todo-lv-now {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  border-bottom-width: 3px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, var(--surface)), color-mix(in srgb, var(--accent-2) 10%, var(--surface)));
+}
+.todo-lv-hex {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  width: 64px;
+  height: 72px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(160deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-size: 1.6rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.todo-lv-hex small {
+  font-size: 0.6rem;
+  font-weight: 800;
+  opacity: 0.85;
+}
+.todo-lv-now-txt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.todo-lv-bar {
+  --p: 0;
+  display: block;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(to var(--fwd, right), var(--tg-gold) calc(var(--p) * 100%), var(--tg-track) 0);
+  box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.12);
+}
+[dir='rtl'] .todo-lv-bar {
+  --fwd: left;
+}
+.todo-xp-rules,
+.todo-xp-types,
+.todo-ladder {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.todo-xp-rules li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 2px;
+  border-bottom: 1px dashed var(--border);
+}
+.todo-xp-rules b,
+.todo-xp-types b {
+  color: var(--tg-gold-deep);
+  white-space: nowrap;
+}
+.todo-lv-sub {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
+}
+.todo-xp-types {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+@media (min-width: 560px) {
+  .todo-xp-types {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.todo-xp-types li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tc) 12%, var(--surface));
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.todo-xp-types li svg {
+  color: var(--tc);
+  flex-shrink: 0;
+}
+.todo-xp-types li span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.todo-lv-example {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tg-gold) 14%, var(--surface));
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.todo-ladder {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.todo-ladder li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  color: var(--muted);
+}
+.todo-ladder-n {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  font-weight: 900;
+  font-size: 0.85rem;
+}
+.todo-ladder-name {
+  flex: 1;
+  font-weight: 700;
+}
+.todo-ladder-xp {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.todo-ladder li.is-past {
+  color: var(--text);
+}
+.todo-ladder li.is-past .todo-ladder-n {
+  background: var(--tg-gold);
+  color: #fff;
+}
+.todo-ladder li.is-now {
+  color: var(--text);
+  background: var(--accent-soft);
+  outline: 2px solid var(--accent);
+}
+.todo-ladder li.is-now .todo-ladder-n {
+  background: linear-gradient(160deg, var(--accent), var(--accent-2));
+  color: #fff;
+}
+.todo-ladder-you {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+/* Form dropdowns (SelectMenu.tsx): a field-like button opening a card, with search for long task lists. */
+.todo-menu {
+  position: relative;
+}
+.todo-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.95rem;
+  text-align: start;
+  cursor: pointer;
+}
+.todo-menu.is-open .todo-menu-btn {
+  border-color: var(--accent);
+}
+.todo-menu.is-open .todo-picker-chev {
+  transform: rotate(180deg);
+}
+.todo-menu-val {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.todo-menu-val.is-empty {
+  color: var(--muted);
+}
+.todo-menu-card {
+  scroll-margin-bottom: 90px;
+}
+.todo-menu-card,
+.todo-ac {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  inset-inline: 0;
+  padding: 6px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  border-bottom-width: 3px;
+  background: var(--surface);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 0.22);
+  animation: todo-menu 0.14s ease-out;
+}
+.todo-menu-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.todo .todo-menu-search input:not([type='checkbox']):not([type='radio']) {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  min-height: 40px;
+  outline: none;
+}
+.todo-menu-list,
+.todo-ac {
+  list-style: none;
+  margin: 0;
+}
+.todo-menu-list {
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 0;
+}
+.todo-menu-list button,
+.todo-ac button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+.todo-menu-list button.is-active,
+.todo-ac button.is-active,
+.todo-ac button:hover {
+  background: var(--surface-2);
+}
+.todo-menu-list button.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.todo-menu-l {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.todo-menu-note {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.todo-menu-ic {
+  flex-shrink: 0;
+  color: var(--tc);
+}
+.todo-menu-empty {
+  padding: 10px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+.todo-labels-box {
+  position: relative;
+}
+
+/* Tooltips (TipLayer.tsx): hover, keyboard focus, or a long press on phones. */
+.todo-tip {
+  position: fixed;
+  z-index: 70;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 7px 11px;
+  border-radius: 10px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
+  translate: -50% -100%;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.25);
+  animation: todo-tip-in 0.12s ease-out;
+}
+.todo-tip.is-below {
+  translate: -50% 0;
+}
+.todo-tip::after {
+  content: '';
+  position: absolute;
+  left: calc(50% + var(--nudge, 0px));
+  top: 100%;
+  translate: -50% 0;
+  border: 6px solid transparent;
+  border-top-color: var(--text);
+}
+.todo-tip.is-below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--text);
+}
+@keyframes todo-tip-in {
+  from {
+    opacity: 0;
+  }
+}
+/* A long press shows the tip instead of iOS's text callout. */
+.todo [data-tip] {
+  -webkit-touch-callout: none;
+}
+.todo-row .todo-meta,
+.todo-row .todo-ty-wrap {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.todo-ty-wrap {
+  display: inline-flex;
 }
 
 /* Celebration layer: above the page, under dialogs, never takes taps. */

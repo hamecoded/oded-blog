@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlarmClock,
+  ArrowDownUp,
   ArrowLeft,
   ArrowRight,
-  ArrowUpToLine,
+  GripVertical,
   Bell,
   CheckCheck,
+  ChevronDown,
   Flag,
   Hash,
   Inbox,
+  Layers,
   LayoutList,
   ListTodo,
-  Plus,
   SlidersHorizontal,
   Sun,
   Swords,
@@ -38,10 +40,15 @@ import {
   isReminded,
   labelsIn,
   logFor,
+  moved,
+  foldOutline,
+  nextLeaf,
+  nestTasks,
   parseQuick,
   progressOf,
   recall,
   relink,
+  reparent,
   remember,
   sortTasks,
   statsOf,
@@ -50,11 +57,15 @@ import {
   type GroupKey,
   type SortKey,
 } from './model';
+import { useOutlineDrag, type Place } from './outlineDrag';
+import { Picker } from './Picker';
 import { QuestMap } from './QuestMap';
 import { ReviewSheet, type Decision } from './ReviewSheet';
 import { useTt, type TKey } from './strings';
 import { TaskRow, type Origin } from './TaskRow';
+import { LevelsSheet } from './LevelsSheet';
 import { TaskSheet } from './TaskSheet';
+import { TipLayer } from './TipLayer';
 
 type Tab = 'today' | 'pool' | 'quests' | 'lists' | 'done';
 type PoolFilter = 'all' | 'reminded' | 'due' | 'blocked';
@@ -104,6 +115,23 @@ export default function TodoApp() {
   /** null: the review opens by itself once a day when there are leftovers. */
   const [reviewChoice, setReviewChoice] = useState<boolean | null>(null);
   const [promptedOn, setPromptedOn] = useState(() => recall('reviewed'));
+  const [levelsOpen, setLevelsOpen] = useState(false);
+  /** Pool tasks folded shut (their subtasks hidden); kept per browser. */
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(recall('collapsed') ?? '[]') as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const toggleFold = (id: string) =>
+    setCollapsed((c) => {
+      const n = new Set(c);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      remember('collapsed', JSON.stringify([...n].filter((x) => rows?.some((r) => r.id === x) ?? true)));
+      return n;
+    });
 
   const fail = (e: unknown) => {
     toast(errorText(e, t));
@@ -127,11 +155,16 @@ export default function TodoApp() {
   const all = useMemo(() => rows ?? [], [rows]);
   const byId = useMemo(() => new Map(all.map((r) => [r.id, r])), [all]);
   const stats = useMemo(() => statsOf(all, today), [all, today]);
+  /** Tasks that have subtasks. They never sit on Today themselves (nor come up as leftovers): only their subtasks do. */
+  const parents = useMemo(() => new Set(all.map((r) => r.root_id).filter((x): x is string => !!x)), [all]);
   const leftovers = useMemo(
-    () => all.filter((r) => isLeftover(r, today)).sort((a, b) => (a.day ?? '').localeCompare(b.day ?? '') || b.priority - a.priority),
-    [all, today],
+    () =>
+      all
+        .filter((r) => isLeftover(r, today) && !parents.has(r.id))
+        .sort((a, b) => (a.day ?? '').localeCompare(b.day ?? '') || b.priority - a.priority),
+    [all, today, parents],
   );
-  const todayAll = useMemo(() => all.filter((r) => r.day === today && r.status !== 'quit'), [all, today]);
+  const todayAll = useMemo(() => all.filter((r) => r.day === today && r.status !== 'quit' && !parents.has(r.id)), [all, today, parents]);
   const todayList = useMemo(() => sortTasks(todayAll, sort, today, byId), [todayAll, sort, today, byId]);
   const reminded = useMemo(() => sortTasks(all.filter((r) => isReminded(r, today)), 'smart', today, byId), [all, today, byId]);
   const pool = useMemo(() => all.filter((r) => !r.day && isOpen(r)), [all]);
@@ -207,9 +240,12 @@ export default function TodoApp() {
   const create = async (d: TodoDraft): Promise<Todo | null> => {
     const parent = d.root_id ? byId.get(d.root_id) : undefined;
     const last = parent ? stepsOf(parent.id, all).at(-1) : undefined;
+    // A task on a day list that gets its first subtask hands its place to it: parents never sit on Today.
+    const handOver = parent?.day && !last ? parent.day : null;
     const full: TodoDraft = {
       ...(parent ? { day: null, priority: parent.priority, urgency: parent.urgency, tags: parent.tags, lists: parent.lists } : {}),
       ...d,
+      ...(handOver ? { day: handOver } : {}),
       prev_id: parent ? (last?.id ?? null) : d.prev_id,
       log: [{ at: new Date().toISOString(), kind: 'created' }],
     };
@@ -217,6 +253,7 @@ export default function TodoApp() {
       const saved = await api.saveTodo(full);
       setRows((rs) => [...(rs ?? []), saved]);
       if (last) update([{ id: last.id, next_id: saved.id }]);
+      if (handOver && parent) update([{ id: parent.id, day: null }]);
       return saved;
     } catch (e) {
       fail(e);
@@ -266,15 +303,52 @@ export default function TodoApp() {
       update([{ id: task.id, status: 'inprogress', day: task.day && task.day < today ? today : task.day }]);
     }
   };
-  const toToday = (task: Todo) =>
-    update([{ id: task.id, day: today, remind_on: task.remind_on && task.remind_on <= today ? null : task.remind_on }]);
+  /**
+   * Puts a task on today's list and returns it. A task with subtasks never goes there itself: its next subtask to
+   * work on does (null when there's none left).
+   */
+  const toToday = (task: Todo): Todo | null => {
+    const target = parents.has(task.id) ? nextLeaf(task, all, byId) : task;
+    if (!target) return null;
+    const patches: Patch[] = [{ id: target.id, day: today, remind_on: target.remind_on && target.remind_on <= today ? null : target.remind_on }];
+    // The parent's own reminder has done its job once its next step is on Today.
+    if (target !== task && task.remind_on && task.remind_on <= today) patches.push({ id: task.id, remind_on: null });
+    update(patches);
+    return target;
+  };
   const snooze = (task: Todo) => update([{ id: task.id, remind_on: addDays(today, 1) }]);
-  const moveStep = (root: Todo, i: number, dir: -1 | 1) => {
+  const reorder = (root: Todo, from: number, to: number) => {
     const order = stepsOf(root.id, all);
-    const j = i + dir;
-    if (j < 0 || j >= order.length) return;
-    [order[i], order[j]] = [order[j], order[i]];
+    if (from === to || to < 0 || to >= order.length) return;
+    update(relink(moved(order, from, to)));
+  };
+  /** Puts a step right before or after one of its siblings (a drop in the pool's outline). */
+  const placeStep = (id: string, place: Place) => {
+    const task = byId.get(id);
+    if (!task?.root_id) return;
+    const order = stepsOf(task.root_id, all).filter((s) => s.id !== id);
+    const at = 'before' in place ? order.findIndex((s) => s.id === place.before) : order.findIndex((s) => s.id === place.after) + 1;
+    if (at < 0) return;
+    order.splice(at, 0, task);
     update(relink(order));
+  };
+  /** In the pool, a step's siblings that are shown there too, in their order. */
+  const poolSiblings = (id: string) => {
+    const task = byId.get(id);
+    if (!task?.root_id) return [];
+    const shown = new Set(poolShown.map((r) => r.id));
+    return stepsOf(task.root_id, all)
+      .filter((s) => shown.has(s.id))
+      .map((s) => s.id);
+  };
+  const outline = useOutlineDrag(poolSiblings, placeStep);
+  const moveUnder = (task: Todo, parentId: string | null) => {
+    if ((task.root_id ?? null) === parentId) return;
+    const p0 = parentId ? byId.get(parentId) : undefined;
+    // Its new parent can't stay on a day list (parents never sit on Today): the moved task takes that place.
+    update([...reparent(task, parentId, all), ...(p0?.day ? [{ id: p0.id, day: null }, ...(task.day ? [] : [{ id: task.id, day: p0.day }])] : [])]);
+    const p = parentId ? byId.get(parentId) : undefined;
+    toast(p ? tt('movedUnder', { title: p.title || tt('untitled') }) : tt('movedOut'));
   };
   const decide = (task: Todo, d: Decision, refine: TodoDraft) => {
     if (d === 'done') {
@@ -335,16 +409,70 @@ export default function TodoApp() {
   }
 
   const doneToday = todayAll.filter((r) => r.status === 'completed').length;
-  const row = (task: Todo, extra?: { showRemind?: boolean; action?: ReactNode; hideRoot?: boolean }) => (
-    <TaskRow key={task.id} task={task} all={all} byId={byId} today={today} lang={lang} onToggle={toggle} onOpen={(x) => openTask(x.id)} {...extra} />
+  const row = (task: Todo, extra?: { showRemind?: boolean; action?: ReactNode; hideRoot?: boolean }, level = 0) => {
+    const look = level ? outline.rowLook(task.id) : {};
+    return (
+      <TaskRow
+        key={task.id}
+        task={task}
+        all={all}
+        byId={byId}
+        today={today}
+        lang={lang}
+        onToggle={toggle}
+        onOpen={(x) => openTask(x.id)}
+        {...extra}
+        {...(level
+          ? {
+              hideRoot: true,
+              className: `is-nested${look.className ? ` ${look.className}` : ''}`,
+              rowStyle: { '--lvl': level, ...look.rowStyle } as React.CSSProperties,
+            }
+          : {})}
+      />
+    );
+  };
+  /** The handle a nested pool row is dragged by (arrow keys move it too). */
+  const gripFor = (r: Todo) => (
+    <button type="button" className="icon-btn sm todo-grip" aria-label={tt('dragToReorder')} data-tip={tt('tipGrip')} {...outline.grip(r.id)}>
+      <GripVertical size={18} />
+    </button>
   );
+  /** Moves a task onto today's list: a labelled button, and a toast saying where it went. */
   const toTodayBtn = (r: Todo) => (
-    <button type="button" className="icon-btn sm accent" onClick={() => toToday(r)} aria-label={tt('toToday')} title={tt('toToday')}>
-      <ArrowUpToLine size={18} />
+    <button
+      type="button"
+      className="todo-today-btn"
+      onClick={() => {
+        const moved = toToday(r);
+        toast(moved ? tt('movedToToday', { title: moved.title || tt('untitled') }) : tt('nothingLeft'));
+      }}
+      aria-label={tt('toToday')}
+      data-tip={tt('toToday')}
+    >
+      <Sun size={15} aria-hidden />
+      {tt('toTodayShort')}
+    </button>
+  );
+  /** Sends a task on today's list back to the pool. */
+  const toPoolBtn = (r: Todo) => (
+    <button
+      type="button"
+      className="todo-today-btn to-pool"
+      onClick={() => {
+        update([{ id: r.id, day: null }]);
+        toast(tt('movedToPool', { title: r.title || tt('untitled') }));
+      }}
+      aria-label={tt('toPool')}
+      data-tip={tt('toPool')}
+    >
+      <Inbox size={15} aria-hidden />
+      {tt('toPoolShort')}
     </button>
   );
   /** A list split by the chosen grouping; each group a labelled block. */
-  const grouped = (list: Todo[], rowExtra?: (r: Todo) => { showRemind?: boolean; action?: ReactNode }, by: GroupKey = group) =>
+  /** A list split by the chosen grouping; with `nest`, steps sit indented under their parent within a group. */
+  const grouped = (list: Todo[], rowExtra?: (r: Todo) => { showRemind?: boolean; action?: ReactNode }, by: GroupKey = group, nest = false) =>
     groupTasks(list, by, tt).map((g) => (
       <section key={g.id || '-'} className="todo-group">
         {g.label && (
@@ -352,7 +480,35 @@ export default function TodoApp() {
             {g.label} <span className="muted">{g.items.length}</span>
           </h2>
         )}
-        <ul className="todo-list">{g.items.map((r) => row(r, rowExtra?.(r)))}</ul>
+        <ul className={`todo-list${nest ? ' is-outline' : ''}${nest && outline.dragging ? ' is-sorting' : ''}`}>
+          {nest
+            ? foldOutline(nestTasks(g.items, all), collapsed).map(({ task: r, level, kids, hidden }) => {
+                const extra = rowExtra?.(r);
+                if (!level && !kids) return row(r, extra, level);
+                const shut = hidden > 0;
+                const action = (
+                  <span className="todo-acts">
+                    {kids > 0 && (
+                      <button
+                        type="button"
+                        className={`todo-fold-btn${shut ? ' is-shut' : ''}`}
+                        onClick={() => toggleFold(r.id)}
+                        aria-expanded={!shut}
+                        aria-label={shut ? tt('expandN', { n: hidden }) : tt('collapse')}
+                        data-tip={shut ? tt('expandN', { n: hidden }) : tt('collapse')}
+                      >
+                        <ChevronDown size={16} aria-hidden />
+                        {shut && <span>{hidden}</span>}
+                      </button>
+                    )}
+                    {level > 0 && gripFor(r)}
+                    {extra?.action}
+                  </span>
+                );
+                return row(r, { ...extra, action }, level);
+              })
+            : g.items.map((r) => row(r, rowExtra?.(r)))}
+        </ul>
       </section>
     ));
   const viewBar = (opts: { sort?: boolean; groups?: GroupKey[]; children?: ReactNode }) => (
@@ -360,32 +516,34 @@ export default function TodoApp() {
       {opts.children}
       <span className="todo-viewbar-end">
         {opts.groups && (
-          <label className="todo-select">
-            <span className="sr-only">{tt('groupBy')}</span>
-            <select value={group} onChange={(e) => setGroup(e.target.value as GroupKey)}>
-              {opts.groups.map((g) => (
-                <option key={g} value={g}>
-                  {tt(`group_${g}`)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <Picker
+            label={tt('groupBy')}
+            icon={<Layers size={15} aria-hidden />}
+            value={group}
+            options={opts.groups.map((g) => ({ value: g, label: tt(`group_${g}`) }))}
+            onChange={setGroup}
+          />
         )}
         {opts.sort && (
-          <label className="todo-select">
-            <span className="sr-only">{tt('sortSmart')}</span>
-            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-              <option value="smart">{tt('sortSmart')}</option>
-              <option value="due">{tt('sortDue')}</option>
-              <option value="new">{tt('sortNew')}</option>
-            </select>
-          </label>
+          <Picker
+            label={tt('sortBy')}
+            icon={<ArrowDownUp size={15} aria-hidden />}
+            value={sort}
+            options={[
+              { value: 'smart' as SortKey, label: tt('sortSmart') },
+              { value: 'due' as SortKey, label: tt('sortDue') },
+              { value: 'new' as SortKey, label: tt('sortNew') },
+            ]}
+            onChange={setSort}
+          />
         )}
       </span>
     </div>
   );
   const GROUPS: GroupKey[] = ['none', 'tag', 'list', 'type', 'status'];
   const Back = lang === 'he' ? ArrowRight : ArrowLeft;
+  /** Add fields read in the interface's direction (Hebrew: right to left), whatever language is typed into them. */
+  const uiDir = lang === 'he' ? 'rtl' : 'ltr';
 
   // ── Screens ──
   const todayView = (
@@ -399,7 +557,7 @@ export default function TodoApp() {
           <h2>
             <Bell size={15} aria-hidden /> {tt('remindersTitle')}
             {reminded.length > 1 && (
-              <button type="button" className="todo-link" onClick={() => update(reminded.map((r) => ({ id: r.id, day: today, remind_on: null })))}>
+              <button type="button" className="todo-link" onClick={() => reminded.forEach((r) => toToday(r))}>
                 {tt('pullAll')}
               </button>
             )}
@@ -410,7 +568,7 @@ export default function TodoApp() {
                 showRemind: true,
                 action: (
                   <span className="todo-acts">
-                    <button type="button" className="icon-btn sm" onClick={() => snooze(r)} aria-label={tt('snooze')} title={tt('snooze')}>
+                    <button type="button" className="icon-btn sm" onClick={() => snooze(r)} aria-label={tt('snooze')} data-tip={tt('snooze')}>
                       <AlarmClock size={18} />
                     </button>
                     {toTodayBtn(r)}
@@ -434,7 +592,7 @@ export default function TodoApp() {
       ) : (
         <>
           {viewBar({ sort: true, groups: GROUPS })}
-          {grouped(todayList)}
+          {grouped(todayList, (r) => (isOpen(r) ? { action: toPoolBtn(r) } : {}))}
         </>
       )}
       {todayAll.length > 0 && doneToday === todayAll.length && <p className="todo-cheer">🏆 {tt('allDoneToday')}</p>}
@@ -469,7 +627,7 @@ export default function TodoApp() {
           <p>{tt('emptyPool')}</p>
         </div>
       ) : (
-        grouped(poolShown, (r) => ({ showRemind: true, action: toTodayBtn(r) }))
+        grouped(poolShown, (r) => ({ showRemind: true, action: toTodayBtn(r) }), group, true)
       )}
     </>
   );
@@ -477,7 +635,7 @@ export default function TodoApp() {
   const questsView = quest ? (
     <>
       <div className="todo-quest-head">
-        <button type="button" className="icon-btn" onClick={() => pickQuest(null)} aria-label={tt('allQuests')} title={tt('allQuests')}>
+        <button type="button" className="icon-btn" onClick={() => pickQuest(null)} aria-label={tt('allQuests')} data-tip={tt('allQuests')}>
           <Back size={20} />
         </button>
         <button type="button" className="todo-quest-title" onClick={() => openTask(quest.id)}>
@@ -514,7 +672,7 @@ export default function TodoApp() {
         }}
       >
         <Flag size={18} aria-hidden />
-        <input name="purpose" placeholder={tt('newPurpose')} aria-label={tt('newPurpose')} dir="auto" enterKeyHint="go" />
+        <input name="purpose" placeholder={tt('newPurpose')} aria-label={tt('newPurpose')} dir={uiDir} enterKeyHint="go" />
         <button type="submit" className="btn primary sm">
           {tt('startQuest')}
         </button>
@@ -564,7 +722,7 @@ export default function TodoApp() {
   const listsView = label ? (
     <>
       <div className="todo-quest-head">
-        <button type="button" className="icon-btn" onClick={() => setLabel(null)} aria-label={tt('allLists')} title={tt('allLists')}>
+        <button type="button" className="icon-btn" onClick={() => setLabel(null)} aria-label={tt('allLists')} data-tip={tt('allLists')}>
           <Back size={20} />
         </button>
         <h2 className="todo-label-title" dir="auto">
@@ -655,17 +813,16 @@ export default function TodoApp() {
   return (
     <div className={`todo tab-${tab}`} ref={setRootEl}>
       <div className="todo-top">
-        <Hud stats={stats} done={doneToday} total={todayAll.length} pal={pal} reduced={reduced} lang={lang} tt={tt} />
+        <Hud onLevel={() => setLevelsOpen(true)} stats={stats} done={doneToday} total={todayAll.length} pal={pal} reduced={reduced} lang={lang} tt={tt} />
         {canAdd && (
-          <form className="todo-add" onSubmit={quickAdd}>
-            <Plus size={18} aria-hidden className="muted" />
+          <form className={`todo-add${text.trim() ? ' has-text' : ''}`} onSubmit={quickAdd}>
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder={placeholder}
               aria-label={placeholder}
               aria-describedby="todo-quick-hint"
-              dir="auto"
+              dir={uiDir}
               enterKeyHint="send"
             />
             {text && (
@@ -673,15 +830,20 @@ export default function TodoApp() {
                 <X size={16} />
               </button>
             )}
-            <button type="button" className="icon-btn sm" onClick={() => openNew()} aria-label={tt('addDetails')} title={tt('addDetails')}>
+            <button type="button" className="icon-btn sm" onClick={() => openNew()} aria-label={tt('addDetails')} data-tip={tt('addDetails')}>
               <SlidersHorizontal size={18} />
             </button>
+            {text.trim() && (
+              <button type="submit" className="btn primary sm todo-add-go">
+                {tt('create')}
+              </button>
+            )}
             <span id="todo-quick-hint" className="sr-only">
               {tt('quickHint')}
             </span>
           </form>
         )}
-        {canAdd && text.length > 0 && <p className="todo-hint" dir="ltr">{tt('quickHint')}</p>}
+        {canAdd && text.length > 0 && <p className="todo-hint">{tt('quickHint')}</p>}
       </div>
 
       {leftovers.length > 0 && tab !== 'done' && (
@@ -727,7 +889,8 @@ export default function TodoApp() {
         onOpen={openTask}
         onToggle={toggle}
         onAddChild={(r, title) => void create({ title, root_id: r.id })}
-        onMoveStep={moveStep}
+        onReorder={reorder}
+        onMoveUnder={moveUnder}
         onPlayQuest={(id) => {
           closeSheet();
           setTab('quests');
@@ -745,6 +908,8 @@ export default function TodoApp() {
         onAll={decideAll}
         onClose={closeReview}
       />
+      <LevelsSheet open={levelsOpen} onClose={() => setLevelsOpen(false)} stats={stats} />
+      <TipLayer root={rootEl} />
       <FxLayer fx={fx} reduced={reduced} font={pal?.font ?? 'system-ui, sans-serif'} />
     </div>
   );

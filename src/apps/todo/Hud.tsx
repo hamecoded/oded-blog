@@ -25,7 +25,10 @@ export function Hud({
   reduced,
   lang,
   tt,
+  onLevel,
 }: {
+  /** Opens the explanation of levels (a tap on the badge). */
+  onLevel: () => void;
   stats: Stats;
   done: number;
   total: number;
@@ -85,7 +88,13 @@ export function Hud({
   ]
     .filter(Boolean)
     .join(' · ');
-  return <canvas ref={ref} className="todo-hud" role="img" aria-label={label} />;
+  return (
+    <div className="todo-hud-wrap">
+      <canvas ref={ref} className="todo-hud" role="img" aria-label={label} />
+      {/* The badge is drawn on the canvas; this invisible button over it makes it tappable and focusable. */}
+      <button type="button" className="todo-hud-level" onClick={onLevel} aria-label={tt('levelsOpen', { n: stats.level })} data-tip={tt('levelsOpen', { n: stats.level })} />
+    </div>
+  );
 }
 
 function draw(

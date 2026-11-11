@@ -7,6 +7,30 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-11 02:13
+
+- Changed: To-do task form dropdowns are the app's own: "Depends on" and "Part of" open a card listing tasks with their type icon, depth and tier, with a search box when the list is long; the lists and tags fields suggest matching names in the same style instead of the browser's popup
+- Changed: To-do task form ordered by importance: title, then today/pool, priority and urgency, deadline and due date, stage, description, steps, type, lists and tags (each with a line saying what it's for), reminder, complexity and estimate, what it waits for, and what it's part of; the lists field now reads "List name, e.g. Shopping"
+- Added: To-do levels sheet: tapping the level badge opens an explanation: your level, rank and XP to the next level; how a task's XP is worked out (base, complexity, priority and a bonus per type, with an example), the ladder of levels with their XP and rank names, and what the streak and today's ring mean
+- Added: To-do tooltips on every icon in the task lists (stage orb, type, part of, dates, reminder, urgency, complexity, steps, lists, tags, waiting-for, and the row buttons): on hover with a mouse, on keyboard focus, or by pressing and holding on a phone (the long press doesn't also open or complete the task)
+- Fixed: the "checking you are human" step blocking sign-in where Turnstile can't run: it's now off in demo mode and on local addresses (localhost, an IP such as the dev server opened from a phone, .local names), so the sign-in button no longer waits forever
+- Added: To-do pool: fold and unfold what's under any task with subtasks (chevron on its row; folded, it shows how many are hidden); remembered per browser
+- Changed: To-do: a task with subtasks never sits on Today, only its subtasks do. "Today" on such a task in the pool or reminders sends its next open subtask (going down into actions, preferring one that isn't waiting); a task on Today that gets its first subtask hands its place to it; its sheet explains instead of offering Today
+- Fixed: the site on a plain-http address (the dev server opened from a phone at http://10.x.x.x:5173): sign-in and new ids failed because browsers hide crypto.randomUUID and crypto.subtle there; uid() falls back to getRandomValues and sha256Hex() to a built-in SHA-256 (checked against Node's)
+- Added: `npm run dev:phone`: the dev server in demo mode for a phone on the same Wi-Fi (blanks the Supabase and Turnstile keys; fixed port 5173, so a server already running there is reported instead of a silent move to 5174)
+- Changed: To-do add fields (quick add, new purpose, add step) follow the interface direction (right to left in Hebrew) instead of switching with the typed text
+- Changed: To-do sort and group menus are the app's own dropdowns (a chip opening a card of choices, with a check on the current one) instead of the browser's native select
+- Added: To-do: a "Pool" button on each open task in Today sends it back to the pool, with a message saying so
+- Changed: To-do: the bare up-arrow on pool and reminder rows is now a labelled "Today" button (sun icon), and a message says the task moved to today's list
+- Added: To-do pool: drag a nested step or action by its grip to reorder it among its siblings (what's under it moves along; a line shows where it lands; the page scrolls near the edges); arrow keys on the grip move it one place
+- Changed: To-do quick add: the decorative plus at the start of the field is gone (it looked like a button); an Add button appears at the end once something is typed
+- Changed: To-do pool shows nested tasks as an outline: steps indented under their purpose and actions under their step, in their own order, joined by a guide line
+- Added: To-do step order by dragging: in a task's sheet, drag the grip on a step (or action) to put it elsewhere in the order; the other rows slide aside to show where it lands, the sheet scrolls along, and the grip also takes the up/down arrow keys. The quest road follows the new order
+- Added: To-do "Part of" in the task sheet: move a task, with everything under it, to the end of another purpose's or step's list, or make it a task of its own
+- Changed: To-do task sheet keeps the task's title (and where it belongs) pinned at the top while the form scrolls
+- Changed: no zooming the page on phones (pinch or double tap), site-wide
+- Fixed: To-do task sheet date fields overlapping on phones: the three dates now stack, one row each
+
 ## 2026-11-09 10:14
 
 - Added: To-do app (/apps/todo), played as a game: each day starts with a clean Today list; unfinished tasks from earlier days come up the next morning as a swipeable card stack (keep today, or save to the pool after refining priority and urgency and setting a remind-me date; or mark done / quit); pooled tasks come back on their reminder date. XP, levels, a streak and today's ring on a canvas HUD, particle bursts and confetti on completing. Tabs at the bottom: Today, Pool, Quests, Lists, Done

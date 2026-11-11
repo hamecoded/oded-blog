@@ -25,6 +25,8 @@ export function TaskRow({
   showRemind,
   action,
   hideRoot,
+  className,
+  rowStyle,
 }: {
   task: Todo;
   all: Todo[];
@@ -39,6 +41,9 @@ export function TaskRow({
   action?: ReactNode;
   /** Inside its own root's sheet the "part of" line says nothing new. */
   hideRoot?: boolean;
+  /** Extra class and style for the row (a row being dragged into a new place). */
+  className?: string;
+  rowStyle?: CSSProperties;
 }) {
   const tt = useTt();
   const Icon = STATUS_ICON[task.status];
@@ -52,11 +57,21 @@ export function TaskRow({
   const late = (iso: string | null) => !!iso && iso < today && isOpen(task);
   const soon = (iso: string | null) => !!iso && iso <= today && isOpen(task);
   const meta: ReactNode[] = [];
+  const when = (iso: string | null) => (iso ? dayLabel(iso, today, lang, tt) : '');
 
   if (root && !hideRoot) {
     const siblings = stepsOf(root.id, all);
     meta.push(
-      <span key="root" className="todo-m root">
+      <span
+        key="root"
+        className="todo-m root"
+        data-tip={tt('tipRoot', {
+          tier: tt(`tier_${tierOf(depth)}`),
+          n: siblings.findIndex((s) => s.id === task.id) + 1,
+          m: siblings.length,
+          title: root.title || tt('untitled'),
+        })}
+      >
         <CornerDownRight size={12} aria-hidden />
         <span className="tier">{tt(`tier_${tierOf(depth)}`)}</span>
         <span className="n">
@@ -70,14 +85,14 @@ export function TaskRow({
   }
   if (task.status !== 'discovered' && task.status !== 'completed') {
     meta.push(
-      <span key="st" className={`todo-m st st-${task.status}`}>
+      <span key="st" className={`todo-m st st-${task.status}`} data-tip={tt(`tipSt_${task.status}`)}>
         {tt(`st_${task.status}`)}
       </span>,
     );
   }
   if (task.deadline) {
     meta.push(
-      <span key="dl" className={`todo-m date${soon(task.deadline) ? ' late' : ''}`} title={tt('deadline')}>
+      <span key="dl" className={`todo-m date${soon(task.deadline) ? ' late' : ''}`} data-tip={tt('tipDeadline', { d: when(task.deadline), late: soon(task.deadline) ? tt('tipLate') : '' })}>
         <Hourglass size={12} aria-hidden />
         {dayLabel(task.deadline, today, lang, tt)}
       </span>,
@@ -85,7 +100,7 @@ export function TaskRow({
   }
   if (task.due_date) {
     meta.push(
-      <span key="due" className={`todo-m date${late(task.due_date) ? ' late' : ''}`} title={tt('dueDate')}>
+      <span key="due" className={`todo-m date${late(task.due_date) ? ' late' : ''}`} data-tip={tt('tipDue', { d: when(task.due_date), late: late(task.due_date) ? tt('tipLate') : '' })}>
         <Clock size={12} aria-hidden />
         {dayLabel(task.due_date, today, lang, tt)}
       </span>,
@@ -93,7 +108,7 @@ export function TaskRow({
   }
   if (task.estimate_date && !task.due_date && !task.deadline) {
     meta.push(
-      <span key="est" className="todo-m date" title={tt('estimateDate')}>
+      <span key="est" className="todo-m date" data-tip={tt('tipEstimate', { d: when(task.estimate_date) })}>
         <CalendarClock size={12} aria-hidden />
         {dayLabel(task.estimate_date, today, lang, tt)}
       </span>,
@@ -101,7 +116,7 @@ export function TaskRow({
   }
   if (showRemind && task.remind_on) {
     meta.push(
-      <span key="rem" className="todo-m" title={tt('remindOn')}>
+      <span key="rem" className="todo-m" data-tip={tt('tipRemind', { d: when(task.remind_on) })}>
         <Bell size={12} aria-hidden />
         {dayLabel(task.remind_on, today, lang, tt)}
       </span>,
@@ -109,7 +124,7 @@ export function TaskRow({
   }
   if (task.urgency >= 2) {
     meta.push(
-      <span key="urg" className={`todo-m urg u${task.urgency}`} title={`${tt('urgency')}: ${tt(`ur_${task.urgency as 2 | 3}`)}`}>
+      <span key="urg" className={`todo-m urg u${task.urgency}`} data-tip={tt('tipUrgency', { u: tt(`ur_${task.urgency as 2 | 3}`) })}>
         <Flame size={12} aria-hidden />
         {task.urgency === 3 ? tt('ur_3') : null}
       </span>,
@@ -117,14 +132,18 @@ export function TaskRow({
   }
   if (task.complexity) {
     meta.push(
-      <span key="cx" className="todo-m size" title={`${tt('complexity')}: ${tt(`cx_${task.complexity as 1 | 2 | 3 | 4 | 5}`)}`}>
+      <span key="cx" className="todo-m size" data-tip={tt('tipSize', { s: SIZES[task.complexity], c: tt(`cx_${task.complexity as 1 | 2 | 3 | 4 | 5}`) })}>
         {SIZES[task.complexity]}
       </span>,
     );
   }
   if (kids.length) {
     meta.push(
-      <span key="kids" className="todo-m kids" title={tt(`kids_${childTier(depth) as 'step' | 'action'}`)}>
+      <span
+        key="kids"
+        className="todo-m kids"
+        data-tip={tt('tipKids', { what: tt(`kids_${childTier(depth) as 'step' | 'action'}`), n: kidsDone, m: kids.length })}
+      >
         <ListTree size={12} aria-hidden />
         {kidsDone}/{kids.length}
       </span>,
@@ -132,7 +151,7 @@ export function TaskRow({
   }
   task.lists.forEach((l) =>
     meta.push(
-      <span key={`l:${l}`} className="todo-m list" dir="auto">
+      <span key={`l:${l}`} className="todo-m list" dir="auto" data-tip={tt('tipList', { l })}>
         <AtSign size={11} aria-hidden />
         {l}
       </span>,
@@ -140,14 +159,14 @@ export function TaskRow({
   );
   task.tags.forEach((l) =>
     meta.push(
-      <span key={`t:${l}`} className="todo-m tag" dir="auto">
+      <span key={`t:${l}`} className="todo-m tag" dir="auto" data-tip={tt('tipTag', { l })}>
         #{l}
       </span>,
     ),
   );
   if (waitFor.length) {
     meta.push(
-      <span key="lock" className="todo-m lock" title={tt('blockedBy', { list: waitFor.map((w) => w.title).join(', ') })}>
+      <span key="lock" className="todo-m lock" data-tip={tt('tipLock', { list: waitFor.map((w) => w.title || tt('untitled')).join(', ') })}>
         <Lock size={12} aria-hidden />
       </span>,
     );
@@ -156,9 +175,11 @@ export function TaskRow({
   const style = { '--prog': kids.length ? kidsDone / kids.length : 0 } as CSSProperties;
   return (
     <li
-      className={`todo-row ty-${task.type} p${task.priority} is-${task.status}${blocked ? ' is-blocked' : ''}${depth ? ` is-${tierOf(depth)}` : ''}`}
-      style={style}
+      className={`todo-row ty-${task.type} p${task.priority} is-${task.status}${blocked ? ' is-blocked' : ''}${depth ? ` is-${tierOf(depth)}` : ''}${className ? ` ${className}` : ''}`}
+      style={rowStyle ? { ...style, ...rowStyle } : style}
+      data-id={task.id}
     >
+      {className?.includes('is-nested') && <span className="todo-guide" aria-hidden />}
       <button
         type="button"
         className="todo-check"
@@ -168,13 +189,15 @@ export function TaskRow({
         }}
         aria-label={isOpen(task) ? `${tt('markDoneShort')} (+${xpFor(task)} XP)` : tt('reopen')}
         aria-pressed={!isOpen(task)}
-        title={isOpen(task) ? `${tt('markDoneShort')} · +${xpFor(task)} XP` : tt('reopen')}
+        data-tip={isOpen(task) ? tt('tipOrb', { s: tt(`st_${task.status}`), n: xpFor(task) }) : tt('tipOrbDone')}
       >
         <Icon size={18} strokeWidth={2.4} />
       </button>
       <button type="button" className="todo-main" onClick={() => onOpen(task)}>
         <span className="todo-title" dir="auto">
-          <TypeIcon size={13} className="todo-ty" aria-label={tt(`ty_${task.type}`)} />
+          <span className="todo-ty-wrap" data-tip={tt('tipType', { t: tt(`ty_${task.type}`), hint: tt(`tyHint_${task.type}`) })}>
+            <TypeIcon size={13} className="todo-ty" aria-label={tt(`ty_${task.type}`)} />
+          </span>
           {task.title || tt('untitled')}
         </span>
         {meta.length > 0 && <span className="todo-meta">{meta}</span>}

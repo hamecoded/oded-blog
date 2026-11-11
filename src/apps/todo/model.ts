@@ -156,6 +156,98 @@ export function relink(order: Todo[]): (TodoDraft & { id: string })[] {
   return patches;
 }
 
+/**
+ * `list` as an outline: each task followed by those of its steps (in their order) that are also in `list`, one
+ * level deeper. A task whose parent isn't in `list` starts at the top level, so nothing is left out.
+ */
+export function nestTasks(list: Todo[], all: Todo[]): { task: Todo; level: number }[] {
+  const ids = new Set(list.map((t) => t.id));
+  const out: { task: Todo; level: number }[] = [];
+  const seen = new Set<string>();
+  const walk = (t: Todo, level: number) => {
+    if (seen.has(t.id)) return;
+    seen.add(t.id);
+    out.push({ task: t, level });
+    stepsOf(t.id, all).forEach((k) => ids.has(k.id) && walk(k, level + 1));
+  };
+  list.forEach((t) => (!t.root_id || !ids.has(t.root_id)) && walk(t, 0));
+  list.forEach((t) => walk(t, 0)); // anything caught in a broken chain
+  return out;
+}
+
+/**
+ * The task to work on next under a parent: the first open step, going down into its actions when it has some,
+ * preferring one that isn't waiting on anything. Null when everything under it is done.
+ */
+export function nextLeaf(task: Todo, all: Todo[], byId: Map<string, Todo>): Todo | null {
+  let fallback: Todo | null = null;
+  const walk = (t: Todo): Todo | null => {
+    for (const s of stepsOf(t.id, all)) {
+      if (!isOpen(s)) continue;
+      if (all.some((k) => k.root_id === s.id && isOpen(k))) {
+        const r = walk(s);
+        if (r) return r;
+        continue;
+      }
+      if (!blockers(s, byId).length) return s;
+      fallback ??= s;
+    }
+    return null;
+  };
+  return walk(task) ?? fallback;
+}
+
+/**
+ * An outline (from nestTasks) with collapsed tasks folded: rows under a collapsed task are left out and counted
+ * on it (`hidden`). `kids` is how many rows sit under a task when it's open, so the view knows which can fold.
+ */
+export function foldOutline(rows: { task: Todo; level: number }[], collapsed: Set<string>) {
+  const out: { task: Todo; level: number; kids: number; hidden: number }[] = [];
+  let owner: (typeof out)[number] | null = null;
+  rows.forEach((r, i) => {
+    if (owner && r.level > owner.level) {
+      owner.hidden++;
+      return;
+    }
+    owner = null;
+    let kids = 0;
+    while (i + 1 + kids < rows.length && rows[i + 1 + kids].level > r.level) kids++;
+    const e = { ...r, kids, hidden: 0 };
+    out.push(e);
+    if (kids && collapsed.has(r.task.id)) owner = e;
+  });
+  return out;
+}
+
+/** `list` with the item at `from` moved to index `to`. */
+export function moved<T>(list: T[], from: number, to: number): T[] {
+  const out = [...list];
+  const [x] = out.splice(from, 1);
+  out.splice(to, 0, x);
+  return out;
+}
+
+/** How many levels hang under a task (0: none, 1: steps, 2: steps with actions). */
+export function heightOf(id: string, all: Todo[]): number {
+  const kids = all.filter((t) => t.root_id === id);
+  return kids.length ? 1 + Math.max(...kids.map((k) => heightOf(k.id, all))) : 0;
+}
+
+/**
+ * Patches that move a task, with everything under it, to the end of another parent's chain (`parentId`), or out
+ * on its own (null). The chain it leaves closes the gap.
+ */
+export function reparent(task: Todo, parentId: string | null, all: Todo[]): (TodoDraft & { id: string })[] {
+  const patches: (TodoDraft & { id: string })[] = [];
+  if (task.root_id) patches.push(...relink(stepsOf(task.root_id, all).filter((s) => s.id !== task.id)));
+  if (parentId) {
+    const order = [...stepsOf(parentId, all).filter((s) => s.id !== task.id), { ...task, prev_id: '-', next_id: '-' }];
+    patches.push(...relink(order));
+  } else patches.push({ id: task.id, prev_id: null, next_id: null });
+  patches.push({ id: task.id, root_id: parentId });
+  return patches;
+}
+
 // ── Ordering ──
 
 /** The nearest date that matters: deadline counts most, then due, then estimated. */
@@ -336,6 +428,10 @@ export function statsOf(all: Todo[], today: string): Stats {
   const floor = levelFloor(level);
   return { xp, level, into: xp - floor, span: levelFloor(level + 1) - floor, streak, doneToday };
 }
+
+/** A name for each level, so climbing feels like a rank; past the last one it stays "Legend". */
+const RANKS: TKey[] = ['rank_1', 'rank_2', 'rank_3', 'rank_4', 'rank_5', 'rank_6', 'rank_7', 'rank_8'];
+export const rankKey = (level: number): TKey => RANKS[Math.max(1, Math.min(level, RANKS.length)) - 1];
 
 // ── Labels for levels ──
 

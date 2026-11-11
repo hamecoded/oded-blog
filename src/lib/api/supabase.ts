@@ -24,6 +24,7 @@ import {
   sha256Hex,
   slugify,
   todoFields,
+  uid,
   USERNAME_RE,
   validSiteSlug,
   visitorSecret,
@@ -229,7 +230,7 @@ export function createSupabaseApi(url: string, key: string): Api {
 
     async uploadMedia(file) {
       const ext = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'bin';
-      const path = `${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${ext}`;
+      const path = `${new Date().toISOString().slice(0, 7)}/${uid()}.${ext}`;
       const res = await sb.storage.from(BUCKET).upload(path, file, {
         cacheControl: '31536000',
         contentType: file.type || undefined,
@@ -479,7 +480,7 @@ export function createSupabaseApi(url: string, key: string): Api {
       const { data } = await sb.auth.getUser();
       if (!data.user) throw new Error('auth/required');
       const ext = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-      const path = `possessions/${data.user.id}/${crypto.randomUUID()}.${ext}`;
+      const path = `possessions/${data.user.id}/${uid()}.${ext}`;
       const res = await sb.storage.from(BUCKET).upload(path, file, {
         cacheControl: '31536000',
         contentType: file.type || undefined,
