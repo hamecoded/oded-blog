@@ -176,7 +176,8 @@ export default function TodoApp() {
   const todayAll = useMemo(() => all.filter((r) => r.day === today && r.status !== 'quit' && !parents.has(r.id)), [all, today, parents]);
   const todayList = useMemo(() => sortTasks(todayAll, sort, today, byId), [todayAll, sort, today, byId]);
   const reminded = useMemo(() => sortTasks(all.filter((r) => isReminded(r, today)), 'smart', today, byId), [all, today, byId]);
-  const pool = useMemo(() => all.filter((r) => !r.day && isOpen(r)), [all]);
+  // A goal with no steps yet is only a name on the journeys page: it joins the pool once it has something to do.
+  const pool = useMemo(() => all.filter((r) => !r.day && isOpen(r) && !(r.goal && !all.some((x) => x.root_id === r.id))), [all]);
   const poolShown = useMemo(() => {
     const f = pool.filter((r) =>
       filter === 'reminded' ? isReminded(r, today) : filter === 'due' ? !!(r.due_date || r.deadline) : filter === 'blocked' ? blockers(r, byId).length > 0 || r.status === 'blocked' : true,
@@ -189,7 +190,8 @@ export default function TodoApp() {
   }, [all, questId]);
   const quest = questId ? byId.get(questId) : undefined;
   const finished = useMemo(() => {
-    const list = all.filter((r) => !isOpen(r)).sort((a, b) => (b.done_at ?? b.updated_at).localeCompare(a.done_at ?? a.updated_at));
+    // A goal with no steps yet has nothing to show for it, so it stays out of the archive.
+    const list = all.filter((r) => !isOpen(r) && !(r.goal && !all.some((x) => x.root_id === r.id))).sort((a, b) => (b.done_at ?? b.updated_at).localeCompare(a.done_at ?? a.updated_at));
     const groups: { day: string; items: Todo[] }[] = [];
     list.slice(0, 300).forEach((r) => {
       const d = isoDay(new Date(r.done_at ?? r.updated_at));
@@ -834,11 +836,12 @@ export default function TodoApp() {
     );
 
   const nav: { id: Tab; label: TKey; icon: typeof Sun; n?: number; dot?: boolean }[] = [
-    // Today in the middle, within easy reach of the thumb; the pool right beside it.
-    { id: 'quests', label: 'quests', icon: Swords, n: purposes.filter(isOpen).length },
+    // Today in the middle, within easy reach of the thumb; the pool on one side of it, the journeys on the other
+    // (in Hebrew, right to left: lists, pool, today, journeys, done).
+    { id: 'lists', label: 'lists', icon: LayoutList },
     { id: 'pool', label: 'pool', icon: Inbox, n: pool.length },
     { id: 'today', label: 'today', icon: Sun, n: todayAll.length - doneToday, dot: reminded.length > 0 },
-    { id: 'lists', label: 'lists', icon: LayoutList },
+    { id: 'quests', label: 'quests', icon: Swords, n: purposes.filter(isOpen).length },
     { id: 'done', label: 'done', icon: CheckCheck },
   ];
   const placeholder =
@@ -948,6 +951,7 @@ export default function TodoApp() {
         onToggle={toggle}
         onAddChild={(r, title) => void create({ title, root_id: r.id })}
         onReorder={reorder}
+        onMoved={(t, toToday) => toast(tt(toToday ? 'movedToToday' : 'movedToPool', { title: t.title || tt('untitled') }))}
         onMoveUnder={moveUnder}
         onSetGoal={setGoal}
         onPlayQuest={(id) => {

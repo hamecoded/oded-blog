@@ -19,6 +19,8 @@ function Layout() {
   const { t, user, toastMsg } = useApp();
   const loc = useLocation();
   const bare = loc.pathname.endsWith('/print');
+  /** Inside an app (/apps/<app>) the blog's tags and search links are noise: the app has its own. */
+  const inApp = /^\/apps\/[^/]+/.test(loc.pathname);
   // Printing the blog is for the manager; apps print the user's own data, so they may print.
   usePrintLock(can.export(user) || (!!user && loc.pathname.startsWith('/apps/')));
   return (
@@ -32,10 +34,14 @@ function Layout() {
             {t('siteName')}
           </Link>
           <nav>
-            <Link to="/tags">{t('tags')}</Link>
-            <Link to="/search" aria-label={t('search')} className="icon-link">
-              <Search size={20} />
-            </Link>
+            {!inApp && (
+              <>
+                <Link to="/tags">{t('tags')}</Link>
+                <Link to="/search" aria-label={t('search')} className="icon-link">
+                  <Search size={20} />
+                </Link>
+              </>
+            )}
             {user && (
               <Link to="/apps" aria-label={t('apps')} title={t('apps')} className="icon-link">
                 <LayoutGrid size={20} />

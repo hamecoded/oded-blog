@@ -30,7 +30,8 @@ function Fab({ pageActions }: { pageActions: FabAction[] }) {
     setPath(loc.pathname);
     setOpen(false);
   }
-  if (/\/(edit|new)$/.test(loc.pathname) || loc.pathname.endsWith('/print')) return null;
+  // Hidden in editors, print views and inside an app (/apps/<app>): an app has the whole screen and its own controls.
+  if (/\/(edit|new)$/.test(loc.pathname) || loc.pathname.endsWith('/print') || /\/apps\/[^/]+/.test(loc.pathname)) return null;
 
   const go = (path: string) => () => nav(path);
   const actions: FabAction[] = [

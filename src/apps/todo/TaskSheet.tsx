@@ -6,9 +6,11 @@ import {
   ListTree,
   Database,
   History,
+  Inbox,
   Lock,
   MessageSquare,
   Plus,
+  Sun,
   Swords,
   Trash2,
   Users,
@@ -116,6 +118,7 @@ export function TaskSheet({
   onReorder,
   onMoveUnder,
   onSetGoal,
+  onMoved,
   onPlayQuest,
 }: {
   /** The task open in the sheet; null with a draft for a new one, null without a draft when closed. */
@@ -138,6 +141,8 @@ export function TaskSheet({
   onMoveUnder: (task: Todo, parentId: string | null) => void;
   /** Makes a task a goal (out of its parent, off the day lists), or takes the mark off. */
   onSetGoal: (task: Todo, on: boolean) => void;
+  /** After the sheet's "to today" / "to the pool" button moved the task (for a toast). */
+  onMoved?: (task: Todo, toToday: boolean) => void;
   onPlayQuest: (id: string) => void;
 }) {
   const tt = useTt();
@@ -172,8 +177,8 @@ export function TaskSheet({
 
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm((f) => ({ ...f, [k]: v }));
 
-  const commit = () => {
-    const f = tidy(form);
+  const commit = (cur: Form = form) => {
+    const f = tidy(cur);
     if (!task) {
       if (f.title) onCreate({ ...draft, ...f, link: cleanLink(f.link), root_id: draftParent });
       return;
@@ -549,6 +554,23 @@ export function TaskSheet({
             </button>
           ) : (
             <span />
+          )}
+          {/* Where the task is now decides the move: from Today back to the pool, or from the pool (or a later day)
+              onto Today. Saves and closes. Not for a task with subtasks: those go to Today through their next step. */}
+          {task && isOpen(task) && kids.length === 0 && !isGoal(task, all) && (
+            <button
+              type="button"
+              className={`btn ghost todo-move-btn${form.day === today ? ' to-pool' : ''}`}
+              onClick={() => {
+                const toToday = form.day !== today;
+                commit({ ...form, day: toToday ? today : null });
+                onMoved?.(task, toToday);
+                onClose();
+              }}
+            >
+              {form.day === today ? <Inbox size={16} aria-hidden /> : <Sun size={16} aria-hidden />}
+              {form.day === today ? tt('toPoolShort') : tt('toTodayShort')}
+            </button>
           )}
           <button type="button" className="btn primary" onClick={close} disabled={!task && !form.title.trim()}>
             {task ? tt('save') : tt('create')}

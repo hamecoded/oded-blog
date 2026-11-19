@@ -106,7 +106,7 @@ export function DrillBar({
     if (el) el.scrollLeft = lang === 'he' ? -el.scrollWidth : el.scrollWidth;
   }, [task?.id, lang]);
 
-  const crumb = (t: Todo, d: number) => (
+  const crumb = (t: Todo, d: number, last: boolean) => (
     <li key={t.id}>
       <button
         type="button"
@@ -119,12 +119,15 @@ export function DrillBar({
           {t.title || tt('untitled')}
         </span>
       </button>
-      <Sep size={15} aria-hidden className="todo-drill-sep" />
+      {!last && <Sep size={15} aria-hidden className="todo-drill-sep" />}
     </li>
   );
 
-  /** "This task" and the path only mean something in a drill-down: a goal above it or subtasks below. */
-  const showTrail = path.length > 0 || kids.length > 0;
+  /**
+   * The path is the task's ancestors only, from its goal down to its parent: no chip for the task itself (the sheet's
+   * title already says which task this is). A goal, or a task outside any goal, has no path.
+   */
+  const showTrail = path.length > 0;
   const goalsMenu = goals.length > 0 && (
     <BarMenu
       label={tt('goals')}
@@ -163,18 +166,7 @@ export function DrillBar({
         <div className="todo-drill-path">
           {showTrail && goalsMenu}
           <ol className="todo-drill-trail" ref={trail}>
-            {path.map((t, i) => crumb(t, i))}
-            {/* "This task" only means something in a drill-down: when there's a goal above it or subtasks below. */}
-            {showTrail && (
-              <li aria-current="page">
-                <span className={`todo-drill-crumb is-here tier-${tier}`}>
-                  <span className="tier">
-                    {task ? (depth === 0 && !goal ? tt('editTask') : tt(`tier_${tier}`)) : depth === 0 ? tt('newTask') : tt(`new_${tier as 'step' | 'action'}`)}
-                  </span>
-                  <span className="name">{tt('youAreHereShort')}</span>
-                </span>
-              </li>
-            )}
+            {path.map((t, i) => crumb(t, i, i === path.length - 1))}
           </ol>
         </div>
       )}

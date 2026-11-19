@@ -5925,6 +5925,24 @@ body:has(.todo-nav) .fab {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* A goal row: a gold edge and a "Goal" chip, so it stands apart from the tasks around it. */
+.todo-row.is-goal {
+  border-color: color-mix(in srgb, var(--tg-gold) 55%, var(--border));
+  background: linear-gradient(to left, color-mix(in srgb, var(--tg-gold) 9%, var(--surface)), var(--surface) 70%);
+}
+.todo-row.is-goal:dir(ltr) {
+  background: linear-gradient(to right, color-mix(in srgb, var(--tg-gold) 9%, var(--surface)), var(--surface) 70%);
+}
+.todo-row.is-goal::before {
+  background: var(--tg-gold);
+}
+.todo-m.goal {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tg-gold) 20%, transparent);
+  color: color-mix(in srgb, var(--tg-gold) 70%, var(--text));
+  font-weight: 700;
+}
 .todo-m.st {
   padding: 0 7px;
   border-radius: 999px;
@@ -6922,6 +6940,15 @@ body:has(.todo-nav) .fab {
   background: var(--surface);
   border-top: 1px solid var(--border);
 }
+.todo-sheet-foot .todo-move-btn {
+  margin-inline-start: auto; /* next to Save, away from Delete */
+  color: var(--tg-gold);
+  border-color: color-mix(in srgb, var(--tg-gold) 45%, var(--border));
+}
+.todo-sheet-foot .todo-move-btn.to-pool {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
 .todo-sheet-foot .btn.primary {
   min-width: 120px;
   box-shadow: 0 3px 0 color-mix(in srgb, var(--accent) 55%, #000);
@@ -7628,9 +7655,14 @@ button.todo-drill-crumb:focus-visible {
 }
 .todo-drill-moves {
   display: flex;
+  flex-wrap: wrap; /* goals, promote, siblings and the drill-down chip: wrap rather than spill out of the bar */
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+.todo-drill-moves > * {
+  min-width: 0;
+  max-width: 100%;
 }
 .todo-drill-sibs {
   display: inline-flex;

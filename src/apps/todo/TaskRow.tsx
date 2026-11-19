@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { AtSign, Bell, CalendarClock, Clock, CornerDownRight, ExternalLink, Flame, Hourglass, ListTree, Lock } from 'lucide-react';
+import { AtSign, Bell, CalendarClock, Clock, CornerDownRight, ExternalLink, Flag, Flame, Hourglass, ListTree, Lock } from 'lucide-react';
 import type { Lang, Todo } from '../../lib/types';
 import { STATUS_ICON, TYPE_ICON } from './look';
-import { blockers, childTier, dayLabel, depthOf, hostOf, isOpen, SIZES, stepsOf, tierOf, xpFor } from './model';
+import { blockers, childTier, dayLabel, depthOf, hostOf, isGoal, isOpen, SIZES, stepsOf, tierOf, xpFor } from './model';
 import { useTt } from './strings';
 
 export interface Origin {
@@ -58,6 +58,16 @@ export function TaskRow({
   const soon = (iso: string | null) => !!iso && iso <= today && isOpen(task);
   const meta: ReactNode[] = [];
   const when = (iso: string | null) => (iso ? dayLabel(iso, today, lang, tt) : '');
+  // A goal is marked as one (a "Goal" chip, a gold edge), so it doesn't read as just another task in a list.
+  const goal = isGoal(task, all);
+  if (goal) {
+    meta.push(
+      <span key="goal" className="todo-m goal" data-tip={tt('tipGoal')}>
+        <Flag size={12} aria-hidden />
+        {tt('tier_purpose')}
+      </span>,
+    );
+  }
 
   if (root && !hideRoot) {
     const siblings = stepsOf(root.id, all);
@@ -175,7 +185,7 @@ export function TaskRow({
   const style = { '--prog': kids.length ? kidsDone / kids.length : 0 } as CSSProperties;
   return (
     <li
-      className={`todo-row ty-${task.type} p${task.priority} is-${task.status}${blocked ? ' is-blocked' : ''}${depth ? ` is-${tierOf(depth)}` : ''}${className ? ` ${className}` : ''}`}
+      className={`todo-row ty-${task.type} p${task.priority} is-${task.status}${blocked ? ' is-blocked' : ''}${goal ? ' is-goal' : ''}${depth ? ` is-${tierOf(depth)}` : ''}${className ? ` ${className}` : ''}`}
       style={rowStyle ? { ...style, ...rowStyle } : style}
       data-id={task.id}
     >

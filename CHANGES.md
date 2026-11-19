@@ -7,6 +7,17 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-19 22:48
+
+- Fixed: To-do task sheet: the break-down chip no longer spills out of the navigation bar when it holds many chips; the row wraps
+- Added: To-do task sheet footer has a move button that follows where the task is: "Today" from the pool, "Pool" from Today (saves and closes)
+- Changed: To-do pool and done list leave out a goal (journey) that has no steps yet; it stays on the journeys page
+- Added: To-do goal rows are marked as goals (a gold edge and a "Goal" chip), so they stand apart from tasks in the done list and elsewhere
+- Changed: To-do task sheet: the navigation bar no longer shows a "this task" chip pointing at the open task; the path lists only its goal and parents
+- Changed: Inside an app, the top bar no longer shows the Tags and Search links
+- Changed: The floating menu button is hidden inside an app (it stays on the Apps page itself)
+- Changed: To-do bottom tabs: Journeys moved next to Today, on the other side from the pool (in Hebrew, right to left: Lists, Pool, Today, Journeys, Done)
+
 ## 2026-11-19 22:24
 
 - Changed: To-do Today tab is a raised round button in the middle of the tab bar, always in the accent colours (glowing when it's the open tab)
