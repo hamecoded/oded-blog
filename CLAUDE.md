@@ -123,6 +123,16 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   drops a task before/after a sibling (`placeStep()` in App.tsx), carrying the rows shown under it.
   Tasks with subtasks never sit on Today or come up as leftovers (`parents` in App.tsx); "Today" on one sends its
   `nextLeaf()`, and a task on a day list hands its place to its first subtask (`create()`).
+  A task's main link (`todos.link`) is cleaned by `cleanLink()` (util.ts: https:// added, http/https only, matching the
+  `todos_link_check` constraint) and opens from the form, the pinned title and the row. The task form leads with the
+  flow under the `DrillBar` (subtasks card, stage, depends on, part of), then description, main link, where, type,
+  labels; levels and dates last.
+  Goals = `isGoal()`: top-level and either marked (`todos.goal`, set by "Make it a goal" in the `DrillBar` or by
+  starting a journey) or having steps; goals count as parents (never on Today). Completing or quitting a task offers
+  `UndoBar` for 5 s: the undo is `update(patches, quiet = true)`, which restores stage, day and log without logging.
+  `UndoBar` is a manual popover portalled into the open sheet's dialog when there is one (a modal dialog makes the
+  rest of the page inert). The `Hud` has `mode` 'day' on Today (done / set for today) and 'xp' elsewhere; Journeys
+  has none.
 - **No page zoom on phones (2026-11-11):** `maximum-scale=1, user-scalable=no` in index.html, `touch-action:
   pan-x pan-y` on `html`, and Safari's `gesturestart`/`gesturechange` cancelled in main.tsx. Form fields use 16px
   text so focusing them doesn't zoom either.
@@ -199,6 +209,8 @@ Supabase project `tbwskzgkmoztdejeiyhz`); `.deploy.json` records the last deploy
 - **Every UI string goes in both dictionaries** in `src/lib/i18n.ts`. `he` is typed as
   `Dict`, so a missing key fails the typecheck. Avoid duplicate keys: `copied` already
   exists, for example.
+- **Sticky needs `overflow-x: clip` on the page.** `body` uses `clip` (index.css); `overflow-x: hidden` there would
+  make it a scroll container and silently stop every `position: sticky` bar from sticking.
 - **RTL first.** Use logical CSS properties (`margin-inline-start`, `inset-inline`). Give
   user-entered text `dir="auto"`, and give emails, usernames and URLs `dir="ltr"`.
 - **Styles** are all in `src/index.css`, using the color tokens defined there (`var(--accent)`

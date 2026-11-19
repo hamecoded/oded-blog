@@ -7,15 +7,15 @@ import type { Tt } from './strings';
 
 interface Shown {
   xp: number;
-  ring: number;
   /** 0–1: how far the level-up flash and the bar's shine have run. */
   flash: number;
   shine: number;
 }
 
 /**
- * The game bar across the top: level badge, experience bar towards the next level, the streak flame and a ring
- * for today's list. Drawn on a canvas; values glide to their new numbers and the bar shines when XP is gained.
+ * The game bar across the top: level badge, a progress bar and the streak flame. On Today (`mode` 'day') the bar
+ * is the day's list: tasks done out of the tasks set for today; elsewhere ('xp') it's the experience towards the
+ * next level. Drawn on a canvas; the bar glides to its new value and shines when it grows.
  */
 export function Hud({
   stats,
@@ -26,7 +26,12 @@ export function Hud({
   lang,
   tt,
   onLevel,
+  mode,
+  home,
 }: {
+  /** The app's icon (back to the Apps page), at the bar's inline start. */
+  home: React.ReactNode;
+  mode: 'day' | 'xp';
   /** Opens the explanation of levels (a tap on the badge). */
   onLevel: () => void;
   stats: Stats;
@@ -43,13 +48,12 @@ export function Hud({
   const prevLevel = useRef(stats.level);
   const raf = useRef(0);
 
-  const xpTarget = stats.span ? stats.into / stats.span : 0;
-  const ringTarget = total ? done / total : 0;
+  const xpTarget = mode === 'day' ? (total ? done / total : 0) : stats.span ? stats.into / stats.span : 0;
 
   useEffect(() => {
     const c = ref.current;
     if (!c || !pal || !size.w) return;
-    const s = (shown.current ??= { xp: xpTarget, ring: ringTarget, flash: 1, shine: 1 });
+    const s = (shown.current ??= { xp: xpTarget, flash: 1, shine: 1 });
     if (stats.level !== prevLevel.current) {
       // Levelled up (or down, after reopening): the bar restarts from its far end.
       if (stats.level > prevLevel.current) s.xp = 0;
@@ -63,34 +67,32 @@ export function Hud({
       last = now;
       if (reduced) {
         s.xp = xpTarget;
-        s.ring = ringTarget;
         s.flash = s.shine = 1;
       } else {
         s.xp += (xpTarget - s.xp) * Math.min(1, dt * 6);
-        s.ring += (ringTarget - s.ring) * Math.min(1, dt * 6);
         s.flash = Math.min(1, s.flash + dt / 0.9);
         s.shine = Math.min(1, s.shine + dt / 1.2);
       }
-      draw(c, size.w, size.h, s, stats, done, total, pal, lang, tt);
-      const moving = Math.abs(s.xp - xpTarget) > 0.002 || Math.abs(s.ring - ringTarget) > 0.002 || s.flash < 1 || s.shine < 1;
+      draw(c, size.w, size.h, s, stats, done, total, pal, lang, tt, mode);
+      const moving = Math.abs(s.xp - xpTarget) > 0.002 || s.flash < 1 || s.shine < 1;
       raf.current = moving ? requestAnimationFrame(frame) : 0;
     };
     cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf.current);
-  }, [xpTarget, ringTarget, stats, done, total, pal, size, reduced, lang, tt]);
+  }, [xpTarget, stats, done, total, pal, size, reduced, lang, tt, mode]);
 
   const label = [
     tt('level', { n: stats.level }),
-    tt('xpOf', { n: stats.into, m: stats.span }),
+    mode === 'day' ? (total ? tt('todayRing', { n: done, m: total }) : tt('dayBarEmpty')) : tt('xpOf', { n: stats.into, m: stats.span }),
     stats.streak ? tt('streak', { n: stats.streak }) : '',
-    total ? tt('todayRing', { n: done, m: total }) : '',
   ]
     .filter(Boolean)
     .join(' · ');
   return (
     <div className="todo-hud-wrap">
       <canvas ref={ref} className="todo-hud" role="img" aria-label={label} />
+      <span className="todo-hud-home">{home}</span>
       {/* The badge is drawn on the canvas; this invisible button over it makes it tappable and focusable. */}
       <button type="button" className="todo-hud-level" onClick={onLevel} aria-label={tt('levelsOpen', { n: stats.level })} data-tip={tt('levelsOpen', { n: stats.level })} />
     </div>
@@ -108,6 +110,7 @@ function draw(
   pal: Palette,
   lang: Lang,
   tt: Tt,
+  mode: 'day' | 'xp',
 ) {
   const g = ctx2d(c);
   if (!g) return;
@@ -118,8 +121,8 @@ function draw(
   g.direction = rtl ? 'rtl' : 'ltr';
   const font = (w: number, px: number) => `${w} ${px}px ${pal.font}`;
 
-  // ── Level badge: a hexagon with depth, popping on level up ──
-  const bx = X(28);
+  // ── Level badge (inline end; the app icon is at the start): a hexagon with depth, popping on level up ──
+  const bx = X(W - 28);
   const pop = s.flash < 1 ? 1 + 0.25 * Math.sin(easeBack(s.flash) * Math.PI) : 1;
   const hex = (r: number, dy: number) => {
     g.beginPath();
@@ -153,32 +156,8 @@ function draw(
   g.font = font(900, 17);
   g.fillText(String(stats.level), bx, cy + 4);
 
-  // ── Today ring (inline end) ──
-  const rx = X(W - 26);
-  const rr = 19;
-  g.lineWidth = 6;
-  g.strokeStyle = pal.track;
-  g.beginPath();
-  g.arc(rx, cy, rr, 0, Math.PI * 2);
-  g.stroke();
-  if (total) {
-    const start = -Math.PI / 2;
-    const end = start + Math.PI * 2 * s.ring * (rtl ? -1 : 1);
-    g.strokeStyle = s.ring >= 0.999 ? pal.gold : pal.st.completed;
-    g.lineCap = 'round';
-    g.beginPath();
-    g.arc(rx, cy, rr, start, end, rtl);
-    g.stroke();
-    g.lineCap = 'butt';
-  }
-  g.fillStyle = pal.text;
-  g.font = font(800, total >= 10 ? 10 : 12);
-  g.direction = 'ltr';
-  g.fillText(total ? `${done}/${total}` : '–', rx, cy + 1);
-  g.direction = rtl ? 'rtl' : 'ltr';
-
   // ── Streak flame ──
-  const fx = X(W - 70);
+  const fx = X(W - 72);
   const lit = stats.streak > 0;
   g.save();
   g.translate(fx, cy - 2);
@@ -207,7 +186,7 @@ function draw(
   g.fillText(String(stats.streak), fx, cy + 19);
 
   // ── XP bar ──
-  const x0 = 62;
+  const x0 = 58;
   const x1 = W - 96;
   const bw = Math.max(40, x1 - x0);
   const by = cy + 1;
@@ -217,13 +196,17 @@ function draw(
   g.textAlign = rtl ? 'right' : 'left';
   g.fillStyle = pal.text;
   g.font = font(800, 13);
-  g.fillText(tt('level', { n: stats.level }), X(x0), by - 6);
+  g.fillText(mode === 'day' ? tt('today') : tt('level', { n: stats.level }), X(x0), by - 6);
   g.textAlign = rtl ? 'left' : 'right';
   g.fillStyle = pal.muted;
   g.font = font(700, 11);
-  g.direction = 'ltr';
+  g.direction = mode === 'day' && rtl ? 'rtl' : 'ltr';
   g.textAlign = rtl ? 'left' : 'right';
-  g.fillText(tt('xpOf', { n: stats.into, m: stats.span }), X(x0 + bw), by - 6);
+  g.fillText(
+    mode === 'day' ? (total ? tt('dayBar', { n: done, m: total }) : tt('dayBarEmpty')) : tt('xpOf', { n: stats.into, m: stats.span }),
+    X(x0 + bw),
+    by - 6,
+  );
   g.direction = rtl ? 'rtl' : 'ltr';
 
   rrect(g, barX, by, bw, bh, bh / 2);
@@ -253,7 +236,8 @@ function draw(
     }
     g.restore();
   }
-  // tick marks every 10%
+  // Tick marks: one per task on Today (when they fit), otherwise every 10%.
+  const ticks = mode === 'day' && total > 1 && total <= 20 ? total : 10;
   g.fillStyle = alpha(pal.surface, 0.5);
-  for (let i = 1; i < 10; i++) g.fillRect(barX + (bw * i) / 10, by + 3, 1, bh - 6);
+  for (let i = 1; i < ticks; i++) g.fillRect(barX + (bw * i) / ticks, by + 3, 1, bh - 6);
 }

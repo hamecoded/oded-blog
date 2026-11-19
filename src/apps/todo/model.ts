@@ -219,6 +219,23 @@ export function foldOutline(rows: { task: Todo; level: number }[], collapsed: Se
   return out;
 }
 
+/**
+ * A goal: a top-level task that's marked as one (promoted, or started from the journeys) or already has steps.
+ * Goals are the journeys; like any task with subtasks they never sit on Today themselves.
+ */
+export function isGoal(t: Todo, all: Todo[]): boolean {
+  return !t.root_id && (t.goal || all.some((k) => k.root_id === t.id));
+}
+
+/** The site a link points at, for labels ("example.com"). */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
 /** `list` with the item at `from` moved to index `to`. */
 export function moved<T>(list: T[], from: number, to: number): T[] {
   const out = [...list];

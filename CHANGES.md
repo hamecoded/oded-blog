@@ -7,9 +7,27 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-19 22:24
+
+- Changed: To-do Today tab is a raised round button in the middle of the tab bar, always in the accent colours (glowing when it's the open tab)
+- Changed: To-do bottom tabs reordered so Today is in the middle: Journeys, Pool, Today, Lists, Done
+- Changed: To-do: the Journeys tab always opens on the list of journeys; the navigation bar of a task with nothing above or below it no longer shows the lone "this task" chip
+- Fixed: To-do: opening a new task with details (the sliders button by the add field) crashed the app since the navigation bar came in (it looked for a label for a new top-level task that didn't exist)
+- Changed: To-do "Part of" dropdown starts with a clear "No goal" choice (a task of its own), and is offered on new tasks too, so a task can be filed under a goal (or step), or under none, while it's being created
+- Changed: To-do app has no "← Apps" header row any more: the app's icon sits at the start of the level bar (or of the top row on Journeys) and leads back to the Apps page; the level badge moved to the other end of the bar, next to the streak
+- Changed: To-do level bar: on Today it shows the day's list (tasks done out of the tasks set for today, one tick per task); on the other tabs it stays the XP towards the next level; it's gone from Journeys; the today ring with its "–" at the end of the bar is removed
+- Added: To-do undo: completing a task (or marking it done or quit in the morning review) shows "Done: …  Undo" for 5 seconds with a draining bar; Undo puts the task back as it was (stage, day list and log), and the XP goes with it. It shows over an open task sheet too
+- Added: To-do goals: "Make it a goal" in a task's navigation bar promotes it to a goal (a journey): out of its parent with its own steps, off the day lists, listed in Journeys and the goals menu even before it has steps; new journeys start as goals; "Not a goal" takes the mark off a goal without steps. The top tier is now called Goal (יעד). Needs `npm run db:update` (new `todos.goal` column)
+- Fixed: pinned bars not staying put when scrolling the page (the site header, the post editor's toolbar, table heads, the to-do top bar): the page body's `overflow-x: hidden` made it a scroll container of its own, which breaks `position: sticky`; it's now `overflow-x: clip`
+- Changed: To-do journeys (and an opened list or tag): the row with the back button now sits at the very top, above the level bar, and stays pinned while scrolling
+- Added: To-do task navigation bar: a bold bar at the top of every task's sheet showing its drill-down path from the goal (goal → step → action, each tier coloured and tappable), a Goals menu to jump to any goal with its progress, previous/next among its siblings, and a menu to drill into its subtasks (or "Break into steps" when it has none). Replaces the small "part of" line
+- Changed: To-do task form puts the task's flow first: subtasks (now a highlighted card with a progress bar), stage, what it waits for and what it's part of; then description, today/pool, type, lists and tags; priority, urgency and dates come last
+- Added: To-do tasks have a main link: a field under the description in the task form with an Open button, a link button next to the title, and a link button on the task's row in every list (opens in a new tab; plain addresses get https://, only web addresses are kept). Needs `npm run db:update` (new `todos.link` column) before deploying
+- Changed: Apps store shows the To-do app first
+
 ## 2026-11-19 19:28
 
-- Added: post summary on the post page: shown under the title and tags, two lines with "Read more" / "Show less" (the button only appears when the summary is longer than two lines)
+- Added: post summary on the post page: shown under the title and tags, two lines with "Read more" / "Show less" (the button only appears when the summary is longer than two lines); printed and PDF versions show the whole summary. Hidden when no summary was written (the one filled in from the body for list cards doesn't count); the editor now shows such a summary as empty, so it is remade from the body on each save instead of going stale
 - Changed: To-do: a task with subtasks has no "Today" button in the pool, lists or reminders (it never goes on Today itself; its subtasks keep theirs)
 
 ## 2026-11-11 02:13

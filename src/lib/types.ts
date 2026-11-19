@@ -302,6 +302,10 @@ export interface Todo {
   tags: string[];
   /** Named lists it belongs to: a list is simply every task that names it. */
   lists: string[];
+  /** The task's main link (a web address): opened straight from its row and its sheet. */
+  link: string | null;
+  /** Marked as a goal: a purpose shown in the journeys even before it has steps (promoted, or started as one). */
+  goal: boolean;
   /** Tasks that have to be finished first. */
   depends_on: string[];
   /** The task this one was derived from (null: a root purpose). */

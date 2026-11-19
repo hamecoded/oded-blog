@@ -6,7 +6,7 @@ import { errorText, useApp } from '../lib/app';
 import { anchorFromRange, type TextAnchor } from '../lib/anchor';
 import { downloadPostHtml, downloadPostMarkdown } from '../lib/export';
 import type { Comment, Post } from '../lib/types';
-import { can, inTagGroup, postPath, titleDir } from '../lib/util';
+import { can, inTagGroup, postPath, titleDir, writtenExcerpt } from '../lib/util';
 import { useSite } from '../lib/site';
 import { PublicComments } from '../site/PublicComments';
 import { PostContent } from '../components/PostContent';
@@ -123,7 +123,8 @@ export function PostView() {
           <h1 dir={titleDir(post.title, post.lang)}>{post.title}</h1>
           <PostMeta post={post} />
           <TagChips tags={post.tags} />
-          {post.excerpt.trim() && <PostSummary key={post.id} text={post.excerpt.trim()} lang={post.lang} />}
+          {/* Only a summary the author wrote: one filled in from the body would just repeat the opening. */}
+          {writtenExcerpt(post) && <PostSummary key={post.id} text={writtenExcerpt(post)} lang={post.lang} />}
         </header>
 
         <PostContent

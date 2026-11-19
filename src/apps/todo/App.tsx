@@ -43,6 +43,7 @@ import {
   moved,
   foldOutline,
   nextLeaf,
+  isGoal,
   nestTasks,
   parseQuick,
   progressOf,
@@ -63,7 +64,9 @@ import { QuestMap } from './QuestMap';
 import { ReviewSheet, type Decision } from './ReviewSheet';
 import { useTt, type TKey } from './strings';
 import { TaskRow, type Origin } from './TaskRow';
+import { HomeLink } from './HomeLink';
 import { LevelsSheet } from './LevelsSheet';
+import { UndoBar } from './UndoBar';
 import { TaskSheet } from './TaskSheet';
 import { TipLayer } from './TipLayer';
 
@@ -110,12 +113,15 @@ export default function TodoApp() {
   const [text, setText] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [draft, setDraft] = useState<TodoDraft | null>(null);
-  const [questId, setQuestId] = useState<string | null>(() => recall('quest'));
+  /** The journey open in the Journeys tab; null shows the list (where the tab always starts). */
+  const [questId, setQuestId] = useState<string | null>(null);
   const [label, setLabel] = useState<Label | null>(null);
   /** null: the review opens by itself once a day when there are leftovers. */
   const [reviewChoice, setReviewChoice] = useState<boolean | null>(null);
   const [promptedOn, setPromptedOn] = useState(() => recall('reviewed'));
   const [levelsOpen, setLevelsOpen] = useState(false);
+  /** The last completion (or quit) that can still be taken back; replaced by the next one. */
+  const [undo, setUndo] = useState<{ key: number; text: string; patches: Patch[] } | null>(null);
   /** Pool tasks folded shut (their subtasks hidden); kept per browser. */
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
@@ -156,7 +162,10 @@ export default function TodoApp() {
   const byId = useMemo(() => new Map(all.map((r) => [r.id, r])), [all]);
   const stats = useMemo(() => statsOf(all, today), [all, today]);
   /** Tasks that have subtasks. They never sit on Today themselves (nor come up as leftovers): only their subtasks do. */
-  const parents = useMemo(() => new Set(all.map((r) => r.root_id).filter((x): x is string => !!x)), [all]);
+  const parents = useMemo(
+    () => new Set([...all.map((r) => r.root_id).filter((x): x is string => !!x), ...all.filter((r) => r.goal && !r.root_id).map((r) => r.id)]),
+    [all],
+  );
   const leftovers = useMemo(
     () =>
       all
@@ -175,7 +184,7 @@ export default function TodoApp() {
     return sortTasks(f, sort, today, byId);
   }, [pool, filter, sort, today, byId]);
   const purposes = useMemo(() => {
-    const list = all.filter((r) => !r.root_id && (all.some((k) => k.root_id === r.id) || r.id === questId));
+    const list = all.filter((r) => isGoal(r, all) || (r.id === questId && !r.root_id));
     return list.sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || b.updated_at.localeCompare(a.updated_at));
   }, [all, questId]);
   const quest = questId ? byId.get(questId) : undefined;
@@ -201,6 +210,8 @@ export default function TodoApp() {
   const setTab = (v: Tab) => {
     setTabState(v);
     remember('tab', v);
+    // The Journeys tab always opens on the list of journeys (a journey is picked from there).
+    if (v === 'quests') setQuestId(null);
     window.scrollTo({ top: 0 });
   };
   const setSort = (v: SortKey) => {
@@ -213,16 +224,16 @@ export default function TodoApp() {
   };
   const pickQuest = (id: string | null) => {
     setQuestId(id);
-    remember('quest', id ?? '');
     window.scrollTo({ top: 0 });
   };
 
   // ── Changes: shown at once, then saved; on failure the list reloads. Stage and day moves are logged. ──
-  const update = (list: Patch[]) => {
+  /** `quiet`: an undo putting tasks back as they were, so nothing is added to their log. */
+  const update = (list: Patch[], quiet = false) => {
     const now = new Date().toISOString();
     const ps = merge(list).map((p) => {
       const before = byId.get(p.id);
-      const entries = before ? logFor(before, p, now) : [];
+      const entries = before && !quiet ? logFor(before, p, now) : [];
       return entries.length ? { ...p, log: [...(p.log ?? before!.log), ...entries] } : p;
     });
     if (!ps.length) return;
@@ -295,10 +306,14 @@ export default function TodoApp() {
       toast(lvl > stats.level ? tt('levelUp', { n: lvl }) : `${tt('questComplete')} ${root?.title ?? ''}`);
     }
   };
+  /** Offers, for a few seconds, to put tasks back exactly as they were (stage, day list, log). */
+  const offerUndo = (text: string, before: Todo[]) =>
+    setUndo({ key: Date.now(), text, patches: before.map((t) => ({ id: t.id, status: t.status, day: t.day, log: t.log })) });
   const toggle = (task: Todo, from?: Origin) => {
     if (isOpen(task)) {
       update([{ id: task.id, status: 'completed' }]);
       celebrate(task, from);
+      offerUndo(tt('undoDone', { title: task.title || tt('untitled') }), [task]);
     } else {
       update([{ id: task.id, status: 'inprogress', day: task.day && task.day < today ? today : task.day }]);
     }
@@ -342,6 +357,18 @@ export default function TodoApp() {
       .map((s) => s.id);
   };
   const outline = useOutlineDrag(poolSiblings, placeStep);
+  /**
+   * Makes a task a goal (a journey): out of its parent if it has one (taking its own subtasks along) and off the
+   * day lists. `false` takes the mark off again (a goal that already has steps stays one, by having them).
+   */
+  const setGoal = (task: Todo, on: boolean) => {
+    if (!on) {
+      update([{ id: task.id, goal: false }]);
+      return toast(tt('goalRemoved'));
+    }
+    update([...(task.root_id ? reparent(task, null, all) : []), { id: task.id, goal: true, day: null }]);
+    toast(tt('promoted', { title: task.title || tt('untitled') }));
+  };
   const moveUnder = (task: Todo, parentId: string | null) => {
     if ((task.root_id ?? null) === parentId) return;
     const p0 = parentId ? byId.get(parentId) : undefined;
@@ -354,7 +381,11 @@ export default function TodoApp() {
     if (d === 'done') {
       update([{ id: task.id, status: 'completed' }]);
       celebrate(task);
-    } else if (d === 'drop') update([{ id: task.id, status: 'quit' }]);
+      offerUndo(tt('undoDone', { title: task.title || tt('untitled') }), [task]);
+    } else if (d === 'drop') {
+      update([{ id: task.id, status: 'quit' }]);
+      offerUndo(tt('undoQuit', { title: task.title || tt('untitled') }), [task]);
+    }
     else update([{ id: task.id, ...refine, day: d === 'today' ? today : null }]);
   };
   const decideAll = (d: 'today' | 'pool') => {
@@ -636,20 +667,23 @@ export default function TodoApp() {
     </>
   );
 
+  /** Inside a quest or a list, the row back out: shown at the very top, above the level bar. */
+  const questHead = quest && (
+    <div className="todo-quest-head">
+      <button type="button" className="icon-btn" onClick={() => pickQuest(null)} aria-label={tt('allQuests')} data-tip={tt('allQuests')}>
+        <Back size={20} />
+      </button>
+      <button type="button" className="todo-quest-title" onClick={() => openTask(quest.id)}>
+        <span className="tier">{tt('tier_purpose')}</span>
+        <span dir="auto">{quest.title || tt('untitled')}</span>
+      </button>
+      <span className="todo-ring" style={{ '--p': progressOf(quest, all) } as React.CSSProperties}>
+        {Math.round(progressOf(quest, all) * 100)}%
+      </span>
+    </div>
+  );
   const questsView = quest ? (
     <>
-      <div className="todo-quest-head">
-        <button type="button" className="icon-btn" onClick={() => pickQuest(null)} aria-label={tt('allQuests')} data-tip={tt('allQuests')}>
-          <Back size={20} />
-        </button>
-        <button type="button" className="todo-quest-title" onClick={() => openTask(quest.id)}>
-          <span className="tier">{tt('tier_purpose')}</span>
-          <span dir="auto">{quest.title || tt('untitled')}</span>
-        </button>
-        <span className="todo-ring" style={{ '--p': progressOf(quest, all) } as React.CSSProperties}>
-          {Math.round(progressOf(quest, all) * 100)}%
-        </span>
-      </div>
       <QuestMap
         purpose={quest}
         all={all}
@@ -671,7 +705,7 @@ export default function TodoApp() {
           const title = String(new FormData(e.currentTarget).get('purpose') ?? '').trim();
           if (!title) return;
           e.currentTarget.reset();
-          const saved = await create({ title, day: null, type: 'planning', status: 'defined' });
+          const saved = await create({ title, day: null, type: 'planning', status: 'defined', goal: true });
           if (saved) pickQuest(saved.id);
         }}
       >
@@ -723,18 +757,20 @@ export default function TodoApp() {
   const lists = labelsIn(all, 'lists');
   const tags = labelsIn(all, 'tags');
   const labelTasks = label ? sortTasks(all.filter((r) => hasLabel(r[label.kind], label.name) && r.status !== 'quit'), sort, today, byId) : [];
+  const labelHead = label && (
+    <div className="todo-quest-head">
+      <button type="button" className="icon-btn" onClick={() => setLabel(null)} aria-label={tt('allLists')} data-tip={tt('allLists')}>
+        <Back size={20} />
+      </button>
+      <h2 className="todo-label-title" dir="auto">
+        {label.kind === 'tags' ? <Hash size={18} aria-hidden /> : <LayoutList size={18} aria-hidden />}
+        {label.name}
+      </h2>
+      <span className="muted small">{tt('openN', { n: labelTasks.filter(isOpen).length })}</span>
+    </div>
+  );
   const listsView = label ? (
     <>
-      <div className="todo-quest-head">
-        <button type="button" className="icon-btn" onClick={() => setLabel(null)} aria-label={tt('allLists')} data-tip={tt('allLists')}>
-          <Back size={20} />
-        </button>
-        <h2 className="todo-label-title" dir="auto">
-          {label.kind === 'tags' ? <Hash size={18} aria-hidden /> : <LayoutList size={18} aria-hidden />}
-          {label.name}
-        </h2>
-        <span className="muted small">{tt('openN', { n: labelTasks.filter(isOpen).length })}</span>
-      </div>
       {labelTasks.length > 0 && viewBar({ sort: true, groups: GROUPS })}
       {grouped(labelTasks, (r) => (r.day === today || !isOpen(r) ? {} : { showRemind: true, action: toTodayBtn(r) }), label.kind === 'lists' && group === 'list' ? 'tag' : group)}
     </>
@@ -798,9 +834,10 @@ export default function TodoApp() {
     );
 
   const nav: { id: Tab; label: TKey; icon: typeof Sun; n?: number; dot?: boolean }[] = [
-    { id: 'today', label: 'today', icon: Sun, n: todayAll.length - doneToday, dot: reminded.length > 0 },
-    { id: 'pool', label: 'pool', icon: Inbox, n: pool.length },
+    // Today in the middle, within easy reach of the thumb; the pool right beside it.
     { id: 'quests', label: 'quests', icon: Swords, n: purposes.filter(isOpen).length },
+    { id: 'pool', label: 'pool', icon: Inbox, n: pool.length },
+    { id: 'today', label: 'today', icon: Sun, n: todayAll.length - doneToday, dot: reminded.length > 0 },
     { id: 'lists', label: 'lists', icon: LayoutList },
     { id: 'done', label: 'done', icon: CheckCheck },
   ];
@@ -816,8 +853,19 @@ export default function TodoApp() {
 
   return (
     <div className={`todo tab-${tab}`} ref={setRootEl}>
+      {/* The blog's app header row is hidden for this app (index.css); its heading lives on here for screen readers. */}
+      <h1 className="sr-only">{tt('appName')}</h1>
       <div className="todo-top">
-        <Hud onLevel={() => setLevelsOpen(true)} stats={stats} done={doneToday} total={todayAll.length} pal={pal} reduced={reduced} lang={lang} tt={tt} />
+        {tab === 'quests' && (
+          <div className="todo-home-row">
+            <HomeLink />
+            {questHead || <h2 className="todo-home-title">{tt('quests')}</h2>}
+          </div>
+        )}
+        {tab === 'lists' && labelHead}
+        {tab !== 'quests' && (
+        <Hud home={<HomeLink />} mode={tab === 'today' ? 'day' : 'xp'} onLevel={() => setLevelsOpen(true)} stats={stats} done={doneToday} total={todayAll.length} pal={pal} reduced={reduced} lang={lang} tt={tt} />
+        )}
         {canAdd && (
           <form className={`todo-add${text.trim() ? ' has-text' : ''}`} onSubmit={quickAdd}>
             <input
@@ -868,9 +916,15 @@ export default function TodoApp() {
 
       <nav className="todo-nav" aria-label={tt('sections')}>
         {nav.map(({ id, label: l, icon: Icon, n, dot }) => (
-          <button key={id} type="button" className={tab === id ? 'on' : undefined} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>
+          <button
+            key={id}
+            type="button"
+            className={[id === 'today' ? 'is-hero' : '', tab === id ? 'on' : ''].filter(Boolean).join(' ') || undefined}
+            aria-current={tab === id ? 'page' : undefined}
+            onClick={() => setTab(id)}
+          >
             <span className="todo-nav-ic">
-              <Icon size={21} aria-hidden />
+              <Icon size={id === 'today' ? 26 : 21} aria-hidden />
               {!!n && <span className="todo-count">{n > 99 ? '99+' : n}</span>}
               {dot && !n && <span className="todo-dot" />}
             </span>
@@ -895,6 +949,7 @@ export default function TodoApp() {
         onAddChild={(r, title) => void create({ title, root_id: r.id })}
         onReorder={reorder}
         onMoveUnder={moveUnder}
+        onSetGoal={setGoal}
         onPlayQuest={(id) => {
           closeSheet();
           setTab('quests');
@@ -911,6 +966,14 @@ export default function TodoApp() {
         onDecide={decide}
         onAll={decideAll}
         onClose={closeReview}
+      />
+      <UndoBar
+        undo={undo}
+        onUndo={() => {
+          if (undo) update(undo.patches, true);
+          setUndo(null);
+        }}
+        onClose={() => setUndo(null)}
       />
       <LevelsSheet open={levelsOpen} onClose={() => setLevelsOpen(false)} stats={stats} />
       <TipLayer root={rootEl} />

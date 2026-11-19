@@ -16,7 +16,9 @@ const app: AppManifest = {
   tags: ['tasks', 'quests', 'lists'],
   version: '1.0',
   updated: '2026-11-09',
-  order: 10,
+  // First in the store: Possessions is also featured, with order 1.
+  featured: true,
+  order: 0,
 };
 
 export default app;

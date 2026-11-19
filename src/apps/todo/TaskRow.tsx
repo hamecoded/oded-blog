@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { AtSign, Bell, CalendarClock, Clock, CornerDownRight, Flame, Hourglass, ListTree, Lock } from 'lucide-react';
+import { AtSign, Bell, CalendarClock, Clock, CornerDownRight, ExternalLink, Flame, Hourglass, ListTree, Lock } from 'lucide-react';
 import type { Lang, Todo } from '../../lib/types';
 import { STATUS_ICON, TYPE_ICON } from './look';
-import { blockers, childTier, dayLabel, depthOf, isOpen, SIZES, stepsOf, tierOf, xpFor } from './model';
+import { blockers, childTier, dayLabel, depthOf, hostOf, isOpen, SIZES, stepsOf, tierOf, xpFor } from './model';
 import { useTt } from './strings';
 
 export interface Origin {
@@ -202,6 +202,18 @@ export function TaskRow({
         </span>
         {meta.length > 0 && <span className="todo-meta">{meta}</span>}
       </button>
+      {task.link && (
+        <a
+          className="icon-btn sm todo-row-link"
+          href={task.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={tt('openLinkTo', { host: hostOf(task.link) })}
+          data-tip={tt('openLinkTo', { host: hostOf(task.link) })}
+        >
+          <ExternalLink size={17} />
+        </a>
+      )}
       {action}
     </li>
   );

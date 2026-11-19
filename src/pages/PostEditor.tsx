@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, ImagePlus, Trash2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import type { Lang, Post, PostDraft, PostStatus } from '../lib/types';
-import { can, hasHebrew, postPath, titleDir } from '../lib/util';
+import { can, hasHebrew, postPath, titleDir, writtenExcerpt } from '../lib/util';
 import { RichEditor } from '../editor/RichEditor';
 import { AudienceSheet } from '../components/Audience';
 import { VIS_ICON } from '../components/visIcons';
@@ -53,7 +53,8 @@ export function PostEditor() {
           id: p.id,
           slug: p.slug,
           title: p.title,
-          excerpt: p.excerpt,
+          // An automatic summary shows as empty, so saving after body edits makes a fresh one instead of freezing the old.
+          excerpt: writtenExcerpt(p),
           content_html: p.content_html,
           cover_url: p.cover_url,
           tags: p.tags,

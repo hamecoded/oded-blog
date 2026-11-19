@@ -114,6 +114,22 @@ export function makeExcerpt(text: string, max = 220): string {
   return `${cut.slice(0, sp > 120 ? sp : max)}…`;
 }
 
+/**
+ * Whether a post's summary was filled in automatically (savePost uses the start of the body when the summary box is
+ * left empty) rather than typed by the author: it is then just the body's opening, with "…" if it was cut. The post
+ * page hides such a summary, and the editor shows its box empty so the next save makes a fresh one from the body.
+ */
+export function isAutoExcerpt(excerpt: string, html: string): boolean {
+  const ex = excerpt.replace(/\s+/g, ' ').trim().replace(/…$/, '').trimEnd();
+  if (!ex) return true;
+  return htmlToText(html, true).startsWith(ex);
+}
+
+/** The summary the author actually wrote, or '' when there's none (empty or filled in from the body). */
+export function writtenExcerpt(post: { excerpt: string; content_html: string }): string {
+  return isAutoExcerpt(post.excerpt, post.content_html) ? '' : post.excerpt.trim();
+}
+
 export function hasHebrew(s: string): boolean {
   return /[֐-׿]/.test(s);
 }
@@ -469,6 +485,22 @@ export function cleanLabels(v: unknown): string[] {
 }
 
 /** A to-do draft cleaned up for saving, on top of `base` (the stored row) when updating. Both backends use it. */
+/**
+ * A task's main link, cleaned: trimmed, `https://` added when it's typed without a scheme ("example.com/x"), and
+ * anything that isn't a web address dropped, so the row's link button can never run script.
+ */
+export function cleanLink(v: unknown): string | null {
+  let s = clip(v, 2000).trim();
+  if (!s) return null;
+  if (!/^[a-z][a-z\d+.-]*:/i.test(s)) s = `https://${s.replace(/^\/+/, '')}`;
+  try {
+    const u = new URL(s);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
 export function todoFields(d: TodoDraft, base?: Todo) {
   const pick = <K extends keyof TodoDraft>(k: K) => (k in d ? d[k] : base?.[k as keyof Todo]);
   const level = (k: 'priority' | 'urgency' | 'complexity', max: number) => {
@@ -499,6 +531,8 @@ export function todoFields(d: TodoDraft, base?: Todo) {
     day: date('day'),
     tags: cleanLabels(pick('tags')),
     lists: cleanLabels(pick('lists')),
+    link: cleanLink(pick('link')),
+    goal: !!pick('goal'),
     depends_on: deps.slice(0, 50),
     root_id: ref('root_id'),
     prev_id: ref('prev_id'),

@@ -651,6 +651,12 @@ alter table public.todos add column if not exists estimate_date date;
 alter table public.todos add column if not exists deadline      date;
 alter table public.todos add column if not exists tags          text[] not null default '{}';
 alter table public.todos add column if not exists lists         text[] not null default '{}';
+-- The task's main link (http/https only; cleanLink() in util.ts checks it before saving).
+alter table public.todos add column if not exists link          text;
+-- Marked as a goal (a journey), even before it has steps.
+alter table public.todos add column if not exists goal          boolean not null default false;
+alter table public.todos drop constraint if exists todos_link_check;
+alter table public.todos add constraint todos_link_check check (link is null or (length(link) <= 2000 and link ~* '^https?://'));
 -- Named values, people involved, comments and history: arrays of small objects (see TodoDatum, TodoContact,
 -- TodoComment, TodoLogEntry in src/lib/types.ts; todoFields() caps their sizes).
 alter table public.todos add column if not exists data          jsonb not null default '[]';

@@ -79,6 +79,13 @@ body {
   -webkit-tap-highlight-color: transparent;
   overflow-x: hidden;
 }
+/* clip, not hidden: hidden makes <body> a scroll container of its own, and position: sticky inside it never sticks
+   (the site header, the editor's toolbar, table heads, the to-do top bar). Old browsers keep hidden. */
+@supports (overflow-x: clip) {
+  body {
+    overflow-x: clip;
+  }
+}
 a {
   color: var(--accent);
   text-decoration: none;
@@ -688,6 +695,17 @@ h3 {
 }
 .post-summary button:hover {
   text-decoration: underline;
+}
+@media print {
+  /* Printing the post page itself: the whole summary, no button. */
+  .post-summary p {
+    display: block;
+    -webkit-line-clamp: unset;
+    color: #444;
+  }
+  .post-summary button {
+    display: none;
+  }
 }
 .post-actions {
   display: flex;
@@ -5366,6 +5384,57 @@ body:has(.todo-nav) .fab {
 .todo-nav button:active .todo-nav-ic {
   transform: scale(0.92);
 }
+/* Today: the raised centre button, always in the accent colours so it stands out from the other tabs. */
+.todo-nav button.is-hero {
+  position: relative;
+  color: var(--accent);
+  font-weight: 800;
+}
+.todo-nav button.is-hero .todo-nav-ic {
+  width: 58px;
+  height: 58px;
+  margin-top: -26px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--accent), var(--accent-2));
+  color: #fff;
+  box-shadow:
+    0 0 0 5px var(--surface),
+    0 4px 0 5px color-mix(in srgb, var(--accent) 35%, var(--surface)),
+    0 10px 22px -6px color-mix(in srgb, var(--accent) 70%, transparent);
+  transform: none;
+}
+.todo-nav button.is-hero:not(.on) .todo-nav-ic {
+  filter: saturate(0.75) brightness(0.92);
+}
+.todo-nav button.is-hero.on .todo-nav-ic {
+  transform: translateY(-2px);
+  animation: todo-hero-glow 2.4s ease-in-out infinite;
+}
+.todo-nav button.is-hero:active .todo-nav-ic {
+  transform: scale(0.94);
+}
+.todo-nav button.is-hero .todo-nav-l {
+  position: relative;
+  z-index: 1;
+  margin-top: 6px;
+}
+.todo-nav button.is-hero .todo-count {
+  top: -2px;
+  inset-inline-end: -4px;
+}
+@keyframes todo-hero-glow {
+  50% {
+    box-shadow:
+      0 0 0 5px var(--surface),
+      0 4px 0 5px color-mix(in srgb, var(--accent) 35%, var(--surface)),
+      0 10px 28px -2px color-mix(in srgb, var(--accent-2) 80%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .todo-nav button.is-hero.on .todo-nav-ic {
+    animation: none;
+  }
+}
 .todo-count {
   display: inline-grid;
   place-items: center;
@@ -6034,6 +6103,9 @@ body:has(.todo-nav) .fab {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+.todo-top > .todo-quest-head {
+  margin: 2px 0 4px;
 }
 .todo-quest-head .icon-btn {
   margin: 0;
@@ -7025,7 +7097,7 @@ body:has(.todo-nav) .fab {
 .todo-hud-level {
   position: absolute;
   top: 0;
-  inset-inline-start: 0;
+  inset-inline-end: 0;
   width: 58px;
   height: 100%;
   border: 0;
@@ -7339,6 +7411,9 @@ body:has(.todo-nav) .fab {
   flex-shrink: 0;
   color: var(--tc);
 }
+.todo-menu-ic.is-none {
+  color: var(--muted);
+}
 .todo-menu-empty {
   padding: 10px;
   color: var(--muted);
@@ -7346,6 +7421,441 @@ body:has(.todo-nav) .fab {
 }
 .todo-labels-box {
   position: relative;
+}
+
+/* Task form: main link, the task-flow heading, and the subtasks card (the most emphasised block). */
+.todo-mainlink-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding-block: 4px;
+  padding-inline: 12px 4px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.todo-mainlink-row:focus-within {
+  border-color: var(--accent);
+}
+.todo .todo-mainlink-row input:not([type='checkbox']):not([type='radio']) {
+  flex: 1;
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+  outline: none;
+}
+.todo-mainlink-row .btn {
+  flex-shrink: 0;
+  min-height: 38px;
+  margin: 0;
+  padding: 0 14px;
+  border-radius: 10px;
+}
+.todo-open-link {
+  flex-shrink: 0;
+  margin-top: 4px;
+  color: var(--accent);
+}
+.todo .todo-row-link {
+  flex-shrink: 0;
+  margin: 0;
+  width: 34px;
+  height: 34px;
+  color: var(--accent);
+}
+.todo-flow-h {
+  margin: 4px 0 -4px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.todo-kids {
+  padding: 12px;
+  border-radius: 18px;
+  border: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-bottom-width: 4px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface) 70%);
+}
+.todo-kids h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  gap: 6px;
+}
+.todo-kids h3 > svg {
+  color: var(--accent);
+}
+.todo-kids-bar {
+  --p: 0;
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(to var(--fwd, right), var(--tg-gold) calc(var(--p) * 100%), var(--tg-track) 0);
+}
+[dir='rtl'] .todo-kids-bar {
+  --fwd: left;
+}
+.todo-kids .todo-add-step input {
+  background: var(--surface);
+}
+
+/* Task sheet navigation bar (DrillBar.tsx): the drill-down path goal → step → action, siblings, subtasks. */
+.todo-drill {
+  --tier-purpose: var(--tg-gold);
+  --tier-step: #38bdf8;
+  --tier-action: #a3e635;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 16px;
+  background: linear-gradient(120deg, var(--accent), color-mix(in srgb, var(--accent-2) 75%, var(--accent)));
+  color: #fff;
+  box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 55%, #000), 0 8px 20px -10px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.todo-drill-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.todo-drill-trail {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.todo-drill-trail::-webkit-scrollbar {
+  display: none;
+}
+.todo-drill-trail li {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+}
+.todo-drill-sep {
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+.todo-drill-crumb {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 150px;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.14);
+  color: #fff;
+  text-align: start;
+  cursor: pointer;
+  line-height: 1.15;
+}
+button.todo-drill-crumb:hover,
+button.todo-drill-crumb:focus-visible {
+  background: rgb(255 255 255 / 0.26);
+}
+.todo-drill-crumb .tier {
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.todo-drill-crumb.tier-purpose .tier {
+  color: var(--tier-purpose);
+}
+.todo-drill-crumb.tier-step .tier {
+  color: var(--tier-step);
+}
+.todo-drill-crumb.tier-action .tier {
+  color: var(--tier-action);
+}
+.todo-drill-crumb .name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.todo-drill-crumb.is-here {
+  background: #fff;
+  color: var(--accent);
+  cursor: default;
+  box-shadow: 0 2px 0 rgb(0 0 0 / 0.18);
+}
+.todo-drill-crumb.is-here.tier-purpose .tier {
+  color: var(--tg-gold-deep);
+}
+.todo-drill-crumb.is-here.tier-step .tier {
+  color: #0284c7;
+}
+.todo-drill-crumb.is-here.tier-action .tier {
+  color: #4d7c0f;
+}
+.todo-drill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.22);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.todo-drill-chip:hover,
+.todo-drill-menu.is-open .todo-drill-chip {
+  background: rgb(0 0 0 / 0.34);
+}
+.todo-drill-chip .todo-picker-chev {
+  color: inherit;
+  opacity: 0.8;
+}
+.todo-drill-moves {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.todo-drill-sibs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.todo .todo-drill-sibs .icon-btn.sm {
+  margin: 0;
+  width: 34px;
+  height: 34px;
+  color: #fff;
+  background: rgb(255 255 255 / 0.14);
+}
+.todo .todo-drill-sibs .icon-btn.sm:disabled {
+  opacity: 0.35;
+}
+.todo-drill-n {
+  padding: 0 6px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.todo-drill-down {
+  margin-inline-start: auto;
+}
+.todo-drill-card {
+  min-width: 230px;
+  max-height: 320px;
+  overflow-y: auto;
+  color: var(--text);
+}
+.todo-drill-path > .todo-drill-menu .todo-drill-card {
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+}
+.todo-drill-card button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+.todo-drill-card button:hover,
+.todo-drill-card button:focus-visible {
+  background: var(--surface-2);
+  outline: none;
+}
+.todo-drill-card button.on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.todo-drill-st {
+  flex-shrink: 0;
+  color: var(--sc, var(--muted));
+}
+.todo-drill-pct {
+  --p: 0;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--surface) 60%, transparent 63%), conic-gradient(var(--tg-gold) calc(var(--p) * 360deg), var(--tg-track) 0);
+}
+.todo-drill-add {
+  color: var(--accent) !important;
+  border-top: 1px dashed var(--border) !important;
+  border-radius: 0 0 10px 10px !important;
+  margin-top: 4px;
+}
+@media (max-width: 380px) {
+  .todo-drill-goals-l {
+    display: none;
+  }
+}
+
+/* Undo after completing (UndoBar.tsx): a manual popover, so it's in the top layer, above an open sheet. */
+.todo-undo {
+  position: fixed;
+  inset: auto;
+  inset-inline: 12px;
+  bottom: calc(84px + var(--safe-b));
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 8px 8px 12px;
+  padding-inline-start: 14px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.35);
+  overflow: hidden;
+  animation: todo-undo-in 0.2s ease-out;
+}
+@keyframes todo-undo-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+.todo-undo-txt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.todo-undo-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--tg-gold);
+  color: #1a1300;
+  font-weight: 900;
+  cursor: pointer;
+}
+.todo-undo-x {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+.todo-undo-time {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 4px;
+  background: var(--tg-gold);
+  transform-origin: left;
+  animation: todo-undo-drain linear forwards;
+}
+[dir='rtl'] .todo-undo-time {
+  transform-origin: right;
+}
+@keyframes todo-undo-drain {
+  to {
+    transform: scaleX(0);
+  }
+}
+.todo-drill-chip.is-promote {
+  background: var(--tg-gold);
+  color: #1a1300;
+}
+.todo-drill-chip.is-promote:hover {
+  background: color-mix(in srgb, var(--tg-gold) 85%, #fff);
+}
+
+/* The app's icon (HomeLink.tsx) replaces the blog's "← Apps" header row: at the start of the level bar, or of the
+   top row on Journeys. */
+.app-host:has(.todo) .app-host-head {
+  display: none;
+}
+.todo-hud-home {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 0;
+  translate: 0 -50%;
+  display: flex;
+}
+.todo-home {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--app-c1, var(--accent)), var(--app-c2, var(--accent-2)));
+  color: #fff;
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--app-c2, var(--accent)) 55%, #000);
+  transition: transform 0.1s;
+}
+.todo-home:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.todo-home:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+.todo-home img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+.todo-home-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 4px;
+}
+.todo-home-row > .todo-quest-head {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.todo-home-title {
+  margin: 0;
+  font-size: 1.2rem;
 }
 
 /* Tooltips (TipLayer.tsx): hover, keyboard focus, or a long press on phones. */

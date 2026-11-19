@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import { useApp } from '../lib/app';
 import type { Post } from '../lib/types';
 import type { TagGroup } from '../lib/types';
-import { can, formatDate, pickText, titleDir } from '../lib/util';
+import { can, formatDate, pickText, titleDir, writtenExcerpt } from '../lib/util';
 import { PostContent } from '../components/PostContent';
 import { TagChips } from '../components/PostBits';
 import { NotFound } from './NotFound';
@@ -96,6 +96,12 @@ export function PrintView() {
             {p.updated_at !== p.published_at && ` · ${t('updated')} ${formatDate(p.updated_at, prefs.uiLang)}`}
           </p>
           <TagChips tags={p.tags} />
+          {/* The summary in full: paper can't "read more", so no two-line clamp here. */}
+          {writtenExcerpt(p) && (
+            <div className="post-summary open">
+              <p dir={titleDir(p.excerpt, p.lang)}>{writtenExcerpt(p)}</p>
+            </div>
+          )}
           <PostContent html={p.content_html} lang={p.lang} />
         </article>
       ))}

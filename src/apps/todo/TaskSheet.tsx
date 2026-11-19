@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  ChevronDown,
-  ChevronUp,
-  CornerDownRight,
+  ExternalLink,
+  FlagOff,
+  Link2,
   ListTree,
   Database,
   History,
@@ -15,14 +15,16 @@ import {
   X,
 } from 'lucide-react';
 import { Sheet } from '../../components/Sheet';
+import { cleanLink } from '../../lib/util';
 import type { Lang, Todo, TodoComment, TodoContact, TodoDatum, TodoDraft, TodoLogEntry, TodoStatus, TodoType } from '../../lib/types';
 import { CommentsField, ContactsField, DataField, Fold, LabelField, LogField, StageTrack, TypePicker } from './fields';
-import { blockers, childTier, dayLabel, depthOf, descendants, heightOf, isOpen, labelsIn, levelKeys, nestTasks, SIZES, stepsOf, tierOf, xpFor } from './model';
+import { blockers, childTier, dayLabel, depthOf, descendants, heightOf, hostOf, isGoal, isOpen, labelsIn, levelKeys, nestTasks, SIZES, stepsOf, tierOf, xpFor } from './model';
 import { TYPE_ICON } from './look';
 import { RemindField } from './RemindField';
 import { Segmented } from './Segmented';
 import { useTt } from './strings';
 import { SelectMenu, type MenuOption } from './SelectMenu';
+import { DrillBar } from './DrillBar';
 import { StepList } from './StepList';
 import { type Origin } from './TaskRow';
 
@@ -41,6 +43,7 @@ interface Form {
   day: string | null;
   tags: string[];
   lists: string[];
+  link: string;
   depends_on: string[];
   data: TodoDatum[];
   contacts: TodoContact[];
@@ -63,6 +66,7 @@ const formOf = (t: TodoDraft): Form => ({
   day: t.day ?? null,
   tags: t.tags ?? [],
   lists: t.lists ?? [],
+  link: t.link ?? '',
   depends_on: t.depends_on ?? [],
   data: t.data ?? [],
   contacts: t.contacts ?? [],
@@ -74,6 +78,7 @@ const formOf = (t: TodoDraft): Form => ({
 const tidy = (f: Form): Form => ({
   ...f,
   title: f.title.trim(),
+  link: f.link.trim(),
   description: f.description.trim(),
   data: f.data.filter((d) => d.key.trim() || d.value.trim()),
   contacts: f.contacts.filter((c) => c.name.trim() || c.phone.trim() || c.email.trim()),
@@ -110,6 +115,7 @@ export function TaskSheet({
   onAddChild,
   onReorder,
   onMoveUnder,
+  onSetGoal,
   onPlayQuest,
 }: {
   /** The task open in the sheet; null with a draft for a new one, null without a draft when closed. */
@@ -130,6 +136,8 @@ export function TaskSheet({
   onReorder: (root: Todo, from: number, to: number) => void;
   /** Moves a task (and what hangs under it) under another parent, or out on its own (null). */
   onMoveUnder: (task: Todo, parentId: string | null) => void;
+  /** Makes a task a goal (out of its parent, off the day lists), or takes the mark off. */
+  onSetGoal: (task: Todo, on: boolean) => void;
   onPlayQuest: (id: string) => void;
 }) {
   const tt = useTt();
@@ -138,6 +146,14 @@ export function TaskSheet({
   const [form, setForm] = useState<Form>(() => formOf({}));
   const [armed, setArmed] = useState(false);
   const [stepText, setStepText] = useState('');
+  /** For a new task: the goal (or step) it will belong to, chosen in "Part of"; null = no goal. */
+  const [draftParent, setDraftParent] = useState<string | null>(null);
+  const stepRef = useRef<HTMLInputElement>(null);
+  /** From the navigation bar: to the field that adds a subtask, ready to type. */
+  const focusAddStep = () => {
+    stepRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    stepRef.current?.focus({ preventScroll: true });
+  };
   const titleRef = useRef<HTMLTextAreaElement>(null);
   // Refill the form when a different task opens (compared during render, not in an effect).
   if (key !== shownFor) {
@@ -145,6 +161,7 @@ export function TaskSheet({
     setForm(formOf(task ?? draft ?? {}));
     setArmed(false);
     setStepText('');
+    setDraftParent(draft?.root_id ?? null);
   }
   // A new task starts with the cursor in its title (after the dialog has opened and taken focus).
   useEffect(() => {
@@ -158,13 +175,13 @@ export function TaskSheet({
   const commit = () => {
     const f = tidy(form);
     if (!task) {
-      if (f.title) onCreate({ ...draft, ...f });
+      if (f.title) onCreate({ ...draft, ...f, link: cleanLink(f.link), root_id: draftParent });
       return;
     }
-    const patch = diff(formOf(task), { ...f, title: f.title || task.title });
+    const patch = diff(formOf(task), { ...f, title: f.title || task.title, link: cleanLink(f.link) ?? '' });
     // A task that gained subtasks while open has handed its place on a day list over to them: keep it off.
     if (all.some((k) => k.root_id === task.id)) delete patch.day;
-    if (Object.keys(patch).length) onSave(task.id, patch);
+    if (Object.keys(patch).length) onSave(task.id, { ...patch, ...('link' in patch ? { link: patch.link || null } : {}) });
   };
   const close = () => {
     commit();
@@ -184,10 +201,8 @@ export function TaskSheet({
     );
   }
 
-  const parentId = task?.root_id ?? draft?.root_id ?? null;
+  const parentId = task ? task.root_id : draft ? draftParent : null;
   const parent = parentId ? byId.get(parentId) : undefined;
-  const siblings = parent ? stepsOf(parent.id, all) : [];
-  const at = task ? siblings.findIndex((s) => s.id === task.id) : -1;
   const depth = task ? depthOf(task, byId) : parent ? depthOf(parent, byId) + 1 : 0;
   const tier = tierOf(depth);
   const kidTier = childTier(depth);
@@ -207,11 +222,11 @@ export function TaskSheet({
   // Parents it could move under: not itself or anything under it, and deep enough room for what hangs below it
   // (purpose → step → action is three levels at most).
   const below = task ? heightOf(task.id, all) : 0;
-  const parentOptions = task
-    ? all
-        .filter((o) => isOpen(o) && !family.has(o.id) && o.id !== task.root_id && depthOf(o, byId) + 1 + below <= 2)
-        .sort((a, b) => a.title.localeCompare(b.title, lang))
-    : [];
+  const parentOptions = (
+    task
+      ? all.filter((o) => isOpen(o) && !family.has(o.id) && o.id !== task.root_id && depthOf(o, byId) + 1 + below <= 2)
+      : all.filter((o) => isOpen(o) && o.id !== draftParent && depthOf(o, byId) <= 1)
+  ).sort((a, b) => a.title.localeCompare(b.title, lang));
   /** A task as a dropdown choice: its type icon, its title, indented by depth, and its tier as a note. */
   const taskOption = (o: Todo): MenuOption => {
     const Icon = TYPE_ICON[o.type];
@@ -227,41 +242,30 @@ export function TaskSheet({
   };
   /** Tasks as dropdown choices in outline order: each step right under its purpose, each action under its step. */
   const outlineOptions = (list: Todo[]) => nestTasks(list, all).map(({ task: t }) => taskOption(t));
+  /** The link as it will be saved (https:// added), or null while what's typed isn't a web address. */
+  const openable = cleanLink(form.link);
   const nKids = task ? descendants(task.id, all).length : 0;
   const dayName = (iso: string | null) => (iso ? dayLabel(iso, today, lang, tt) : tt('pool'));
-  const title = task ? (depth === 0 && !kids.length ? tt('editTask') : tt(`tier_${tier}`)) : tt(depth ? `new_${tier as 'step' | 'action'}` : 'newTask');
+  const title = task ? (depth === 0 && !isGoal(task, all) ? tt('editTask') : tt(`tier_${tier}`)) : tt(depth ? `new_${tier as 'step' | 'action'}` : 'newTask');
 
   return (
     <Sheet open onClose={close} title={title} wide>
       <div className={`todo-sheet ty-${form.type}`}>
         <div className="todo-sheet-top">
-          {parent && (
-            <nav className="todo-crumb">
-              <button type="button" className="todo-crumb-root" onClick={() => go(parent.id)} title={tt('openRoot')}>
-                <CornerDownRight size={14} aria-hidden />
-                <span className="lbl">{tt('partOf')}</span>
-                <span dir="auto">{parent.title || tt('untitled')}</span>
-              </button>
-              {task && (
-                <>
-                  <span className="todo-crumb-n">{tt('nOfTier', { tier: tt(`tier_${tier}`), n: at + 1, m: siblings.length })}</span>
-                  <button type="button" className="icon-btn sm" disabled={at <= 0} onClick={() => go(siblings[at - 1].id)} aria-label={tt('prevStep')} title={tt('prevStep')}>
-                    <ChevronUp size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-btn sm"
-                    disabled={at < 0 || at >= siblings.length - 1}
-                    onClick={() => go(siblings[at + 1].id)}
-                    aria-label={tt('nextStep')}
-                    title={tt('nextStep')}
-                  >
-                    <ChevronDown size={18} />
-                  </button>
-                </>
-              )}
-            </nav>
-          )}
+          <DrillBar
+            task={task}
+            parentId={parentId}
+            all={all}
+            byId={byId}
+            lang={lang}
+            onOpen={go}
+            onAddKid={focusAddStep}
+            onGoal={(on) => {
+              if (!task) return;
+              commit();
+              onSetGoal(task, on);
+            }}
+          />
 
           <div className="todo-title-row">
             <textarea
@@ -281,62 +285,24 @@ export function TaskSheet({
                 }
               }}
             />
+            {openable && (
+              <a className="icon-btn sm todo-open-link" href={openable} target="_blank" rel="noopener noreferrer" aria-label={tt('openLink')} data-tip={tt('openLinkTo', { host: hostOf(openable) })}>
+                <ExternalLink size={18} />
+              </a>
+            )}
             <span className="todo-xp" title={tt('xpWorth')} dir="ltr">
               +{xpFor(form)} XP
             </span>
           </div>
         </div>
 
-        {/* Most important first: where it sits, how much it matters, when it's due, its stage, what it is. */}
-        <div className="todo-grid">
-          <div className="todo-field wide">
-            <span className="todo-field-l">{tt('where')}</span>
-            {kids.length > 0 ? (
-              <p className="muted small todo-note">{tt('parentOffToday')}</p>
-            ) : (
-              <Segmented label={tt('where')} value={form.day ?? ''} onChange={(v) => set('day', v || null)} options={dayOptions} />
-            )}
-          </div>
-          <div className="todo-field">
-            <span className="todo-field-l">{tt('priority')}</span>
-            <Segmented label={tt('priority')} value={form.priority} onChange={(v) => set('priority', v)} options={level('priority')} tone="level" />
-          </div>
-          <div className="todo-field">
-            <span className="todo-field-l">{tt('urgency')}</span>
-            <Segmented label={tt('urgency')} value={form.urgency} onChange={(v) => set('urgency', v)} options={level('urgency')} tone="level" />
-          </div>
-          <div className="todo-dates wide">
-            <label className="todo-field">
-              <span className="todo-field-l">{tt('deadline')}</span>
-              <input type="date" value={form.deadline ?? ''} onChange={(e) => set('deadline', e.target.value || null)} dir="ltr" />
-            </label>
-            <label className="todo-field">
-              <span className="todo-field-l">{tt('dueDate')}</span>
-              <input type="date" value={form.due_date ?? ''} onChange={(e) => set('due_date', e.target.value || null)} dir="ltr" />
-            </label>
-          </div>
-        </div>
-
-        <StageTrack value={form.status} onChange={(v) => set('status', v)} />
-        {waitFor.length > 0 && (
-          <p className="todo-wait">
-            <Lock size={14} aria-hidden /> {tt('blockedBy', { list: waitFor.map((w) => w.title || tt('untitled')).join(', ') })}
-          </p>
-        )}
-
-        <textarea
-          className="todo-desc"
-          value={form.description}
-          onChange={(e) => set('description', e.target.value)}
-          placeholder={tt('description')}
-          aria-label={tt('description')}
-          rows={2}
-          dir="auto"
-        />
-
+        {/* The task's flow comes first: its subtasks, its stage, what it waits for and what it belongs to.
+            Then what it is and where it sits; levels and dates after that. */}
+        <h2 className="todo-flow-h">{tt('flowTitle')}</h2>
         {task && (
-          <section className="todo-sec">
+          <section className="todo-sec todo-kids">
             <h3>
+              <ListTree size={18} aria-hidden />
               {tt(`kids_${kidTier as 'step' | 'action'}`)}
               {kids.length > 0 && (
                 <span className="muted">
@@ -353,6 +319,9 @@ export function TaskSheet({
                 </button>
               )}
             </h3>
+            {kids.length > 0 && (
+              <span className="todo-kids-bar" style={{ '--p': kids.filter((s) => !isOpen(s)).length / kids.length } as React.CSSProperties} />
+            )}
             {kids.length === 0 && <p className="muted small">{tt(depth === 0 ? 'deriveHint_step' : 'deriveHint_action')}</p>}
             {kids.length > 0 && (
               <StepList kids={kids} all={all} byId={byId} today={today} lang={lang} onToggle={onToggle} onOpen={go} onReorder={(from, to) => onReorder(task, from, to)} />
@@ -367,7 +336,7 @@ export function TaskSheet({
                 setStepText('');
               }}
             >
-              <input value={stepText} onChange={(e) => setStepText(e.target.value)} placeholder={tt(`add_${kidTier as 'step' | 'action'}`)} dir={lang === 'he' ? 'rtl' : 'ltr'} enterKeyHint="send" />
+              <input ref={stepRef} value={stepText} onChange={(e) => setStepText(e.target.value)} placeholder={tt(`add_${kidTier as 'step' | 'action'}`)} dir={lang === 'he' ? 'rtl' : 'ltr'} enterKeyHint="send" />
               <button type="submit" className="icon-btn accent" aria-label={tt(`add_${kidTier as 'step' | 'action'}`)} disabled={!stepText.trim()}>
                 <Plus size={20} />
               </button>
@@ -375,45 +344,12 @@ export function TaskSheet({
           </section>
         )}
 
-        <div className="todo-field">
-          <span className="todo-field-l">{tt('type')}</span>
-          <TypePicker value={form.type} onChange={(v) => set('type', v)} />
-        </div>
-
-        <LabelField
-          label={tt('listsField')}
-          values={form.lists}
-          onChange={(v) => set('lists', v)}
-          suggest={labelsIn(all, 'lists').map((l) => l.name)}
-          prefix="@"
-          placeholder={tt('addList')}
-          hint={tt('listsHint')}
-        />
-        <LabelField
-          label={tt('tags')}
-          values={form.tags}
-          onChange={(v) => set('tags', v)}
-          suggest={labelsIn(all, 'tags').map((l) => l.name)}
-          prefix="#"
-          placeholder={tt('addTag')}
-          hint={tt('tagsHint')}
-        />
-
-        <div className="todo-grid">
-          <div className="todo-field wide">
-            <RemindField label={tt('remindOn')} value={form.remind_on} onChange={(v) => set('remind_on', v)} today={today} />
-          </div>
-          <div className="todo-field wide">
-            <span className="todo-field-l">{tt('complexity')}</span>
-            <Segmented label={tt('complexity')} value={form.complexity} onChange={(v) => set('complexity', v)} options={level('complexity', true)} />
-          </div>
-          <div className="todo-dates wide">
-            <label className="todo-field">
-              <span className="todo-field-l">{tt('estimateDate')}</span>
-              <input type="date" value={form.estimate_date ?? ''} onChange={(e) => set('estimate_date', e.target.value || null)} dir="ltr" />
-            </label>
-          </div>
-        </div>
+        <StageTrack value={form.status} onChange={(v) => set('status', v)} />
+        {waitFor.length > 0 && (
+          <p className="todo-wait">
+            <Lock size={14} aria-hidden /> {tt('blockedBy', { list: waitFor.map((w) => w.title || tt('untitled')).join(', ') })}
+          </p>
+        )}
 
         <section className="todo-sec">
           <h3>{tt('dependsOn')}</h3>
@@ -449,26 +385,138 @@ export function TaskSheet({
           )}
         </section>
 
-        {task && parentOptions.length + (parent ? 1 : 0) > 0 && (
+        {parentOptions.length + (parent ? 1 : 0) > 0 && (
           <div className="todo-sec todo-parent">
             <h3>
               <ListTree size={16} aria-hidden /> {tt('partOfField')}
             </h3>
             <SelectMenu
               label={tt('partOfField')}
-              value={task.root_id ?? ''}
+              value={parentId ?? ''}
               placeholder={tt('standalone')}
               searchPlaceholder={tt('searchTasks')}
               empty={tt('noMatches')}
-              options={[{ value: '', label: tt('standalone') }, ...outlineOptions((parent ? [parent] : []).concat(parentOptions))]}
+              options={[
+                { value: '', label: tt('standalone'), icon: <FlagOff size={15} aria-hidden className="todo-menu-ic is-none" />, note: tt('standaloneNote') },
+                ...outlineOptions((parent ? [parent] : []).concat(parentOptions)),
+              ]}
               onChange={(v) => {
+                if (!task) return setDraftParent(v || null);
                 commit();
                 onMoveUnder(task, v || null);
               }}
             />
-            <span className="muted small">{tt('partOfHint')}</span>
+            <span className="muted small">{tt(task ? 'partOfHint' : 'partOfHintNew')}</span>
           </div>
         )}
+
+        <textarea
+          className="todo-desc"
+          value={form.description}
+          onChange={(e) => set('description', e.target.value)}
+          placeholder={tt('description')}
+          aria-label={tt('description')}
+          rows={2}
+          dir="auto"
+        />
+
+        <div className="todo-field todo-mainlink">
+          <span className="todo-field-l">{tt('mainLink')}</span>
+          <div className="todo-mainlink-row">
+            <Link2 size={18} aria-hidden className="muted" />
+            <input
+              type="url"
+              inputMode="url"
+              value={form.link}
+              onChange={(e) => set('link', e.target.value)}
+              placeholder={tt('mainLinkPh')}
+              aria-label={tt('mainLink')}
+              dir="ltr"
+              autoComplete="off"
+              autoCapitalize="off"
+              spellCheck={false}
+            />
+            {openable && (
+              <a className="btn sm primary" href={openable} target="_blank" rel="noopener noreferrer">
+                <ExternalLink size={15} aria-hidden /> {tt('openShort')}
+              </a>
+            )}
+          </div>
+          {form.link.trim() && !openable && <span className="muted small">{tt('linkInvalid')}</span>}
+        </div>
+
+        <div className="todo-grid">
+          <div className="todo-field wide">
+            <span className="todo-field-l">{tt('where')}</span>
+            {kids.length > 0 ? (
+              <p className="muted small todo-note">{tt('parentOffToday')}</p>
+            ) : (
+              <Segmented label={tt('where')} value={form.day ?? ''} onChange={(v) => set('day', v || null)} options={dayOptions} />
+            )}
+          </div>
+        </div>
+
+        <div className="todo-field">
+          <span className="todo-field-l">{tt('type')}</span>
+          <TypePicker value={form.type} onChange={(v) => set('type', v)} />
+        </div>
+
+        <LabelField
+          label={tt('listsField')}
+          values={form.lists}
+          onChange={(v) => set('lists', v)}
+          suggest={labelsIn(all, 'lists').map((l) => l.name)}
+          prefix="@"
+          placeholder={tt('addList')}
+          hint={tt('listsHint')}
+        />
+        <LabelField
+          label={tt('tags')}
+          values={form.tags}
+          onChange={(v) => set('tags', v)}
+          suggest={labelsIn(all, 'tags').map((l) => l.name)}
+          prefix="#"
+          placeholder={tt('addTag')}
+          hint={tt('tagsHint')}
+        />
+
+        {/* Levels and dates */}
+        <div className="todo-grid">
+          <div className="todo-field">
+            <span className="todo-field-l">{tt('priority')}</span>
+            <Segmented label={tt('priority')} value={form.priority} onChange={(v) => set('priority', v)} options={level('priority')} tone="level" />
+          </div>
+          <div className="todo-field">
+            <span className="todo-field-l">{tt('urgency')}</span>
+            <Segmented label={tt('urgency')} value={form.urgency} onChange={(v) => set('urgency', v)} options={level('urgency')} tone="level" />
+          </div>
+          <div className="todo-dates wide">
+            <label className="todo-field">
+              <span className="todo-field-l">{tt('deadline')}</span>
+              <input type="date" value={form.deadline ?? ''} onChange={(e) => set('deadline', e.target.value || null)} dir="ltr" />
+            </label>
+            <label className="todo-field">
+              <span className="todo-field-l">{tt('dueDate')}</span>
+              <input type="date" value={form.due_date ?? ''} onChange={(e) => set('due_date', e.target.value || null)} dir="ltr" />
+            </label>
+          </div>
+        </div>
+
+        <div className="todo-grid">
+          <div className="todo-field wide">
+            <RemindField label={tt('remindOn')} value={form.remind_on} onChange={(v) => set('remind_on', v)} today={today} />
+          </div>
+          <div className="todo-field wide">
+            <span className="todo-field-l">{tt('complexity')}</span>
+            <Segmented label={tt('complexity')} value={form.complexity} onChange={(v) => set('complexity', v)} options={level('complexity', true)} />
+          </div>
+          <div className="todo-dates wide">
+            <label className="todo-field">
+              <span className="todo-field-l">{tt('estimateDate')}</span>
+              <input type="date" value={form.estimate_date ?? ''} onChange={(e) => set('estimate_date', e.target.value || null)} dir="ltr" />
+            </label>
+          </div>
+        </div>
 
         <div className="todo-folds">
           <Fold title={tt('dataTitle')} count={form.data.length} icon={<Database size={16} aria-hidden />}>
