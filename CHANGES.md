@@ -7,6 +7,11 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-19 19:28
+
+- Added: post summary on the post page: shown under the title and tags, two lines with "Read more" / "Show less" (the button only appears when the summary is longer than two lines)
+- Changed: To-do: a task with subtasks has no "Today" button in the pool, lists or reminders (it never goes on Today itself; its subtasks keep theirs)
+
 ## 2026-11-11 02:13
 
 - Changed: To-do task form dropdowns are the app's own: "Depends on" and "Part of" open a card listing tasks with their type icon, depth and tier, with a search box when the list is long; the lists and tags fields suggest matching names in the same style instead of the browser's popup

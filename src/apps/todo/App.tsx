@@ -438,8 +438,12 @@ export default function TodoApp() {
       <GripVertical size={18} />
     </button>
   );
-  /** Moves a task onto today's list: a labelled button, and a toast saying where it went. */
-  const toTodayBtn = (r: Todo) => (
+  /**
+   * Moves a task onto today's list: a labelled button, and a toast saying where it went. A task with subtasks has
+   * none: it never goes on Today itself (its subtasks have their own buttons).
+   */
+  const toTodayBtn = (r: Todo) =>
+    parents.has(r.id) ? null : (
     <button
       type="button"
       className="todo-today-btn"
@@ -557,7 +561,7 @@ export default function TodoApp() {
           <h2>
             <Bell size={15} aria-hidden /> {tt('remindersTitle')}
             {reminded.length > 1 && (
-              <button type="button" className="todo-link" onClick={() => reminded.forEach((r) => toToday(r))}>
+              <button type="button" className="todo-link" onClick={() => reminded.filter((r) => !parents.has(r.id)).forEach((r) => toToday(r))}>
                 {tt('pullAll')}
               </button>
             )}

@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock, Heart } from 'lucide-react';
 import { VIS_ICON } from './visIcons';
@@ -111,5 +112,38 @@ export function PostCard({ post, compact }: { post: Post; compact?: boolean }) {
         <TagChips tags={post.tags} />
       </div>
     </article>
+  );
+}
+
+/**
+ * The post's summary at the top of the post page: two lines, with "Read more" to open the rest. The button only
+ * shows when the text is actually cut off (measured, and re-measured on resize), so a short summary stays plain.
+ */
+export function PostSummary({ text, lang }: { text: string; lang: Post['lang'] }) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  const [clipped, setClipped] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || open) return;
+    const measure = () => setClipped(el.scrollHeight > el.clientHeight + 1);
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, text]);
+  const id = 'post-summary-text';
+  return (
+    <div className={`post-summary${open ? ' open' : ''}`}>
+      {/* Same rule as the title: any Hebrew → RTL, else the post's language. */}
+      <p ref={ref} id={id} dir={titleDir(text, lang)}>
+        {text}
+      </p>
+      {(clipped || open) && (
+        <button type="button" className="link-btn" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
+          {open ? t('summaryLess') : t('summaryMore')}
+        </button>
+      )}
+    </div>
   );
 }

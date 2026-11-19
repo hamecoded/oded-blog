@@ -10,7 +10,7 @@ import { can, inTagGroup, postPath, titleDir } from '../lib/util';
 import { useSite } from '../lib/site';
 import { PublicComments } from '../site/PublicComments';
 import { PostContent } from '../components/PostContent';
-import { PostMeta, TagChips } from '../components/PostBits';
+import { PostMeta, PostSummary, TagChips } from '../components/PostBits';
 import { LikeButton, ShareSheet } from '../components/Social';
 import { CommentsPanel } from '../components/CommentsPanel';
 import { Sheet } from '../components/Sheet';
@@ -123,6 +123,7 @@ export function PostView() {
           <h1 dir={titleDir(post.title, post.lang)}>{post.title}</h1>
           <PostMeta post={post} />
           <TagChips tags={post.tags} />
+          {post.excerpt.trim() && <PostSummary key={post.id} text={post.excerpt.trim()} lang={post.lang} />}
         </header>
 
         <PostContent
