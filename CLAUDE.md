@@ -167,7 +167,7 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   event's page only: Today, pool, tags, journeys, done and the review are built from `pub` (all minus those). Tasks made
   on an event's page start event-only; "To the pool" there, the form's switch, or putting it on a day publishes it.
   **Sensitive items (2026-11-20, `PinSheet.tsx`):** `todos.sensitive` (top-level tasks; `rootOf()` makes it cover
-  everything under them) and `todo_events.sensitive`. Locked, they render as `VEIL` dots (look.ts; the real name isn't
+  everything under them) and `todo_events.sensitive` (covers the event's tasks too: `isSensitive()`). Locked, they render as `VEIL` dots (look.ts; the real name isn't
   in the DOM) in rows (`TaskRow` `veiled`), journey/event/topic cards, the form's menus (`veil` / `veilEvent` props),
   the `DrillBar` goals menu and the `ReviewSheet`; opening one goes through `guard()` → the PIN. The PIN is a hash
   (`sha256Hex(userId + ':' + pin)`) in `todo_settings` (Api `getTodoSettings` / `saveTodoSettings`). Unlocked (only by typing
@@ -190,10 +190,14 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   Reopening a done task offers the undo too ('undoReopen').
   **Copy title:** `CopyButton.tsx` (uses `copyText` from lib/errorReport.ts) in the task form's title row, the event
   title and each event item and tip; every task, step and action has a form, so that covers them all.
-  **Home screen (iOS):** while the app is open `useHomeScreenApp()` (hooks.ts) swaps the page's manifest,
-  apple-touch-icon and home-screen name for `public/todo-app/` (outside `/apps/todo` so the host never mistakes it
-  for the route), so Share → Add to Home Screen adds the to-do app, full screen, opening on Today. The icon PNGs were
-  rendered from the lucide ListTodo glyph on the app's gradient; redo them if the icon or colours change.
+  **Home screen (every app, 2026-11-20):** phones read the home-screen tags (manifest, apple-touch-icon, title) when
+  a page loads, so swapping them in later isn't enough (an app reached inside the blog was added as the blog's root).
+  `npm run icons:apps` (scripts/app-icons.mjs) draws `public/<id>-app/` (icons + manifest, start_url /apps/<id>)
+  from each app.ts; `scripts/spa-fallback.mjs` writes `dist/apps/<id>.html` = the shell with those tags (GitHub Pages
+  serves it for /apps/<id>) and `dist/apps/index.html`. The store tile's "Home screen" pill is a plain link (full
+  load) to `/apps/<id>?home=1`; `AppHostPage` shows `HomeScreenSheet` (steps per browser: `homePlatform()`, Chrome's
+  `beforeinstallprompt` where offered) and `useHomeScreenApp()` (src/apps/homeScreen.ts) still swaps the tags as a
+  fallback (dev server, in-blog navigation).
   The app icon (`HomeLink`) now goes to Today (closing any open form); the Apps page is reached from the blog menu.
   The task form's order: title + `DrillBar`, stage track, steps, description, main link, then three `.todo-part`
   sections: Connections (depends on, part of, event, tags), Options (type, priority, urgency, complexity, sensitive),

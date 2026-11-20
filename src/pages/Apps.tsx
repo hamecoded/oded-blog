@@ -1,10 +1,12 @@
 import { Suspense, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ExternalLink, SquarePlus } from 'lucide-react';
 import { useApp } from '../lib/app';
 import { formatDate, pickText } from '../lib/util';
 import { APPS, appTarget, findApp, isNew } from '../apps/registry';
 import type { AppEntry } from '../apps/types';
+import { HomeScreenSheet } from '../components/HomeScreenSheet';
+import { useHomeScreenApp } from '../apps/homeScreen';
 import { NotFound } from './NotFound';
 import { usePageTitle } from './usePageTitle';
 
@@ -125,6 +127,25 @@ function AppTile({ app }: { app: AppEntry }) {
   );
 }
 
+/**
+ * "Home screen" on an app's tile (beside the tile's link, not inside it). It opens the app with a fresh page load
+ * (apps/<id>.html carries the app's own home-screen tags from the start; phones read them on load) and the steps.
+ */
+function HomeButton({ app }: { app: AppEntry }) {
+  const { t, prefs } = useApp();
+  const name = pickText(app.name, prefs.uiLang);
+  return (
+    <a
+      className="app-home-btn"
+      href={`${import.meta.env.BASE_URL}apps/${app.id}?home=1`}
+      aria-label={t('homeButtonTip', { name })}
+      data-tip={t('homeButtonTip', { name })}
+    >
+      <SquarePlus size={15} aria-hidden /> {t('homeButton')}
+    </a>
+  );
+}
+
 /** /apps — the app store, built from every folder in src/apps (see src/apps/README.md). */
 export function AppsPage() {
   const { t, user, authReady, prefs } = useApp();
@@ -167,6 +188,7 @@ export function AppsPage() {
           {shown.map((app) => (
             <li key={app.id} className={app.featured ? 'is-featured' : undefined}>
               <AppTile app={app} />
+              {appTarget(app)?.kind === 'internal' && <HomeButton app={app} />}
             </li>
           ))}
         </ul>
@@ -182,6 +204,15 @@ export function AppHostPage() {
   const app = findApp(id);
   const name = app ? pickText(app.name, prefs.uiLang) : undefined;
   usePageTitle(name);
+  useHomeScreenApp(app?.id, name);
+  // Opened from the "Home screen" button (?home=1): the steps, over the app.
+  const [homeOpen, setHomeOpen] = useState(() => new URLSearchParams(location.search).get('home') === '1');
+  const closeHome = () => {
+    setHomeOpen(false);
+    const u = new URL(location.href);
+    u.searchParams.delete('home');
+    history.replaceState(history.state, '', u);
+  };
 
   if (!authReady) return <p className="loading">{t('loading')}</p>;
   if (!user) return <SignInFirst from={`/apps/${id ?? ''}`} />;
@@ -201,6 +232,7 @@ export function AppHostPage() {
       <Suspense fallback={<p className="loading">{t('loading')}</p>}>
         <Component />
       </Suspense>
+      {homeOpen && <HomeScreenSheet app={app} onClose={closeHome} />}
     </div>
   );
 }

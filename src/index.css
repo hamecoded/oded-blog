@@ -9340,3 +9340,87 @@ body:has(.err-screen) .fab {
   flex: none;
   color: var(--muted);
 }
+/* ───────── Add to Home Screen ───────── */
+/* The "Home screen" pill sits on a tile's cover, opposite the badges (it's a sibling of the tile's link). */
+.app-grid > li {
+  position: relative;
+}
+.app-home-btn {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-end: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  backdrop-filter: blur(6px);
+  text-decoration: none;
+}
+.app-home-btn:hover,
+.app-home-btn:focus-visible {
+  background: rgb(0 0 0 / 0.75);
+  text-decoration: none;
+}
+.home-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.home-sheet-app {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.home-sheet-app > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.home-sheet-icon {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  box-shadow: 0 3px 10px rgb(0 0 0 / 0.25);
+}
+.home-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  counter-reset: home;
+}
+.home-steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  line-height: 1.45;
+}
+.home-step-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
+}
+.home-sheet-url {
+  font-size: 0.82rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

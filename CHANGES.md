@@ -7,6 +7,13 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-20 14:29
+
+- Added: "Home screen" button on every app in the Apps store: opens the app at its own address and shows how to add it (Share → Add to Home Screen, with the steps for Safari or Chrome on iPhone; the install prompt where the browser offers one)
+- Fixed: An app added to the iPhone home screen opened the blog's home page: each app now has its own page (`apps/<id>.html`) with its manifest, icon and name from the first load, so the icon opens the app
+- Added: `npm run icons:apps` draws each app's home-screen icons and manifest into `public/<id>-app/`
+- Fixed: To-do tasks of a locked (sensitive) event showed unblurred on the Done page and elsewhere: they're blurred with their event now, one row per locked event on the Done page
+
 ## 2026-11-20 14:16
 
 - Changed: To-do steps' parallel toggle is a labelled switch ("After it" / "In parallel") and confirms the change by naming both steps; the map shows the fork

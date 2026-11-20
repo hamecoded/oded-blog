@@ -29,7 +29,7 @@ import { sha256Hex, todoFields } from '../../lib/util';
 import { FxLayer } from './FxLayer';
 import { Fx } from './fx';
 import { Hud } from './Hud';
-import { useAppChrome, useHomeScreenApp, usePalette, useReducedMotion, useToday } from './hooks';
+import { useAppChrome, usePalette, useReducedMotion, useToday } from './hooks';
 import {
   addDays,
   blockers,
@@ -114,7 +114,6 @@ export default function TodoApp() {
   const tt = useTt();
   const today = useToday();
   useAppChrome();
-  useHomeScreenApp(tt('homeName'));
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
   const pal = usePalette(rootEl);
   const reduced = useReducedMotion();
@@ -670,7 +669,12 @@ export default function TodoApp() {
     }
     return r;
   };
-  const isSensitive = (t: Todo) => rootOf(t).sensitive;
+  /** Sensitive: its top-level task is marked, or it belongs to a sensitive event (it or its top-level task). */
+  const sensitiveEvents = new Set(events.filter((e) => e.sensitive).map((e) => e.id));
+  const isSensitive = (t: Todo) => {
+    const r = rootOf(t);
+    return r.sensitive || (!!t.event_id && sensitiveEvents.has(t.event_id)) || (!!r.event_id && sensitiveEvents.has(r.event_id));
+  };
   /** Blurred right now: sensitive, and the PIN not entered (or locked again). */
   const isVeiled = (t: Todo) => !unlocked && isSensitive(t);
   const eventVeiled = (e: TodoEvent) => !unlocked && e.sensitive;
@@ -685,7 +689,10 @@ export default function TodoApp() {
     const seen = new Set<string>();
     return list.filter((r) => {
       if (!isVeiled(r)) return true;
-      const id = rootOf(r).id;
+      // One row per locked goal or task, or per locked event for that event's tasks.
+      const root = rootOf(r);
+      const ev = r.event_id ?? root.event_id;
+      const id = root.sensitive || !ev ? root.id : `ev:${ev}`;
       if (seen.has(id)) return false;
       seen.add(id);
       return true;

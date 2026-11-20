@@ -36,6 +36,11 @@ src/apps/<id>/
 
 Images: put them in the app's folder and `import cover from './cover.png'` so Vite bundles them.
 
+**Home screen:** run `npm run icons:apps` after adding an app or changing its `icon`, `colors` or `name`, and commit
+`public/<id>-app/` (icons and a web manifest drawn from `app.ts`; needs Playwright's Chromium). The tile's "Home
+screen" button opens `/apps/<id>?home=1` with a full page load: the build writes `apps/<id>.html` with these
+files in its `<head>` (`scripts/spa-fallback.mjs`), which is what phones read for "Add to Home Screen".
+
 ## Writing the app
 
 - The page around it (top bar, back-to-apps link, title, sign-in check) comes from `src/pages/Apps.tsx`. The app
