@@ -623,7 +623,7 @@ create policy "possessions own" on public.possessions for all
 -- Mirrors the owner checks in src/lib/api/local.ts and can.useApps() in src/lib/util.ts; field rules mirror
 -- todoFields() in util.ts. `day` is the day list a task is on (null: the general pool). A task with no root_id
 -- is a root purpose; its children are its steps and theirs its actions (root_id), each chained to its
--- siblings by prev_id / next_id. A list is every task naming it in `lists`; `tags` group tasks.
+-- siblings by prev_id / next_id. A tag is a topic: every task carrying it, in their own order (`position`).
 create table if not exists public.todos (
   id          uuid primary key default gen_random_uuid(),
   owner_id    uuid not null default auth.uid() references public.profiles (id) on delete cascade,
@@ -650,7 +650,6 @@ alter table public.todos add column if not exists type          text not null de
 alter table public.todos add column if not exists estimate_date date;
 alter table public.todos add column if not exists deadline      date;
 alter table public.todos add column if not exists tags          text[] not null default '{}';
-alter table public.todos add column if not exists lists         text[] not null default '{}';
 -- The task's main link (http/https only; cleanLink() in util.ts checks it before saving).
 alter table public.todos add column if not exists link          text;
 -- Marked as a goal (a journey), even before it has steps.
@@ -679,8 +678,22 @@ alter table public.todos drop constraint if exists todos_type_check;
 alter table public.todos add constraint todos_type_check check (type in
   ('understanding', 'learning', 'achieving', 'decisions', 'checking', 'opportunities', 'enrichments', 'planning'));
 alter table public.todos drop constraint if exists todos_labels_check;
-alter table public.todos add constraint todos_labels_check
-  check (coalesce(array_length(tags, 1), 0) <= 30 and coalesce(array_length(lists, 1), 0) <= 30);
+-- Named lists were merged into tags (2026-11-20): any list names are added to the task's tags (no duplicates,
+-- case-insensitive, at most 30), then the column goes. The data is kept, as tags; safe to run again.
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+             where table_schema = 'public' and table_name = 'todos' and column_name = 'lists') then
+    update public.todos t set tags = coalesce((
+      select array_agg(l order by o) from (
+        select distinct on (lower(l)) l, o from unnest(t.tags || t.lists) with ordinality as u(l, o)
+        order by lower(l), o) x), '{}')
+    where coalesce(array_length(t.lists, 1), 0) > 0;
+    update public.todos t set tags = t.tags[1:30] where coalesce(array_length(t.tags, 1), 0) > 30;
+    alter table public.todos drop column lists;
+  end if;
+end $$;
+alter table public.todos add constraint todos_labels_check check (coalesce(array_length(tags, 1), 0) <= 30);
 create index if not exists todos_owner_day_idx on public.todos (owner_id, day);
 create index if not exists todos_root_idx on public.todos (root_id);
 

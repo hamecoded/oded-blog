@@ -298,10 +298,11 @@ export interface Todo {
   remind_on: string | null;
   /** The day list it's on ('YYYY-MM-DD'). null: the general pool. */
   day: string | null;
-  /** Labels to group by. */
+  /**
+   * Its topics: a tag is every task that carries it, shown together (in their own order, `position`) in the
+   * To-do app's Tags tab. (Named lists were merged into tags on 2026-11-20.)
+   */
   tags: string[];
-  /** Named lists it belongs to: a list is simply every task that names it. */
-  lists: string[];
   /** The task's main link (a web address): opened straight from its row and its sheet. */
   link: string | null;
   /** Marked as a goal: a purpose shown in the journeys even before it has steps (promoted, or started as one). */

@@ -7,6 +7,20 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-20 09:42
+
+- Added: To-do tag topics can take in existing tasks: a searchable "Add an existing task" picker (in outline order, goals showing how much is under them) adds the tag; a goal brings its steps and actions along
+- Added: To-do Tags tab can start a new topic: name it and it opens empty with the add box ready; every task added there (quick add or with details) carries the tag, and the topic's card appears once it has one
+- Changed: To-do journeys page shows the same level bar as the other tabs (app icon, level, XP, streak); an open journey's heading row sits above it, like an open topic's
+- Added: To-do journeys page: stage filters with counts (all, under way, not started, finished), a tag filter (a journey matches when it or anything under it carries the tag), sorting (my order, progress, recently active, deadline, name), and drag-and-drop reordering in "My order"
+- Changed: To-do task sheet's drill-down bar has fixed places: a path row (goals button in the corner, the path with names shortened to fit, a compact "‹ 2/3 ›" stepper) and an action row of equal slots (drill down or break into steps, make it a goal), so a full bar no longer wraps into a jumble
+- Changed: To-do task sheet: the title comes first, above the drill-down bar with its quick actions (both stay pinned)
+- Changed: To-do tag topics set each goal apart with everything under it: a block with space around it, gold guide lines and a gold tint; the topic cards list goals with a flag and their progress
+- Changed: To-do tag topics are an outline, like the pool: a tagged task brings everything under it, steps and actions sit indented under their parent, fold and unfold, and drag among their siblings
+- Added: Error page: when a page or the whole app crashes, a game-style "glitch" screen (instead of the router's bare error) says in plain words what went wrong and what to do (a new version came out, the connection dropped, the database needs updating, a missing piece of data, or a bug), shows what the browser said and where, and copies a full technical report for the developer
+- Changed: To-do Lists tab replaced by a Tags tab: every #tag is a topic card in its own colour (open count, next tasks, progress); a topic lists its tasks in your own order, reordered by drag and drop, each with a "Today" button (or an "on today" mark), done ones folded below
+- Removed: To-do named lists (`todos.lists`, @name in quick add, "Group by list"): existing list names become tags; schema.sql merges them and drops the column
+
 ## 2026-11-19 22:48
 
 - Fixed: To-do task sheet: the break-down chip no longer spills out of the navigation bar when it holds many chips; the row wraps

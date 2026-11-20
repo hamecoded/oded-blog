@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import 'katex/dist/katex.min.css';
 import './index.css';
 import App from './App';
+import { AppErrorBoundary } from './components/ErrorScreen';
 
 // No zooming the page on phones (pinch or double tap). Safari ignores user-scalable=no in the viewport tag, so its
 // pinch gesture is cancelled here; index.css adds touch-action for the double tap.
@@ -12,6 +13,8 @@ document.addEventListener('gesturechange', blockZoom, { passive: false });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
   </StrictMode>,
 );

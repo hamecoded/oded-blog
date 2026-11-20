@@ -866,7 +866,11 @@ export function createLocalApi(): Api {
       // Rows from an older version of the app are brought up to date as they're read.
       return (await db()).todos
         .filter((x) => x.owner_id === u.id)
-        .map((x) => ({ ...x, ...todoFields(x, x) }))
+        .map((x) => {
+          const r = { ...x, ...todoFields(x, x) };
+          delete (r as Partial<{ lists: unknown }>).lists; // named lists became tags (see todoFields)
+          return r;
+        })
         .sort((a, b) => a.position - b.position);
     },
 

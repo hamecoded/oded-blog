@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { AtSign, Bell, CalendarClock, Clock, CornerDownRight, ExternalLink, Flag, Flame, Hourglass, ListTree, Lock } from 'lucide-react';
+import { Bell, CalendarClock, Clock, CornerDownRight, ExternalLink, Flag, Flame, Hourglass, ListTree, Lock } from 'lucide-react';
 import type { Lang, Todo } from '../../lib/types';
-import { STATUS_ICON, TYPE_ICON } from './look';
+import { STATUS_ICON, tagHue, TYPE_ICON } from './look';
 import { blockers, childTier, dayLabel, depthOf, hostOf, isGoal, isOpen, SIZES, stepsOf, tierOf, xpFor } from './model';
 import { useTt } from './strings';
 
@@ -25,6 +25,7 @@ export function TaskRow({
   showRemind,
   action,
   hideRoot,
+  hideTag,
   className,
   rowStyle,
 }: {
@@ -41,6 +42,8 @@ export function TaskRow({
   action?: ReactNode;
   /** Inside its own root's sheet the "part of" line says nothing new. */
   hideRoot?: boolean;
+  /** A tag not to show on the row: the topic it's listed under in the Tags tab. */
+  hideTag?: string;
   /** Extra class and style for the row (a row being dragged into a new place). */
   className?: string;
   rowStyle?: CSSProperties;
@@ -159,17 +162,9 @@ export function TaskRow({
       </span>,
     );
   }
-  task.lists.forEach((l) =>
+  task.tags.filter((l) => l.toLowerCase() !== hideTag?.toLowerCase()).forEach((l) =>
     meta.push(
-      <span key={`l:${l}`} className="todo-m list" dir="auto" data-tip={tt('tipList', { l })}>
-        <AtSign size={11} aria-hidden />
-        {l}
-      </span>,
-    ),
-  );
-  task.tags.forEach((l) =>
-    meta.push(
-      <span key={`t:${l}`} className="todo-m tag" dir="auto" data-tip={tt('tipTag', { l })}>
+      <span key={`t:${l}`} className="todo-m tag" dir="auto" data-tip={tt('tipTag', { l })} style={{ '--h': tagHue(l) } as CSSProperties}>
         #{l}
       </span>,
     ),

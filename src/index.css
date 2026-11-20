@@ -5968,9 +5968,9 @@ body:has(.todo-nav) .fab {
   font-weight: 800;
   font-size: 0.68rem;
 }
-.todo-m.tag,
-.todo-m.list {
-  color: var(--accent);
+.todo-m.tag {
+  /* each tag in its own colour (tagHue() in look.ts), the same as its topic card in the Tags tab */
+  color: color-mix(in srgb, hsl(var(--h, 250) 70% 50%) 75%, var(--text));
 }
 .todo-m.lock {
   color: var(--st-blocked);
@@ -6059,9 +6059,39 @@ body:has(.todo-nav) .fab {
   gap: 10px;
 }
 @media (min-width: 700px) {
-  .todo-quests {
+  .todo-quests:not(.is-sortable) {
     grid-template-columns: 1fr 1fr;
   }
+}
+/* In "My order" each journey has a grip at its start; dragging draws a line where it will land. One column then,
+   so the order reads top to bottom. */
+.todo-quests.is-sortable > li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.todo-quests.is-sortable .todo-quest-card {
+  flex: 1;
+  min-width: 0;
+}
+.todo-quests.is-sorting > li {
+  transition: transform 0.16s ease-out;
+  user-select: none;
+}
+.todo-quests.is-sorting > li.is-dragging {
+  position: relative;
+  z-index: 2;
+  transition: none;
+  filter: drop-shadow(0 10px 18px rgb(0 0 0 / 0.25));
+}
+.todo-quests > li.drop-before {
+  box-shadow: 0 -6px 0 -3px var(--accent);
+}
+.todo-quests > li.drop-after {
+  box-shadow: 0 6px 0 -3px var(--accent);
+}
+.todo-quests.is-sorting .todo-grip {
+  cursor: grabbing;
 }
 .todo-quest-card {
   display: flex;
@@ -6168,41 +6198,9 @@ body:has(.todo-nav) .fab {
   touch-action: pan-y;
 }
 
-/* ── Lists and tags ── */
+/* ── Tags: every tag is a topic ── */
 .todo-sec-block + .todo-sec-block {
   margin-top: 20px;
-}
-.todo-lists {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px;
-}
-.todo-list-card {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 4px 8px;
-  width: 100%;
-  padding: 12px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  border-bottom-width: 3px;
-  background: var(--surface);
-  text-align: start;
-  cursor: pointer;
-  color: var(--accent);
-}
-.todo-list-card strong {
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.todo-list-card .muted {
-  grid-column: 1 / -1;
 }
 .todo-bar {
   --p: 0;
@@ -6214,11 +6212,6 @@ body:has(.todo-nav) .fab {
 [dir='rtl'] .todo-bar {
   --fwd: left;
 }
-.todo-tagcloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
 .todo-label-title {
   flex: 1;
   display: flex;
@@ -6227,6 +6220,196 @@ body:has(.todo-nav) .fab {
   margin: 0;
   font-size: 1.15rem;
   min-width: 0;
+}
+.todo-topics-sub {
+  margin: -4px 0 10px;
+}
+/* The topics: one card per tag, in the tag's own colour (--h, tagHue() in look.ts), with its next tasks. */
+.todo-topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 10px;
+}
+.todo-topic-card {
+  --c: hsl(var(--h) 70% 50%);
+  --p: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-height: 132px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--c) 35%, var(--border));
+  border-bottom: 4px solid var(--c);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--c) 16%, var(--surface)), var(--surface) 65%);
+  color: var(--text);
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.todo-topic-card:hover,
+.todo-topic-card:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--c) 28%, transparent);
+}
+.todo-topic-card:active {
+  transform: translateY(1px) scale(0.98);
+}
+.todo-topic-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+.todo-topic-top strong {
+  min-width: 0;
+  font-size: 1.02rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.todo-topic-top strong > span,
+.todo-topic-hash {
+  color: var(--c, hsl(var(--h) 70% 50%));
+  font-weight: 900;
+  margin-inline-end: 1px;
+}
+.todo-topic-n {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--c);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 900;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--c) 60%, #000);
+}
+.todo-topic-next {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.8rem;
+  min-width: 0;
+}
+.todo-topic-next > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.todo-topic-next > span:not(.muted)::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-inline-end: 6px;
+  border-radius: 50%;
+  border: 1.5px solid var(--c);
+  vertical-align: 1px;
+}
+.todo-topic-next > span.is-today::before {
+  background: var(--tg-gold);
+  border-color: var(--tg-gold);
+}
+.todo-topic-next > span.is-goal {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--tg-gold) 65%, var(--text));
+}
+.todo-topic-next > span.is-goal::before {
+  display: none;
+}
+.todo-topic-next > span.is-goal svg {
+  flex-shrink: 0;
+  color: var(--tg-gold);
+}
+.todo-topic-next > span.is-goal .t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.todo-topic-next > span.is-goal em {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  font-style: normal;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.todo-topic-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.todo-topic-foot .muted {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.todo-topic-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(to var(--fwd, right), var(--c) calc(var(--p) * 100%), var(--tg-track) 0);
+}
+[dir='rtl'] .todo-topic-bar {
+  --fwd: left;
+}
+/* In a topic, a goal and everything under it are one block: space around it, the guides in gold, a gold tint. */
+.todo-row.goal-head:not(:first-child) {
+  margin-top: 10px;
+}
+.todo-row.goal-last:not(:last-child) {
+  margin-bottom: 12px;
+}
+.todo-row.in-goal {
+  border-color: color-mix(in srgb, var(--tg-gold) 30%, var(--border));
+  background: color-mix(in srgb, var(--tg-gold) 6%, var(--surface));
+}
+.todo-row.in-goal > .todo-guide {
+  border-color: color-mix(in srgb, var(--tg-gold) 70%, transparent);
+}
+/* An open topic: its heading in the tag's colour; rows dragged by the grip; done ones folded away below. */
+.todo-topic-head .todo-label-title {
+  font-size: 1.3rem;
+}
+.todo-topic-head .todo-topic-hash {
+  color: hsl(var(--h) 70% 50%);
+}
+.todo-topic-empty {
+  margin: 8px 0;
+}
+.todo-on-today {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tg-gold) 18%, transparent);
+  color: color-mix(in srgb, var(--tg-gold) 70%, var(--text));
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.todo-topic-done {
+  margin-top: 14px;
+}
+.todo-topic-done > summary {
+  cursor: pointer;
+  padding: 6px 2px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.9rem;
 }
 
 /* ── Task sheet ── */
@@ -6278,7 +6461,7 @@ body:has(.todo-nav) .fab {
   flex-direction: column;
   gap: 8px;
   margin: -4px -18px 0;
-  padding: 4px 18px 6px;
+  padding: 4px 18px 12px; /* room under the drill bar's raised edge, which ends the pinned block */
   background: var(--surface);
   box-shadow: 0 6px 8px -8px rgb(0 0 0 / 0.35);
 }
@@ -7567,8 +7750,12 @@ body:has(.todo-nav) .fab {
 .todo-drill-trail li {
   display: flex;
   align-items: center;
-  flex-shrink: 0;
+  flex: 0 1 auto; /* each level shrinks (its name shortened) so the whole path stays in view */
+  min-width: 48px;
   gap: 2px;
+}
+.todo-drill-trail li:last-child {
+  min-width: 64px;
 }
 .todo-drill-sep {
   opacity: 0.7;
@@ -7578,6 +7765,7 @@ body:has(.todo-nav) .fab {
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
+  min-width: 0;
   max-width: 150px;
   padding: 3px 9px;
   border: 0;
@@ -7653,16 +7841,50 @@ button.todo-drill-crumb:focus-visible {
   color: inherit;
   opacity: 0.8;
 }
-.todo-drill-moves {
-  display: flex;
-  flex-wrap: wrap; /* goals, promote, siblings and the drill-down chip: wrap rather than spill out of the bar */
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.todo-drill-path > .todo-drill-sibs {
+  flex-shrink: 0;
 }
-.todo-drill-moves > * {
+/* Fixed square for the goals menu: the bar's top start corner, in either row. */
+.todo-drill-chip.is-square {
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  gap: 0;
+}
+.todo-drill-chip.is-square .todo-picker-chev {
+  display: none;
+}
+/* The action row: one equal slot per action, labels shortened with an ellipsis rather than wrapping. */
+.todo-drill-acts {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.todo-drill-acts > .todo-drill-menu {
+  flex-shrink: 0;
+}
+.todo-drill-act {
+  flex: 1 1 0;
   min-width: 0;
-  max-width: 100%;
+  display: flex;
+}
+.todo-drill-act > .todo-drill-menu,
+.todo-drill-act > .todo-drill-chip,
+.todo-drill-act > .todo-drill-menu > .todo-drill-chip {
+  width: 100%;
+  min-width: 0;
+}
+.todo-drill-act .todo-drill-chip {
+  justify-content: center;
+}
+.todo-drill-chip .l {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.todo-drill-chip svg {
+  flex-shrink: 0;
 }
 .todo-drill-sibs {
   display: inline-flex;
@@ -7671,7 +7893,7 @@ button.todo-drill-crumb:focus-visible {
 }
 .todo .todo-drill-sibs .icon-btn.sm {
   margin: 0;
-  width: 34px;
+  width: 32px;
   height: 34px;
   color: #fff;
   background: rgb(255 255 255 / 0.14);
@@ -7680,13 +7902,12 @@ button.todo-drill-crumb:focus-visible {
   opacity: 0.35;
 }
 .todo-drill-n {
-  padding: 0 6px;
-  font-size: 0.8rem;
-  font-weight: 800;
+  min-width: 34px;
+  padding: 0 2px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 900;
   white-space: nowrap;
-}
-.todo-drill-down {
-  margin-inline-start: auto;
 }
 .todo-drill-card {
   min-width: 230px;
@@ -7694,7 +7915,9 @@ button.todo-drill-crumb:focus-visible {
   overflow-y: auto;
   color: var(--text);
 }
-.todo-drill-path > .todo-drill-menu .todo-drill-card {
+.todo-drill-path > .todo-drill-menu .todo-drill-card,
+.todo-drill-acts > .todo-drill-menu .todo-drill-card,
+.todo-drill-act:first-of-type .todo-drill-card {
   inset-inline-start: 0;
   inset-inline-end: auto;
 }
@@ -7740,11 +7963,6 @@ button.todo-drill-crumb:focus-visible {
   border-top: 1px dashed var(--border) !important;
   border-radius: 0 0 10px 10px !important;
   margin-top: 4px;
-}
-@media (max-width: 380px) {
-  .todo-drill-goals-l {
-    display: none;
-  }
 }
 
 /* Undo after completing (UndoBar.tsx): a manual popover, so it's in the top layer, above an open sheet. */
@@ -7874,21 +8092,6 @@ button.todo-drill-crumb:focus-visible {
   border-radius: inherit;
   object-fit: cover;
 }
-.todo-home-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 2px 0 4px;
-}
-.todo-home-row > .todo-quest-head {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
-}
-.todo-home-title {
-  margin: 0;
-  font-size: 1.2rem;
-}
 
 /* Tooltips (TipLayer.tsx): hover, keyboard focus, or a long press on phones. */
 .todo-tip {
@@ -7979,3 +8182,252 @@ button.todo-drill-crumb:focus-visible {
   }
 }
 .todo-review-top { margin-top: 6px; }
+
+/* ───── Error page (components/ErrorScreen.tsx) ───── */
+/* A game-style "glitch" screen: a shaking bug badge, a lost life, the plain-words explanation, what the browser
+   said, and a button that copies the technical report for the developer. */
+.err-screen {
+  --err-a: #f43f5e;
+  --err-b: #8b5cf6;
+  min-height: 70vh;
+  display: grid;
+  place-items: center;
+  padding: 24px 16px 48px;
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--err-b) 22%, transparent), transparent 60%),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--text) 4%, transparent) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--text) 4%, transparent) 0 1px, transparent 1px 22px);
+  color: var(--text);
+}
+#root > .err-screen {
+  min-height: 100vh;
+  background-color: var(--bg, var(--surface));
+}
+.err-card {
+  width: min(100%, 520px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 26px 20px 20px;
+  border-radius: 26px;
+  border: 1px solid color-mix(in srgb, var(--err-b) 35%, var(--border));
+  border-bottom-width: 5px;
+  background: var(--surface);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--err-b) 22%, transparent);
+  text-align: center;
+  animation: err-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+.err-badge {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 104px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(160deg, var(--err-a), var(--err-b));
+  color: #fff;
+  animation: err-shake 2.6s ease-in-out infinite;
+  filter: drop-shadow(0 6px 0 color-mix(in srgb, var(--err-b) 55%, #000));
+}
+.err-lives {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+.err-lives .is-full {
+  color: var(--err-a);
+  fill: var(--err-a);
+}
+.err-lives .is-lost {
+  color: var(--muted);
+  opacity: 0.6;
+  animation: err-pop 0.9s 0.3s ease-out both;
+}
+.err-title {
+  position: relative;
+  margin: 4px 0 0;
+  font-size: clamp(1.5rem, 6vw, 2rem);
+  font-weight: 900;
+  line-height: 1.15;
+  text-shadow:
+    2px 0 color-mix(in srgb, var(--err-a) 70%, transparent),
+    -2px 0 color-mix(in srgb, #06b6d4 70%, transparent);
+  animation: err-glitch 3s steps(1) infinite;
+}
+.err-lives-l {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.err-what {
+  margin: 8px 0 0;
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+.err-fix {
+  margin: 0;
+  color: var(--muted);
+}
+.err-said {
+  width: 100%;
+  margin: 8px 0 0;
+  text-align: start;
+}
+.err-said figcaption {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.err-said blockquote {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border-inline-start: 4px solid var(--err-a);
+  background: color-mix(in srgb, var(--err-a) 9%, var(--surface-2));
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.err-said blockquote strong {
+  color: var(--err-a);
+}
+.err-where {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.err-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.err-btn,
+.err-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  border-bottom-width: 3px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.err-btn:active,
+.err-copy:active {
+  transform: translateY(2px);
+  border-bottom-width: 1px;
+}
+.err-btn.is-primary {
+  border-color: color-mix(in srgb, var(--err-b) 60%, #000);
+  background: linear-gradient(135deg, var(--err-a), var(--err-b));
+  color: #fff;
+}
+.err-copy {
+  width: 100%;
+  margin-top: 6px;
+  border-style: dashed;
+  border-bottom-style: solid;
+  color: var(--accent);
+}
+.err-copy.is-done {
+  border-style: solid;
+  border-color: #16a34a;
+  background: color-mix(in srgb, #16a34a 14%, var(--surface));
+  color: #16a34a;
+}
+.err-copy-fail {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+.err-details {
+  width: 100%;
+  text-align: start;
+}
+.err-details summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.err-details summary::-webkit-details-marker {
+  display: none;
+}
+.err-details[open] summary svg {
+  transform: rotate(180deg);
+}
+.err-details pre {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: auto;
+  text-align: left;
+  user-select: all;
+}
+@keyframes err-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+@keyframes err-shake {
+  0%, 82%, 100% { transform: rotate(0); }
+  85% { transform: rotate(-8deg) translateX(-2px); }
+  88% { transform: rotate(7deg) translateX(2px); }
+  91% { transform: rotate(-4deg); }
+  94% { transform: rotate(3deg); }
+}
+@keyframes err-pop {
+  0% { transform: scale(1); opacity: 1; }
+  40% { transform: scale(1.4); }
+  100% { transform: scale(0.85); opacity: 0.45; }
+}
+@keyframes err-glitch {
+  0%, 92%, 100% { transform: none; clip-path: none; }
+  93% { transform: translateX(-3px); clip-path: inset(0 0 55% 0); }
+  95% { transform: translateX(3px); clip-path: inset(45% 0 0 0); }
+  97% { transform: translateX(-1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .err-card,
+  .err-badge,
+  .err-title,
+  .err-lives .is-lost {
+    animation: none;
+  }
+}
+/* While the error page shows, the floating menu would only cover its buttons. */
+body:has(.err-screen) .fab {
+  display: none;
+}
+/* In an open topic: a picker that brings an existing task (and whatever is under it) into the topic. */
+.todo-assign {
+  margin: 0 0 10px;
+}

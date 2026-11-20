@@ -12,7 +12,6 @@ import {
   Hash,
   Inbox,
   Layers,
-  LayoutList,
   ListTodo,
   SlidersHorizontal,
   Sun,
@@ -31,14 +30,20 @@ import {
   addDays,
   blockers,
   dayLabel,
+  depthOf,
   descendants,
   groupTasks,
-  hasLabel,
   isLeftover,
   isOpen,
   isoDay,
   isReminded,
-  labelsIn,
+  goalStage,
+  hasLabel,
+  inTagOrder,
+  positionBetween,
+  tagsIn,
+  tierOf,
+  topicTasks,
   logFor,
   moved,
   foldOutline,
@@ -58,6 +63,8 @@ import {
   type GroupKey,
   type SortKey,
 } from './model';
+import { tagHue, TYPE_ICON } from './look';
+import { SelectMenu } from './SelectMenu';
 import { useOutlineDrag, type Place } from './outlineDrag';
 import { Picker } from './Picker';
 import { QuestMap } from './QuestMap';
@@ -70,10 +77,13 @@ import { UndoBar } from './UndoBar';
 import { TaskSheet } from './TaskSheet';
 import { TipLayer } from './TipLayer';
 
-type Tab = 'today' | 'pool' | 'quests' | 'lists' | 'done';
+type Tab = 'today' | 'pool' | 'quests' | 'tags' | 'done';
 type PoolFilter = 'all' | 'reminded' | 'due' | 'blocked';
+/** The journeys list: its order ('mine' is dragged by hand) and which ones it shows. */
+type QuestSort = 'mine' | 'progress' | 'recent' | 'deadline' | 'name';
+type QuestFilter = 'all' | 'active' | 'new' | 'done';
+const QUEST_SORTS: QuestSort[] = ['mine', 'progress', 'recent', 'deadline', 'name'];
 type Patch = TodoDraft & { id: string };
-type Label = { kind: 'lists' | 'tags'; name: string };
 
 /** Several patches to the same task become one. */
 function merge(list: Patch[]): Patch[] {
@@ -82,13 +92,13 @@ function merge(list: Patch[]): Patch[] {
   return [...m.values()];
 }
 
-const TABS: Tab[] = ['today', 'pool', 'quests', 'lists', 'done'];
+const TABS: Tab[] = ['today', 'pool', 'quests', 'tags', 'done'];
 
 /**
  * To-do, played as a game: a fresh list every day, XP and levels for finished tasks, and purposes played as
  * quests (steps along a road on a canvas, actions around each step). Tasks left open on an earlier day wait
  * for the morning debrief (keep today, or save to the pool after refining priority and setting a reminder);
- * pooled tasks come back on their reminder date. Lists are tasks naming the same list; tags group them.
+ * pooled tasks come back on their reminder date. Every tag is a topic: its tasks, in their own order, in the Tags tab.
  */
 export default function TodoApp() {
   const { user, prefs, toast, t } = useApp();
@@ -104,18 +114,30 @@ export default function TodoApp() {
   const [rows, setRows] = useState<Todo[] | null>(null);
   const [missing, setMissing] = useState(false);
   const [tab, setTabState] = useState<Tab>(() => {
-    const v = recall('tab') as Tab | null;
-    return v && TABS.includes(v) ? v : 'today';
+    const v = recall('tab');
+    if (v === 'lists') return 'tags'; // the Lists tab became the Tags tab
+    return v && TABS.includes(v as Tab) ? (v as Tab) : 'today';
   });
   const [sort, setSortState] = useState<SortKey>(() => (recall('sort') as SortKey | null) ?? 'smart');
-  const [group, setGroupState] = useState<GroupKey>(() => (recall('group') as GroupKey | null) ?? 'none');
+  const [group, setGroupState] = useState<GroupKey>(() => {
+    const v = recall('group') as GroupKey | 'list' | null;
+    return !v || v === 'list' ? 'none' : v; // grouping by list went with the lists
+  });
   const [filter, setFilter] = useState<PoolFilter>('all');
+  const [questSort, setQuestSortState] = useState<QuestSort>(() => {
+    const v = recall('questSort') as QuestSort | null;
+    return v && QUEST_SORTS.includes(v) ? v : 'mine';
+  });
+  const [questFilter, setQuestFilter] = useState<QuestFilter>('all');
+  /** A tag the journeys list is narrowed to ('' = every journey). */
+  const [questTag, setQuestTag] = useState('');
   const [text, setText] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const [draft, setDraft] = useState<TodoDraft | null>(null);
   /** The journey open in the Journeys tab; null shows the list (where the tab always starts). */
   const [questId, setQuestId] = useState<string | null>(null);
-  const [label, setLabel] = useState<Label | null>(null);
+  /** The tag open in the Tags tab (a topic); null shows every topic. */
+  const [topic, setTopic] = useState<string | null>(null);
   /** null: the review opens by itself once a day when there are leftovers. */
   const [reviewChoice, setReviewChoice] = useState<boolean | null>(null);
   const [promptedOn, setPromptedOn] = useState(() => recall('reviewed'));
@@ -189,6 +211,28 @@ export default function TodoApp() {
     return list.sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || b.updated_at.localeCompare(a.updated_at));
   }, [all, questId]);
   const quest = questId ? byId.get(questId) : undefined;
+  /** The journeys list as chosen: filtered by stage and tag, then in the chosen order. */
+  const questsShown = useMemo(() => {
+    const lastActive = (p: Todo) => [p, ...descendants(p.id, all)].reduce((m, t) => (t.updated_at > m ? t.updated_at : m), '');
+    // A tag matches a journey that carries it or has a step or action that does.
+    const tagged = (p: Todo) => [p, ...descendants(p.id, all)].some((t) => hasLabel(t.tags, questTag));
+    const list = purposes.filter((p) => (questFilter === 'all' || goalStage(p, all) === questFilter) && (!questTag || tagged(p)));
+    const by: Record<QuestSort, (a: Todo, b: Todo) => number> = {
+      mine: (a, b) => a.position - b.position,
+      progress: (a, b) => progressOf(b, all) - progressOf(a, all),
+      recent: (a, b) => lastActive(b).localeCompare(lastActive(a)),
+      deadline: (a, b) => (a.deadline ?? a.due_date ?? '9999').localeCompare(b.deadline ?? b.due_date ?? '9999'),
+      name: (a, b) => a.title.localeCompare(b.title, lang),
+    };
+    // Finished journeys go last except in your own order, which is exactly as dragged.
+    return [...list].sort((a, b) => (questSort === 'mine' ? 0 : Number(!isOpen(a)) - Number(!isOpen(b))) || by[questSort](a, b));
+  }, [purposes, questFilter, questTag, questSort, all, lang]);
+  /** The tags in use across the journeys and everything under them, for the tag filter. */
+  const questTags = tagsIn(purposes.flatMap((p) => [p, ...descendants(p.id, all)])).map((l) => l.name);
+  const setQuestSort = (v: QuestSort) => {
+    setQuestSortState(v);
+    remember('questSort', v);
+  };
   const finished = useMemo(() => {
     // A goal with no steps yet has nothing to show for it, so it stays out of the archive.
     const list = all.filter((r) => !isOpen(r) && !(r.goal && !all.some((x) => x.root_id === r.id))).sort((a, b) => (b.done_at ?? b.updated_at).localeCompare(a.done_at ?? a.updated_at));
@@ -214,6 +258,7 @@ export default function TodoApp() {
     remember('tab', v);
     // The Journeys tab always opens on the list of journeys (a journey is picked from there).
     if (v === 'quests') setQuestId(null);
+    if (v === 'tags') setTopic(null); // likewise the Tags tab opens on the topics
     window.scrollTo({ top: 0 });
   };
   const setSort = (v: SortKey) => {
@@ -256,7 +301,7 @@ export default function TodoApp() {
     // A task on a day list that gets its first subtask hands its place to it: parents never sit on Today.
     const handOver = parent?.day && !last ? parent.day : null;
     const full: TodoDraft = {
-      ...(parent ? { day: null, priority: parent.priority, urgency: parent.urgency, tags: parent.tags, lists: parent.lists } : {}),
+      ...(parent ? { day: null, priority: parent.priority, urgency: parent.urgency, tags: parent.tags } : {}),
       ...d,
       ...(handOver ? { day: handOver } : {}),
       prev_id: parent ? (last?.id ?? null) : d.prev_id,
@@ -359,6 +404,45 @@ export default function TodoApp() {
       .map((s) => s.id);
   };
   const outline = useOutlineDrag(poolSiblings, placeStep);
+  /** The open topic's open tasks, top-level ones in the topic's order (its outline nests the rest under them). */
+  const topicOpenOf = () => (topic ? inTagOrder(topicTasks(all, topic).filter(isOpen)) : []);
+  /**
+   * What a dragged row in a topic moves among: a step whose parent is shown too stays among its shown siblings
+   * (as in the pool); a top-level row moves among the topic's top-level rows.
+   */
+  const topicSiblings = (id: string) => {
+    const open = topicOpenOf();
+    const shown = new Set(open.map((r) => r.id));
+    const task = byId.get(id);
+    if (task?.root_id && shown.has(task.root_id))
+      return stepsOf(task.root_id, all)
+        .filter((s) => shown.has(s.id))
+        .map((s) => s.id);
+    return open.filter((r) => !r.root_id || !shown.has(r.root_id)).map((r) => r.id);
+  };
+  /** A drop in a topic: a step is relinked among its siblings; a top-level task takes a `position` between its neighbours. */
+  const placeInTopic = (id: string, place: Place) => {
+    const task = byId.get(id);
+    const shown = new Set(topicOpenOf().map((r) => r.id));
+    if (task?.root_id && shown.has(task.root_id)) return placeStep(id, place);
+    const order = topicSiblings(id)
+      .filter((x) => x !== id)
+      .map((x) => byId.get(x)!);
+    const at = 'before' in place ? order.findIndex((r) => r.id === place.before) : order.findIndex((r) => r.id === place.after) + 1;
+    if (at < 0) return;
+    update([{ id, position: positionBetween(order[at - 1], order[at]) }], true);
+  };
+  const topicDrag = useOutlineDrag(topicSiblings, placeInTopic);
+  /** Journeys in your own order: a drop gives the journey a `position` between its new neighbours in the list. */
+  const questIds = () => questsShown.map((p) => p.id);
+  const placeQuest = (id: string, place: Place) => {
+    const order = questsShown.filter((p) => p.id !== id);
+    const at = 'before' in place ? order.findIndex((r) => r.id === place.before) : order.findIndex((r) => r.id === place.after) + 1;
+    if (at < 0) return;
+    update([{ id, position: positionBetween(order[at - 1], order[at]) }], true);
+  };
+  const questDrag = useOutlineDrag(questIds, placeQuest);
+  const canDragQuests = questSort === 'mine' && questsShown.length > 1;
   /**
    * Makes a task a goal (a journey): out of its parent if it has one (taking its own subtasks along) and off the
    * day lists. `false` takes the mark off again (a goal that already has steps stays one, by having them).
@@ -398,7 +482,7 @@ export default function TodoApp() {
   /** Where a new task goes from the current screen. */
   const placeOf = (): TodoDraft => {
     if (tab === 'pool') return { day: null };
-    if (tab === 'lists' && label) return { day: null, [label.kind]: [label.name] };
+    if (tab === 'tags' && topic) return { day: null, tags: [topic] };
     if (tab === 'quests' && quest) return { root_id: quest.id, day: null };
     return { day: today };
   };
@@ -412,7 +496,6 @@ export default function TodoApp() {
       ...place,
       ...q,
       tags: [...(place.tags ?? []), ...(q.tags ?? [])],
-      lists: [...(place.lists ?? []), ...(q.lists ?? [])],
     });
   };
   const openNew = (extra?: TodoDraft) => {
@@ -548,10 +631,11 @@ export default function TodoApp() {
         </ul>
       </section>
     ));
-  const viewBar = (opts: { sort?: boolean; groups?: GroupKey[]; children?: ReactNode }) => (
+  const viewBar = (opts: { sort?: boolean; groups?: GroupKey[]; children?: ReactNode; extra?: ReactNode }) => (
     <div className="todo-viewbar">
       {opts.children}
       <span className="todo-viewbar-end">
+        {opts.extra}
         {opts.groups && (
           <Picker
             label={tt('groupBy')}
@@ -577,7 +661,7 @@ export default function TodoApp() {
       </span>
     </div>
   );
-  const GROUPS: GroupKey[] = ['none', 'tag', 'list', 'type', 'status'];
+  const GROUPS: GroupKey[] = ['none', 'tag', 'type', 'status'];
   const Back = lang === 'he' ? ArrowRight : ArrowLeft;
   /** Add fields read in the interface's direction (Hebrew: right to left), whatever language is typed into them. */
   const uiDir = lang === 'he' ? 'rtl' : 'ltr';
@@ -717,20 +801,63 @@ export default function TodoApp() {
           {tt('startQuest')}
         </button>
       </form>
+      {purposes.length > 1 &&
+        viewBar({
+          children: (
+            <span className="todo-chips">
+              {(['all', 'active', 'new', 'done'] as QuestFilter[]).map((k) => {
+                const n = k === 'all' ? purposes.length : purposes.filter((p) => goalStage(p, all) === k).length;
+                return (
+                  <button key={k} type="button" className={`chip sm${questFilter === k ? ' on' : ''}`} aria-pressed={questFilter === k} onClick={() => setQuestFilter(k)}>
+                    {tt(`qf_${k}`)} <span className="muted">{n}</span>
+                  </button>
+                );
+              })}
+            </span>
+          ),
+          extra: (
+            <>
+              {questTags.length > 0 && (
+                <Picker
+                  label={tt('qTag')}
+                  icon={<Hash size={15} aria-hidden />}
+                  value={questTag}
+                  options={[{ value: '', label: tt('qTagAll') }, ...questTags.map((t) => ({ value: t, label: `#${t}` }))]}
+                  onChange={setQuestTag}
+                />
+              )}
+              <Picker
+                label={tt('sortBy')}
+                icon={<ArrowDownUp size={15} aria-hidden />}
+                value={questSort}
+                options={QUEST_SORTS.map((k) => ({ value: k, label: tt(`qsort_${k}`) }))}
+                onChange={setQuestSort}
+              />
+            </>
+          ),
+        })}
       {purposes.length === 0 ? (
         <div className="todo-blank">
           <Swords size={40} strokeWidth={1.5} aria-hidden />
           <p>{tt('questsEmpty')}</p>
           <p className="muted small">{tt('purposeHint')}</p>
         </div>
+      ) : questsShown.length === 0 ? (
+        <p className="muted small todo-topic-empty">{tt('questsNone')}</p>
       ) : (
-        <ul className="todo-quests">
-          {purposes.map((p) => {
+        <ul className={`todo-quests${canDragQuests ? ' is-sortable' : ''}${questDrag.dragging ? ' is-sorting' : ''}`}>
+          {questsShown.map((p) => {
             const steps = stepsOf(p.id, all);
             const next = steps.find((s) => isOpen(s) && !blockers(s, byId).length);
             const pr = progressOf(p, all);
+            const look = questDrag.rowLook(p.id);
             return (
-              <li key={p.id} className={`ty-${p.type}${isOpen(p) ? '' : ' is-closed'}`}>
+              <li key={p.id} data-id={p.id} className={`ty-${p.type}${isOpen(p) ? '' : ' is-closed'}${look.className ? ` ${look.className}` : ''}`} style={look.rowStyle}>
+                {canDragQuests && (
+                  <button type="button" className="icon-btn sm todo-grip todo-quest-grip" aria-label={tt('dragToReorder')} data-tip={tt('tipQuestGrip')} {...questDrag.grip(p.id)}>
+                    <GripVertical size={18} />
+                  </button>
+                )}
                 <button type="button" className="todo-quest-card" onClick={() => pickQuest(p.id)}>
                   <span className="todo-ring" style={{ '--p': pr } as React.CSSProperties}>
                     {Math.round(pr * 100)}%
@@ -756,65 +883,237 @@ export default function TodoApp() {
     </>
   );
 
-  const lists = labelsIn(all, 'lists');
-  const tags = labelsIn(all, 'tags');
-  const labelTasks = label ? sortTasks(all.filter((r) => hasLabel(r[label.kind], label.name) && r.status !== 'quit'), sort, today, byId) : [];
-  const labelHead = label && (
-    <div className="todo-quest-head">
-      <button type="button" className="icon-btn" onClick={() => setLabel(null)} aria-label={tt('allLists')} data-tip={tt('allLists')}>
+  const tags = tagsIn(all);
+  const topicAll = topic ? topicTasks(all, topic) : [];
+  const topicOpen = inTagOrder(topicAll.filter(isOpen));
+  const topicDone = topicAll.filter((r) => !isOpen(r));
+  // The topic as an outline, like the pool: steps under their parent, foldable.
+  const topicRows = foldOutline(nestTasks(topicOpen, all), collapsed);
+  /** Whether row `i` sits under a goal: its top-level row (the nearest level-0 row above it) is one. */
+  const goalBlock = (i: number) => {
+    let j = i;
+    while (j > 0 && topicRows[j].level > 0) j--;
+    return isGoal(topicRows[j].task, all);
+  };
+  const topicHead = topic && (
+    <div className="todo-quest-head todo-topic-head" style={{ '--h': tagHue(topic) } as React.CSSProperties}>
+      <button type="button" className="icon-btn" onClick={() => setTopic(null)} aria-label={tt('allTags')} data-tip={tt('allTags')}>
         <Back size={20} />
       </button>
       <h2 className="todo-label-title" dir="auto">
-        {label.kind === 'tags' ? <Hash size={18} aria-hidden /> : <LayoutList size={18} aria-hidden />}
-        {label.name}
+        <span className="todo-topic-hash" aria-hidden>
+          #
+        </span>
+        {topic}
       </h2>
-      <span className="muted small">{tt('openN', { n: labelTasks.filter(isOpen).length })}</span>
+      <span className="muted small">{tt('openN', { n: topicOpen.length })}</span>
     </div>
   );
-  const listsView = label ? (
+  /** Fold, grip, then "Today" (or a mark that it's on today already): the topic's own row actions. */
+  const topicActs = (r: Todo, kids: number, hidden: number) => (
+    <span className="todo-acts">
+      {kids > 0 && (
+        <button
+          type="button"
+          className={`todo-fold-btn${hidden ? ' is-shut' : ''}`}
+          onClick={() => toggleFold(r.id)}
+          aria-expanded={!hidden}
+          aria-label={hidden ? tt('expandN', { n: hidden }) : tt('collapse')}
+          data-tip={hidden ? tt('expandN', { n: hidden }) : tt('collapse')}
+        >
+          <ChevronDown size={16} aria-hidden />
+          {hidden > 0 && <span>{hidden}</span>}
+        </button>
+      )}
+      {topicSiblings(r.id).length > 1 && (
+        <button type="button" className="icon-btn sm todo-grip" aria-label={tt('dragToReorder')} data-tip={tt('tipTagOrder')} {...topicDrag.grip(r.id)}>
+          <GripVertical size={18} />
+        </button>
+      )}
+      {r.day === today ? (
+        <span className="todo-on-today" data-tip={tt('tipOnToday')}>
+          <Sun size={14} aria-hidden />
+          {tt('tagOnToday')}
+        </span>
+      ) : (
+        toTodayBtn(r)
+      )}
+    </span>
+  );
+  // Open tasks not yet in the open topic, offered to bring in (a goal brings everything under it along).
+  const inTopic = new Set(topicAll.map((r) => r.id));
+  const topicCandidates = topic ? all.filter((r) => isOpen(r) && !inTopic.has(r.id)) : [];
+  const assignToTopic = (id: string) => {
+    const t = byId.get(id);
+    if (!t || !topic) return;
+    update([{ id, tags: [...t.tags, topic] }]);
+    toast(tt('assigned', { title: t.title || tt('untitled'), tag: `\u2068#${topic}\u2069` }));
+  };
+  const tagsView = topic ? (
     <>
-      {labelTasks.length > 0 && viewBar({ sort: true, groups: GROUPS })}
-      {grouped(labelTasks, (r) => (r.day === today || !isOpen(r) ? {} : { showRemind: true, action: toTodayBtn(r) }), label.kind === 'lists' && group === 'list' ? 'tag' : group)}
+      {topicCandidates.length > 0 && (
+        <div className="todo-assign">
+          <SelectMenu
+            label={tt('assignExisting')}
+            value={null}
+            placeholder={tt('assignExisting')}
+            searchPlaceholder={tt('searchTasks')}
+            empty={tt('noMatches')}
+            options={nestTasks(topicCandidates, all).map(({ task: o, level }) => {
+              const Icon = TYPE_ICON[o.type];
+              const goalish = isGoal(o, all);
+              return {
+                value: o.id,
+                label: o.title || tt('untitled'),
+                level,
+                icon: <Icon size={15} aria-hidden className={`todo-menu-ic ty-${o.type}`} />,
+                note: goalish ? tt('assignWithSteps', { n: descendants(o.id, all).filter(isOpen).length }) : o.root_id ? tt(`tier_${tierOf(depthOf(o, byId))}`) : undefined,
+              };
+            })}
+            onChange={assignToTopic}
+          />
+        </div>
+      )}
+      {topicOpen.length === 0 ? (
+        <p className="muted small todo-topic-empty">{topicAll.length ? tt('tagNoOpen') : tt('tagFresh', { tag: `\u2068#${topic}\u2069` })}</p>
+      ) : (
+        <ul className={`todo-list is-outline${topicDrag.dragging ? ' is-sorting' : ''}`}>
+          {topicRows.map(({ task: r, level, kids, hidden }, i) => {
+            const look = topicDrag.rowLook(r.id);
+            // A goal and everything under it read as one block, set apart from the loose tasks around it.
+            const head = level === 0 && kids > 0 && isGoal(r, all);
+            const inGoal = level > 0 && goalBlock(i);
+            const last = (head && hidden > 0) || (inGoal && (topicRows[i + 1]?.level ?? 0) === 0);
+            const block = [head ? 'goal-head' : '', inGoal ? 'in-goal' : '', last ? 'goal-last' : ''];
+            return (
+              <TaskRow
+                key={r.id}
+                task={r}
+                all={all}
+                byId={byId}
+                today={today}
+                lang={lang}
+                onToggle={toggle}
+                onOpen={(x) => openTask(x.id)}
+                showRemind
+                hideTag={topic}
+                hideRoot={level > 0}
+                action={topicActs(r, kids, hidden)}
+                className={[level > 0 ? 'is-nested' : '', ...block, look.className].filter(Boolean).join(' ') || undefined}
+                rowStyle={{ '--lvl': level, ...look.rowStyle } as React.CSSProperties}
+              />
+            );
+          })}
+        </ul>
+      )}
+      {topicDone.length > 0 && (
+        <details className="todo-topic-done">
+          <summary>{tt('tagDoneFold', { n: topicDone.length })}</summary>
+          <ul className="todo-list">{topicDone.map((r) => row(r))}</ul>
+        </details>
+      )}
     </>
   ) : (
     <>
-      <section className="todo-sec-block">
-        <h2 className="todo-group-h">{tt('listsTitle')}</h2>
-        {lists.length === 0 ? (
-          <p className="muted small">{tt('listsEmpty')}</p>
-        ) : (
-          <ul className="todo-lists">
-            {lists.map((l) => {
-              const items = all.filter((r) => hasLabel(r.lists, l.name) && r.status !== 'quit');
-              const done = items.filter((r) => r.status === 'completed').length;
-              return (
-                <li key={l.name}>
-                  <button type="button" className="todo-list-card" onClick={() => setLabel({ kind: 'lists', name: l.name })}>
-                    <LayoutList size={18} aria-hidden />
-                    <strong dir="auto">{l.name}</strong>
-                    <span className="muted small">{tt('openN', { n: l.open })}</span>
-                    <span className="todo-bar" style={{ '--p': items.length ? done / items.length : 0 } as React.CSSProperties} />
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-      <section className="todo-sec-block">
-        <h2 className="todo-group-h">{tt('tagsTitle')}</h2>
-        {tags.length === 0 ? (
-          <p className="muted small">{tt('tagsEmpty')}</p>
-        ) : (
-          <div className="todo-tagcloud">
-            {tags.map((l) => (
-              <button key={l.name} type="button" className="chip" onClick={() => setLabel({ kind: 'tags', name: l.name })} dir="auto">
-                #{l.name} <span className="muted">{l.open}</span>
+      {/* A new topic: it opens straight away, empty, and every task added there carries its tag. */}
+      <form
+        className="todo-newquest todo-newtag"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const name = String(new FormData(e.currentTarget).get('tag') ?? '')
+            .replace(/^#+/, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 60);
+          if (!name) return;
+          e.currentTarget.reset();
+          // An existing tag with the same name (in any letter case) opens instead of a twin.
+          setTopic(tags.find((t) => t.name.toLowerCase() === name.toLowerCase())?.name ?? name);
+          window.scrollTo({ top: 0 });
+          setTimeout(() => document.querySelector<HTMLInputElement>('.todo-add input')?.focus(), 50);
+        }}
+      >
+        <Hash size={18} aria-hidden />
+        <input name="tag" placeholder={tt('newTag')} aria-label={tt('newTag')} dir={uiDir} enterKeyHint="go" maxLength={60} />
+        <button type="submit" className="btn primary sm">
+          {tt('newTagGo')}
+        </button>
+      </form>
+      {tags.length === 0 ? (
+        <div className="todo-blank">
+          <Hash size={40} strokeWidth={1.5} aria-hidden />
+          <p>{tt('tagsEmpty')}</p>
+        </div>
+      ) : (
+    <section className="todo-sec-block">
+      <h2 className="todo-group-h">
+        {tt('tagsTitle')} <span className="muted">{tags.length}</span>
+      </h2>
+      <p className="muted small todo-topics-sub">{tt('tagsSub')}</p>
+      <ul className="todo-topics">
+        {tags.map((l) => {
+          const items = topicTasks(all, l.name);
+          const open = inTagOrder(items.filter(isOpen));
+          const done = items.length - open.length;
+          const onToday = open.filter((r) => r.day === today).length;
+          // What the card lists: the topic's top-level items (a goal stands for everything under it).
+          const ids = new Set(open.map((r) => r.id));
+          const tops = open.filter((r) => !r.root_id || !ids.has(r.root_id));
+          return (
+            <li key={l.name}>
+              <button
+                type="button"
+                className="todo-topic-card"
+                style={{ '--h': tagHue(l.name), '--p': items.length ? done / items.length : 0 } as React.CSSProperties}
+                onClick={() => {
+                  setTopic(l.name);
+                  window.scrollTo({ top: 0 });
+                }}
+              >
+                <span className="todo-topic-top">
+                  <strong dir="auto">
+                    <span aria-hidden>#</span>
+                    {l.name}
+                  </strong>
+                  <span className="todo-topic-n">{open.length}</span>
+                </span>
+                {tops.length > 0 && (
+                  <span className="todo-topic-next">
+                    {tops.slice(0, 3).map((r) =>
+                      isGoal(r, all) ? (
+                        <span key={r.id} dir="auto" className="is-goal">
+                          <Flag size={12} aria-hidden />
+                          <span className="t">{r.title || tt('untitled')}</span>
+                          <em dir="ltr">{Math.round(progressOf(r, all) * 100)}%</em>
+                        </span>
+                      ) : (
+                        <span key={r.id} dir="auto" className={r.day === today ? 'is-today' : undefined}>
+                          {r.title || tt('untitled')}
+                        </span>
+                      ),
+                    )}
+                    {tops.length > 3 && <span className="muted">{tt('tagMore', { n: tops.length - 3 })}</span>}
+                  </span>
+                )}
+                <span className="todo-topic-foot">
+                  <span className="todo-topic-bar" aria-hidden />
+                  <span className="muted small">
+                    {tt('tagDoneN', { n: done })}
+                    {onToday > 0 && (
+                      <>
+                        {' · '}
+                        <Sun size={12} aria-hidden /> {onToday}
+                      </>
+                    )}
+                  </span>
+                </span>
               </button>
-            ))}
-          </div>
-        )}
-      </section>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+      )}
     </>
   );
 
@@ -837,8 +1136,8 @@ export default function TodoApp() {
 
   const nav: { id: Tab; label: TKey; icon: typeof Sun; n?: number; dot?: boolean }[] = [
     // Today in the middle, within easy reach of the thumb; the pool on one side of it, the journeys on the other
-    // (in Hebrew, right to left: lists, pool, today, journeys, done).
-    { id: 'lists', label: 'lists', icon: LayoutList },
+    // (in Hebrew, right to left: tags, pool, today, journeys, done).
+    { id: 'tags', label: 'tagsTab', icon: Hash },
     { id: 'pool', label: 'pool', icon: Inbox, n: pool.length },
     { id: 'today', label: 'today', icon: Sun, n: todayAll.length - doneToday, dot: reminded.length > 0 },
     { id: 'quests', label: 'quests', icon: Swords, n: purposes.filter(isOpen).length },
@@ -847,28 +1146,23 @@ export default function TodoApp() {
   const placeholder =
     tab === 'pool'
       ? tt('addPool')
-      : tab === 'lists' && label
-        ? tt('addToList', { list: `\u2068${label.kind === 'tags' ? '#' : ''}${label.name}\u2069` })
+      : tab === 'tags' && topic
+        ? tt('addToTag', { tag: `\u2068#${topic}\u2069` })
         : tab === 'quests' && quest
           ? tt('add_step')
           : tt('addToday');
-  const canAdd = tab === 'today' || tab === 'pool' || (tab === 'lists' && !!label) || (tab === 'quests' && !!quest);
+  const canAdd = tab === 'today' || tab === 'pool' || (tab === 'tags' && !!topic) || (tab === 'quests' && !!quest);
 
   return (
     <div className={`todo tab-${tab}`} ref={setRootEl}>
       {/* The blog's app header row is hidden for this app (index.css); its heading lives on here for screen readers. */}
       <h1 className="sr-only">{tt('appName')}</h1>
       <div className="todo-top">
-        {tab === 'quests' && (
-          <div className="todo-home-row">
-            <HomeLink />
-            {questHead || <h2 className="todo-home-title">{tt('quests')}</h2>}
-          </div>
-        )}
-        {tab === 'lists' && labelHead}
-        {tab !== 'quests' && (
+        {/* An open journey or topic has its own heading row (with the way back) above the bar. */}
+        {tab === 'quests' && questHead}
+        {tab === 'tags' && topicHead}
+        {/* The same game bar on every tab: on Today it counts the day's list, elsewhere the level's XP. */}
         <Hud home={<HomeLink />} mode={tab === 'today' ? 'day' : 'xp'} onLevel={() => setLevelsOpen(true)} stats={stats} done={doneToday} total={todayAll.length} pal={pal} reduced={reduced} lang={lang} tt={tt} />
-        )}
         {canAdd && (
           <form className={`todo-add${text.trim() ? ' has-text' : ''}`} onSubmit={quickAdd}>
             <input
@@ -913,7 +1207,7 @@ export default function TodoApp() {
         {tab === 'today' && todayView}
         {tab === 'pool' && poolView}
         {tab === 'quests' && questsView}
-        {tab === 'lists' && listsView}
+        {tab === 'tags' && tagsView}
         {tab === 'done' && doneView}
       </div>
 

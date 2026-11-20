@@ -501,6 +501,17 @@ export function cleanLink(v: unknown): string | null {
   }
 }
 
+const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+/**
+ * Tasks used to have named lists as well as tags (until 2026-11-20). A row from back then still carries `lists`
+ * (the demo's IndexedDB, or a live row read before schema.sql merged the column): those names become tags. When
+ * the change sets `tags` itself, they're already in it (the app read them as tags), so they aren't added again.
+ */
+const oldLists = (d: TodoDraft, base?: Todo): unknown => {
+  const legacy = (o: unknown) => (o as { lists?: unknown } | undefined)?.lists;
+  return legacy(d) ?? ('tags' in d ? [] : legacy(base));
+};
+
 export function todoFields(d: TodoDraft, base?: Todo) {
   const pick = <K extends keyof TodoDraft>(k: K) => (k in d ? d[k] : base?.[k as keyof Todo]);
   const level = (k: 'priority' | 'urgency' | 'complexity', max: number) => {
@@ -529,8 +540,7 @@ export function todoFields(d: TodoDraft, base?: Todo) {
     deadline: date('deadline'),
     remind_on: date('remind_on'),
     day: date('day'),
-    tags: cleanLabels(pick('tags')),
-    lists: cleanLabels(pick('lists')),
+    tags: cleanLabels([...asList(pick('tags')), ...asList(oldLists(d, base))]),
     link: cleanLink(pick('link')),
     goal: !!pick('goal'),
     depends_on: deps.slice(0, 50),

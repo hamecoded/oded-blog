@@ -124,15 +124,37 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   Tasks with subtasks never sit on Today or come up as leftovers (`parents` in App.tsx); "Today" on one sends its
   `nextLeaf()`, and a task on a day list hands its place to its first subtask (`create()`).
   A task's main link (`todos.link`) is cleaned by `cleanLink()` (util.ts: https:// added, http/https only, matching the
-  `todos_link_check` constraint) and opens from the form, the pinned title and the row. The task form leads with the
-  flow under the `DrillBar` (subtasks card, stage, depends on, part of), then description, main link, where, type,
+  `todos_link_check` constraint) and opens from the form, the pinned title and the row. The task form's pinned top is
+  the title, then the `DrillBar`; it leads with the flow under them (subtasks card, stage, depends on, part of), then description, main link, where, type,
   labels; levels and dates last.
   Goals = `isGoal()`: top-level and either marked (`todos.goal`, set by "Make it a goal" in the `DrillBar` or by
   starting a journey) or having steps; goals count as parents (never on Today). Completing or quitting a task offers
   `UndoBar` for 5 s: the undo is `update(patches, quiet = true)`, which restores stage, day and log without logging.
-  `UndoBar` is a manual popover portalled into the open sheet's dialog when there is one (a modal dialog makes the
-  rest of the page inert). The `Hud` has `mode` 'day' on Today (done / set for today) and 'xp' elsewhere; Journeys
-  has none.
+  The `DrillBar` has two fixed rows: path (goals square, ancestors shrinking to fit, a "2/3" sibling stepper) and
+  actions (equal `.todo-drill-act` slots); with no path the goals square leads the action row. `UndoBar` is a manual popover portalled into the open sheet's dialog when there is one (a modal dialog makes the
+  rest of the page inert). The `Hud` is on every tab: `mode` 'day' on Today (done / set for today), 'xp' elsewhere;
+  an open journey's or topic's heading row sits above it.
+  **Tags are topics (2026-11-20):** named lists (`todos.lists`, `@name`) were removed and merged into tags. schema.sql
+  folds any list names into `tags` and drops the column (the one place it drops a column; the data stays, as tags);
+  `todoFields()` does the same for older rows still carrying `lists` (demo IndexedDB, or a live row before the
+  migration). The Tags tab shows one card per tag (`tagsIn()`, colour `tagHue()` in look.ts, also used for the row
+  chips); a topic is `topicTasks()` (tagged tasks plus everything under them) as an outline like the pool
+  (`nestTasks()`, `foldOutline()`, the same fold set), top-level rows in `inTagOrder()` (by `position`), dragged with
+  a second `useOutlineDrag()`: a nested row is relinked among its siblings (`placeStep()`); a top-level drop gives the
+  task a `position` between its new neighbours (`positionBetween()`), so one `position` serves every tag a task
+  carries. A goal and the rows under it form one block (`goal-head` / `in-goal` / `goal-last`: gold guides, a tint,
+  space around); the cards list a topic's top-level items, goals with a flag and their progress. Rows in a topic carry
+  "Today" (`toTodayBtn`) or an "on today" mark; done ones fold away below. A new topic is only a name until its
+  first task: the form just opens it (`setTopic`), and `placeOf()` tags what's added there.
+  "Add an existing task" (`SelectMenu`, `assignToTopic`) adds the tag to an open task not yet in the topic.
+  Journeys list (2026-11-20): `questsShown` filters by `goalStage()` and tag and sorts by `QuestSort` (remembered);
+  in 'mine' (by `position`) a third `useOutlineDrag()` reorders it, one column, a drop setting `positionBetween()`.
+- **Error page (2026-11-20):** `components/ErrorScreen.tsx` is the router's `errorElement` (on a pathless route inside
+  `Layout`, so the blog's frame stays; also on the root and `/:site` routes) and `AppErrorBoundary` wraps everything in
+  main.tsx. `lib/errorReport.ts` sorts a crash into a plain-words kind (`readError()`: update / offline / notFound /
+  database / data / bug), builds the developer report (`errorReport()`), and copies it (`copyText()`, with an
+  execCommand fallback for plain-http phone testing). Its strings are `err*` in i18n.ts, read through `DICTS` and the
+  saved prefs, since the page may draw outside `AppProvider`.
 - **No page zoom on phones (2026-11-11):** `maximum-scale=1, user-scalable=no` in index.html, `touch-action:
   pan-x pan-y` on `html`, and Safari's `gesturestart`/`gesturechange` cancelled in main.tsx. Form fields use 16px
   text so focusing them doesn't zoom either.
@@ -179,8 +201,8 @@ printed PDF. **Not yet run on the live database:** the `possessions` table, its 
 in schema.sql.
 
 **To-do (2026-11-09):** tested in demo mode in a headless browser at 375px (Hebrew) and 1280px (English): quick add
-with #tags/@lists/!, completing with effects, the task sheet (type, stage, contacts, comments, steps, log), quests and
-the map, lists, the next-day review with a swipe, pool and done. **Not yet run on the live database:** the `todos`
+with #tags/!, completing with effects, the task sheet (type, stage, contacts, comments, steps, log), quests and
+the map, tag topics, the next-day review with a swipe, pool and done. **Not yet run on the live database:** the `todos`
 table and its policy in schema.sql.
 
 **Live since 2026-10-31** at https://oded.me (GitHub Pages, repo `hamecoded/oded-blog`,

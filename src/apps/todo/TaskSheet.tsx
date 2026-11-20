@@ -20,7 +20,7 @@ import { Sheet } from '../../components/Sheet';
 import { cleanLink } from '../../lib/util';
 import type { Lang, Todo, TodoComment, TodoContact, TodoDatum, TodoDraft, TodoLogEntry, TodoStatus, TodoType } from '../../lib/types';
 import { CommentsField, ContactsField, DataField, Fold, LabelField, LogField, StageTrack, TypePicker } from './fields';
-import { blockers, childTier, dayLabel, depthOf, descendants, heightOf, hostOf, isGoal, isOpen, labelsIn, levelKeys, nestTasks, SIZES, stepsOf, tierOf, xpFor } from './model';
+import { blockers, childTier, dayLabel, depthOf, descendants, heightOf, hostOf, isGoal, isOpen, levelKeys, tagsIn, nestTasks, SIZES, stepsOf, tierOf, xpFor } from './model';
 import { TYPE_ICON } from './look';
 import { RemindField } from './RemindField';
 import { Segmented } from './Segmented';
@@ -44,7 +44,6 @@ interface Form {
   remind_on: string | null;
   day: string | null;
   tags: string[];
-  lists: string[];
   link: string;
   depends_on: string[];
   data: TodoDatum[];
@@ -67,7 +66,6 @@ const formOf = (t: TodoDraft): Form => ({
   remind_on: t.remind_on ?? null,
   day: t.day ?? null,
   tags: t.tags ?? [],
-  lists: t.lists ?? [],
   link: t.link ?? '',
   depends_on: t.depends_on ?? [],
   data: t.data ?? [],
@@ -97,7 +95,7 @@ function diff(a: Form, b: Form): Partial<Form> {
 
 /**
  * One task, every field (a bottom sheet on phones): title and kind, its stage on the road, where it sits
- * (today, the pool, a reminder), levels, dates, tags and lists, what it waits for, the steps or actions derived
+ * (today, the pool, a reminder), levels, dates, tags, what it waits for, the steps or actions derived
  * from it, and folding sections for data, people, comments and history. Closing it saves what changed; a new
  * task is created only once it has a title.
  */
@@ -257,21 +255,7 @@ export function TaskSheet({
     <Sheet open onClose={close} title={title} wide>
       <div className={`todo-sheet ty-${form.type}`}>
         <div className="todo-sheet-top">
-          <DrillBar
-            task={task}
-            parentId={parentId}
-            all={all}
-            byId={byId}
-            lang={lang}
-            onOpen={go}
-            onAddKid={focusAddStep}
-            onGoal={(on) => {
-              if (!task) return;
-              commit();
-              onSetGoal(task, on);
-            }}
-          />
-
+          {/* The title first, then the drill-down bar with its quick actions. */}
           <div className="todo-title-row">
             <textarea
               ref={titleRef}
@@ -299,6 +283,20 @@ export function TaskSheet({
               +{xpFor(form)} XP
             </span>
           </div>
+          <DrillBar
+            task={task}
+            parentId={parentId}
+            all={all}
+            byId={byId}
+            lang={lang}
+            onOpen={go}
+            onAddKid={focusAddStep}
+            onGoal={(on) => {
+              if (!task) return;
+              commit();
+              onSetGoal(task, on);
+            }}
+          />
         </div>
 
         {/* The task's flow comes first: its subtasks, its stage, what it waits for and what it belongs to.
@@ -467,19 +465,10 @@ export function TaskSheet({
         </div>
 
         <LabelField
-          label={tt('listsField')}
-          values={form.lists}
-          onChange={(v) => set('lists', v)}
-          suggest={labelsIn(all, 'lists').map((l) => l.name)}
-          prefix="@"
-          placeholder={tt('addList')}
-          hint={tt('listsHint')}
-        />
-        <LabelField
           label={tt('tags')}
           values={form.tags}
           onChange={(v) => set('tags', v)}
-          suggest={labelsIn(all, 'tags').map((l) => l.name)}
+          suggest={tagsIn(all).map((l) => l.name)}
           prefix="#"
           placeholder={tt('addTag')}
           hint={tt('tagsHint')}

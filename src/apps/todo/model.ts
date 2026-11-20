@@ -219,6 +219,12 @@ export function foldOutline(rows: { task: Todo; level: number }[], collapsed: Se
   return out;
 }
 
+/** A journey's stage, for the journeys filter: finished, not started (nothing done or under way), or on its way. */
+export function goalStage(p: Todo, all: Todo[]): 'done' | 'new' | 'active' {
+  if (!isOpen(p)) return 'done';
+  return descendants(p.id, all).some((k) => k.status === 'inprogress' || !isOpen(k)) || p.status === 'inprogress' ? 'active' : 'new';
+}
+
 /**
  * A goal: a top-level task that's marked as one (promoted, or started from the journeys) or already has steps.
  * Goals are the journeys; like any task with subtasks they never sit on Today themselves.
@@ -308,10 +314,10 @@ export function sortTasks(list: Todo[], key: SortKey, today: string, byId: Map<s
 
 // ── Grouping ──
 
-export type GroupKey = 'none' | 'tag' | 'list' | 'type' | 'status';
+export type GroupKey = 'none' | 'tag' | 'type' | 'status';
 
 /**
- * Splits tasks into labelled groups. A task with several tags (or lists) shows under each of them; tasks with
+ * Splits tasks into labelled groups. A task with several tags shows under each of them; tasks with
  * none go last, under `none`. Groups keep the tasks' order.
  */
 export function groupTasks(list: Todo[], key: GroupKey, tt: Tt): { id: string; label: string; items: Todo[] }[] {
@@ -325,9 +331,8 @@ export function groupTasks(list: Todo[], key: GroupKey, tt: Tt): { id: string; l
     if (key === 'type') put(t.type, tt(`ty_${t.type}`), t);
     else if (key === 'status') put(t.status, tt(`st_${t.status}`), t);
     else {
-      const labels = key === 'tag' ? t.tags : t.lists;
-      if (!labels.length) put('', tt(key === 'tag' ? 'noTag' : 'noList'), t);
-      labels.forEach((l) => put(l.toLowerCase(), key === 'tag' ? `#${l}` : l, t));
+      if (!t.tags.length) put('', tt('noTag'), t);
+      t.tags.forEach((l) => put(l.toLowerCase(), `#${l}`, t));
     }
   });
   const order =
@@ -340,11 +345,11 @@ export function groupTasks(list: Todo[], key: GroupKey, tt: Tt): { id: string; l
   });
 }
 
-/** Every tag (or list name) in use, most used first, with how many open tasks carry it. */
-export function labelsIn(all: Todo[], key: 'tags' | 'lists'): { name: string; open: number; total: number }[] {
+/** Every tag in use, most used first, with how many open tasks carry it. */
+export function tagsIn(all: Todo[]): { name: string; open: number; total: number }[] {
   const m = new Map<string, { name: string; open: number; total: number }>();
   all.forEach((t) =>
-    t[key].forEach((l) => {
+    t.tags.forEach((l) => {
       const k = l.toLowerCase();
       const e = m.get(k) ?? { name: l, open: 0, total: 0 };
       e.total++;
@@ -357,20 +362,49 @@ export function labelsIn(all: Todo[], key: 'tags' | 'lists'): { name: string; op
 
 export const hasLabel = (labels: string[], name: string) => labels.some((l) => l.toLowerCase() === name.toLowerCase());
 
-// ── Quick add: "Call the bank #money @errands !!" ──
+/**
+ * A tag's own order of its tasks (dragged in the Tags tab): open ones first, then by `position`. One `position`
+ * per task serves every tag it carries: a drop moves the task between its two new neighbours only, so the
+ * order under its other tags barely changes.
+ */
+export function inTagOrder(list: Todo[]): Todo[] {
+  return [...list].sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || a.position - b.position);
+}
 
 /**
- * Reads #tags, @lists and ! marks (! high, !! urgent too) out of a quick-add line. Underscores in a label
- * stand for spaces (@home_repairs → "home repairs").
+ * A topic's tasks: those carrying the tag, and everything under them (a tagged goal brings its steps and actions,
+ * tagged or not), without quit ones. Shown as an outline in the Tags tab.
+ */
+export function topicTasks(all: Todo[], tag: string): Todo[] {
+  const out = new Map<string, Todo>();
+  all.filter((t) => hasLabel(t.tags, tag)).forEach((t) => {
+    out.set(t.id, t);
+    descendants(t.id, all).forEach((k) => out.set(k.id, k));
+  });
+  return [...out.values()].filter((t) => t.status !== 'quit');
+}
+
+/** A `position` between two neighbours (either may be missing: the start or the end of the list). */
+export function positionBetween(before: Todo | undefined, after: Todo | undefined): number {
+  if (before && after) return (before.position + after.position) / 2;
+  if (before) return before.position + 1000;
+  if (after) return after.position - 1000;
+  return Date.now();
+}
+
+// ── Quick add: "Call the bank #money !!" ──
+
+/**
+ * Reads #tags and ! marks (! high, !! urgent too) out of a quick-add line. Underscores in a tag stand for
+ * spaces (#home_repairs → "home repairs").
  */
 export function parseQuick(text: string): TodoDraft & { title: string } {
   const tags: string[] = [];
-  const lists: string[] = [];
   let bangs = 0;
   const words = text.split(/\s+/).filter((w) => {
-    const m = /^([#@])([^\s#@]+)$/u.exec(w);
+    const m = /^#([^\s#]+)$/u.exec(w);
     if (m) {
-      (m[1] === '#' ? tags : lists).push(m[2].replace(/_/g, ' '));
+      tags.push(m[1].replace(/_/g, ' '));
       return false;
     }
     if (/^!{1,3}$/.test(w)) {
@@ -379,7 +413,7 @@ export function parseQuick(text: string): TodoDraft & { title: string } {
     }
     return true;
   });
-  const out: TodoDraft & { title: string } = { title: words.join(' ').trim(), tags, lists };
+  const out: TodoDraft & { title: string } = { title: words.join(' ').trim(), tags };
   if (bangs) {
     out.priority = 3;
     if (bangs > 1) out.urgency = bangs === 2 ? 2 : 3;

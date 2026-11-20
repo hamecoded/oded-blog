@@ -41,3 +41,13 @@ export const TYPE_ICON: Record<TodoType, LucideIcon> = {
   enrichments: Gem,
   planning: Route,
 };
+
+/**
+ * A tag's own hue (0–359), the same for the same name in any letter case: each topic in the Tags tab keeps one
+ * colour, so it's recognised at a glance.
+ */
+export function tagHue(name: string): number {
+  let h = 0;
+  for (const ch of name.toLowerCase()) h = (h * 31 + ch.codePointAt(0)!) % 3600;
+  return Math.round(h / 10) % 360;
+}

@@ -13,7 +13,7 @@ const app: AppManifest = {
   image: cover,
   colors: ['#10b981', '#0ea5e9'],
   category: { en: 'Productivity', he: 'פרודוקטיביות' },
-  tags: ['tasks', 'quests', 'lists'],
+  tags: ['tasks', 'quests', 'topics'],
   version: '1.0',
   updated: '2026-11-09',
   // First in the store: Possessions is also featured, with order 1.

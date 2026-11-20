@@ -14,6 +14,7 @@ import { NotFound } from './pages/NotFound';
 import { PrivacyPage } from './pages/Privacy';
 import { AppHostPage, AppsPage } from './pages/Apps';
 import { Landing, SiteLayout } from './site/SiteLayout';
+import { RouteError } from './components/ErrorScreen';
 
 function Layout() {
   const { t, user, toastMsg } = useApp();
@@ -105,32 +106,41 @@ const router = createBrowserRouter(
   [
     {
       element: <Layout />,
+      // A page that breaks shows the error page inside the blog's frame (the pathless route below); one that breaks
+      // the frame itself shows it on its own.
+      errorElement: <RouteError />,
       children: [
-        { path: '/', element: <Home /> },
-        { path: '/posts/new', lazy: editor },
-        { path: '/posts/print', element: <PrintView /> },
-        { path: '/posts/:slug', element: <PostView /> },
-        { path: '/posts/:slug/edit', lazy: editor },
-        { path: '/posts/:slug/print', element: <PrintView /> },
-        { path: '/tags', element: <TagsPage /> },
-        { path: '/tags/:tag', element: <TagPage /> },
-        { path: '/authors/:username', element: <AuthorPage /> },
-        { path: '/archive/:year/:month?', element: <ArchivePage /> },
-        { path: '/search', element: <SearchPage /> },
-        { path: '/login', element: <AuthPage mode="login" /> },
-        { path: '/signup', element: <AuthPage mode="signup" /> },
-        { path: '/logout', element: <Logout /> },
-        { path: '/account', element: <AccountPage /> },
-        { path: '/privacy', element: <PrivacyPage /> },
-        { path: '/apps', element: <AppsPage /> },
-        { path: '/apps/:app', element: <AppHostPage /> },
-        { path: '/admin', lazy: () => import('./pages/Admin').then((m) => ({ Component: m.AdminPage })) },
-        { path: '*', element: <NotFound /> },
+        {
+          errorElement: <RouteError />,
+          children: [
+            { path: '/', element: <Home /> },
+            { path: '/posts/new', lazy: editor },
+            { path: '/posts/print', element: <PrintView /> },
+            { path: '/posts/:slug', element: <PostView /> },
+            { path: '/posts/:slug/edit', lazy: editor },
+            { path: '/posts/:slug/print', element: <PrintView /> },
+            { path: '/tags', element: <TagsPage /> },
+            { path: '/tags/:tag', element: <TagPage /> },
+            { path: '/authors/:username', element: <AuthorPage /> },
+            { path: '/archive/:year/:month?', element: <ArchivePage /> },
+            { path: '/search', element: <SearchPage /> },
+            { path: '/login', element: <AuthPage mode="login" /> },
+            { path: '/signup', element: <AuthPage mode="signup" /> },
+            { path: '/logout', element: <Logout /> },
+            { path: '/account', element: <AccountPage /> },
+            { path: '/privacy', element: <PrivacyPage /> },
+            { path: '/apps', element: <AppsPage /> },
+            { path: '/apps/:app', element: <AppHostPage /> },
+            { path: '/admin', lazy: () => import('./pages/Admin').then((m) => ({ Component: m.AdminPage })) },
+            { path: '*', element: <NotFound /> },
+          ],
+        },
       ],
     },
     {
       path: '/:site',
       element: <SiteLayout />,
+      errorElement: <RouteError />,
       children: [
         { index: true, element: <Landing /> },
         { path: 'posts', element: <ArticlesPage /> },

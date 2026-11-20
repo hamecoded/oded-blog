@@ -100,9 +100,9 @@ export function LabelField({
   const [text, setText] = useState('');
   /** The highlighted suggestion while typing (-1: none, Enter adds the typed text). */
   const [active, setActive] = useState(-1);
-  const id = `todo-sug-${prefix === '#' ? 'tags' : 'lists'}`;
+  const id = 'todo-sug-tags';
   const add = (raw: string) => {
-    const v = raw.replace(/^[#@]+/, '').trim();
+    const v = raw.replace(/^#+/, '').trim();
     setText('');
     setActive(-1);
     if (v && !values.some((x) => x.toLowerCase() === v.toLowerCase())) onChange([...values, v]);
@@ -110,7 +110,7 @@ export function LabelField({
   const unused = suggest.filter((s) => !values.some((v) => v.toLowerCase() === s.toLowerCase()));
   const free = unused.slice(0, 8);
   // While typing: the names in use that contain what's typed, in the app's own dropdown (not the browser's).
-  const typed = text.replace(/^[#@]+/, '').trim().toLowerCase();
+  const typed = text.replace(/^#+/, '').trim().toLowerCase();
   const matches = typed ? unused.filter((s) => s.toLowerCase().includes(typed)).slice(0, 6) : [];
   return (
     <div className="todo-labels">

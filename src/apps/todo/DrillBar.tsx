@@ -6,7 +6,18 @@ import { childTier, depthOf, isGoal, isOpen, progressOf, stepsOf, tierOf } from 
 import { useTt } from './strings';
 
 /** A compact dropdown in the bar: a chip that opens a card of rows. Closes on a pick, Escape or a tap outside. */
-function BarMenu({ label, trigger, children }: { label: string; trigger: ReactNode; children: (close: () => void) => ReactNode }) {
+function BarMenu({
+  label,
+  trigger,
+  square,
+  children,
+}: {
+  label: string;
+  trigger: ReactNode;
+  /** An icon-only button of fixed size (the goals menu). */
+  square?: boolean;
+  children: (close: () => void) => ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -30,7 +41,7 @@ function BarMenu({ label, trigger, children }: { label: string; trigger: ReactNo
     >
       <button
         type="button"
-        className="todo-drill-chip"
+        className={`todo-drill-chip${square ? ' is-square' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}
@@ -129,14 +140,7 @@ export function DrillBar({
    */
   const showTrail = path.length > 0;
   const goalsMenu = goals.length > 0 && (
-    <BarMenu
-      label={tt('goals')}
-      trigger={
-        <>
-          <Flag size={15} aria-hidden /> <span className="todo-drill-goals-l">{tt('goals')}</span>
-        </>
-      }
-    >
+    <BarMenu label={tt('goals')} square trigger={<Flag size={17} aria-hidden />}>
       {(close) =>
         goals.map((g) => (
           <button
@@ -160,109 +164,133 @@ export function DrillBar({
     </BarMenu>
   );
 
+  // The previous / next sibling: a compact stepper ("‹ 2/3 ›") at the end of the path row.
+  const sibNav = siblings.length > 1 && at >= 0 && (
+    <span className="todo-drill-sibs" aria-label={tt('nOfTier', { tier: tt(`tier_${tier}`), n: at + 1, m: siblings.length })}>
+      <button
+        type="button"
+        className="icon-btn sm"
+        disabled={at <= 0}
+        onClick={() => onOpen(siblings[at - 1].id)}
+        aria-label={tt('prevStep')}
+        data-tip={at > 0 ? tt('openTask', { title: siblings[at - 1].title || tt('untitled') }) : undefined}
+      >
+        {lang === 'he' ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+      </button>
+      <span className="todo-drill-n" dir="ltr" data-tip={tt('nOfTier', { tier: tt(`tier_${tier}`), n: at + 1, m: siblings.length })}>
+        {at + 1}/{siblings.length}
+      </span>
+      <button
+        type="button"
+        className="icon-btn sm"
+        disabled={at >= siblings.length - 1}
+        onClick={() => onOpen(siblings[at + 1].id)}
+        aria-label={tt('nextStep')}
+        data-tip={at < siblings.length - 1 ? tt('openTask', { title: siblings[at + 1].title || tt('untitled') }) : undefined}
+      >
+        {lang === 'he' ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+      </button>
+    </span>
+  );
+
+  // The actions, each in its own equal slot of the bottom row: go down into the subtasks (or start some), and make
+  // it a goal (or take the mark off).
+  const acts: ReactNode[] = [];
+  if (task && depth < 2)
+    acts.push(
+      kids.length > 0 ? (
+        <BarMenu
+          key="down"
+          label={tt(`kids_${kidTier as 'step' | 'action'}`)}
+          trigger={
+            <>
+              <ArrowDownToLine size={15} aria-hidden />
+              <span className="l">{tt('drillInto', { n: kids.length, what: tt(`kids_${kidTier as 'step' | 'action'}`) })}</span>
+            </>
+          }
+        >
+          {(close) => (
+            <>
+              {kids.map((k) => {
+                const Icon = STATUS_ICON[k.status];
+                return (
+                  <button
+                    key={k.id}
+                    type="button"
+                    role="menuitem"
+                    className={`st-${k.status}`}
+                    onClick={() => {
+                      close();
+                      onOpen(k.id);
+                    }}
+                  >
+                    <Icon size={16} aria-hidden className="todo-drill-st" />
+                    <span className="todo-menu-l">{k.title || tt('untitled')}</span>
+                    {all.some((x) => x.root_id === k.id) && <span className="todo-menu-note">{stepsOf(k.id, all).length}</span>}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                role="menuitem"
+                className="todo-drill-add"
+                onClick={() => {
+                  close();
+                  onAddKid();
+                }}
+              >
+                <Plus size={16} aria-hidden /> {tt(`add_${kidTier as 'step' | 'action'}`)}
+              </button>
+            </>
+          )}
+        </BarMenu>
+      ) : (
+        <button key="down" type="button" className="todo-drill-chip" onClick={onAddKid}>
+          <Plus size={15} aria-hidden />
+          <span className="l">{tt(`breakInto_${kidTier as 'step' | 'action'}`)}</span>
+        </button>
+      ),
+    );
+  if (task && !goal)
+    acts.push(
+      <button key="goal" type="button" className="todo-drill-chip is-promote" onClick={() => onGoal(true)} data-tip={tt('promoteHint')}>
+        <Flag size={15} aria-hidden />
+        <span className="l">{tt('promote')}</span>
+      </button>,
+    );
+  if (task && goal && task.goal && kids.length === 0)
+    acts.push(
+      <button key="goal" type="button" className="todo-drill-chip" onClick={() => onGoal(false)}>
+        <FlagOff size={15} aria-hidden />
+        <span className="l">{tt('unpromote')}</span>
+      </button>,
+    );
+
+  /*
+   * Two fixed rows, so a full bar stays tidy:
+   *   path row:    [goals]  goal › step (scrolls when long)   [‹ 2/3 ›]
+   *   action row:  [goals]  [ drill down / break into ] [ make it a goal ]   (equal slots)
+   * The goals button keeps the top start corner: in the path row when there is a path, else leading the actions.
+   */
   return (
     <nav className="todo-drill" aria-label={tt('drillNav')}>
       {showTrail && (
         <div className="todo-drill-path">
-          {showTrail && goalsMenu}
+          {goalsMenu}
           <ol className="todo-drill-trail" ref={trail}>
             {path.map((t, i) => crumb(t, i, i === path.length - 1))}
           </ol>
+          {sibNav}
         </div>
       )}
-
-      {(siblings.length > 1 || task || !showTrail) && (
-        <div className="todo-drill-moves">
+      {(acts.length > 0 || (!showTrail && goalsMenu)) && (
+        <div className="todo-drill-acts">
           {!showTrail && goalsMenu}
-          {task && !goal && (
-            <button type="button" className="todo-drill-chip is-promote" onClick={() => onGoal(true)} data-tip={tt('promoteHint')}>
-              <Flag size={15} aria-hidden /> {tt('promote')}
-            </button>
-          )}
-          {task && goal && task.goal && kids.length === 0 && (
-            <button type="button" className="todo-drill-chip" onClick={() => onGoal(false)}>
-              <FlagOff size={15} aria-hidden /> {tt('unpromote')}
-            </button>
-          )}
-          {siblings.length > 1 && at >= 0 && (
-            <span className="todo-drill-sibs">
-              <button
-                type="button"
-                className="icon-btn sm"
-                disabled={at <= 0}
-                onClick={() => onOpen(siblings[at - 1].id)}
-                aria-label={tt('prevStep')}
-                data-tip={at > 0 ? tt('openTask', { title: siblings[at - 1].title || tt('untitled') }) : undefined}
-              >
-                {lang === 'he' ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-              </button>
-              <span className="todo-drill-n">{tt('nOfTier', { tier: tt(`tier_${tier}`), n: at + 1, m: siblings.length })}</span>
-              <button
-                type="button"
-                className="icon-btn sm"
-                disabled={at >= siblings.length - 1}
-                onClick={() => onOpen(siblings[at + 1].id)}
-                aria-label={tt('nextStep')}
-                data-tip={at < siblings.length - 1 ? tt('openTask', { title: siblings[at + 1].title || tt('untitled') }) : undefined}
-              >
-                {lang === 'he' ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
-              </button>
+          {acts.map((x, i) => (
+            <span key={i} className="todo-drill-act">
+              {x}
             </span>
-          )}
-          {task && depth < 2 && (
-            <span className="todo-drill-down">
-              {kids.length > 0 ? (
-                <BarMenu
-                  label={tt(`kids_${kidTier as 'step' | 'action'}`)}
-                  trigger={
-                    <>
-                      <ArrowDownToLine size={15} aria-hidden />
-                      {tt('drillInto', { n: kids.length, what: tt(`kids_${kidTier as 'step' | 'action'}`) })}
-                    </>
-                  }
-                >
-                  {(close) => (
-                    <>
-                      {kids.map((k) => {
-                        const Icon = STATUS_ICON[k.status];
-                        return (
-                          <button
-                            key={k.id}
-                            type="button"
-                            role="menuitem"
-                            className={`st-${k.status}`}
-                            onClick={() => {
-                              close();
-                              onOpen(k.id);
-                            }}
-                          >
-                            <Icon size={16} aria-hidden className="todo-drill-st" />
-                            <span className="todo-menu-l">{k.title || tt('untitled')}</span>
-                            {all.some((x) => x.root_id === k.id) && <span className="todo-menu-note">{stepsOf(k.id, all).length}</span>}
-                          </button>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="todo-drill-add"
-                        onClick={() => {
-                          close();
-                          onAddKid();
-                        }}
-                      >
-                        <Plus size={16} aria-hidden /> {tt(`add_${kidTier as 'step' | 'action'}`)}
-                      </button>
-                    </>
-                  )}
-                </BarMenu>
-              ) : (
-                <button type="button" className="todo-drill-chip" onClick={onAddKid}>
-                  <Plus size={15} aria-hidden /> {tt(`breakInto_${kidTier as 'step' | 'action'}`)}
-                </button>
-              )}
-            </span>
-          )}
+          ))}
         </div>
       )}
     </nav>
