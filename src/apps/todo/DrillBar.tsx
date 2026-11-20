@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDownToLine, ChevronDown, ChevronLeft, ChevronRight, Flag, FlagOff, Plus } from 'lucide-react';
 import type { Lang, Todo } from '../../lib/types';
-import { STATUS_ICON } from './look';
+import { STATUS_ICON, VEIL } from './look';
 import { childTier, depthOf, isGoal, isOpen, progressOf, stepsOf, tierOf } from './model';
 import { useTt } from './strings';
 
@@ -76,7 +76,10 @@ export function DrillBar({
   onOpen,
   onAddKid,
   onGoal,
+  veil,
 }: {
+  /** Sensitive and locked: blurred in the goals menu. */
+  veil: (t: Todo) => boolean;
   task: Todo | null;
   parentId: string | null;
   all: Todo[];
@@ -154,7 +157,7 @@ export function DrillBar({
             }}
           >
             <span className="todo-drill-pct" style={{ '--p': progressOf(g, all) } as React.CSSProperties} aria-hidden />
-            <span className="todo-menu-l">{g.title || tt('untitled')}</span>
+            <span className={`todo-menu-l${veil(g) ? ' todo-veil' : ''}`}>{veil(g) ? VEIL : g.title || tt('untitled')}</span>
             <span className="todo-menu-note" dir="ltr">
               {Math.round(progressOf(g, all) * 100)}%
             </span>

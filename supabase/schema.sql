@@ -745,9 +745,26 @@ drop policy if exists "todo events own" on public.todo_events;
 create policy "todo events own" on public.todo_events for all
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid() and not coalesce((select suspended from public.profiles where id = auth.uid()), false));
+-- Sensitive (top-level tasks, events): shown blurred in the app until the To-do PIN is entered. A privacy screen
+-- for the device, not encryption; the rows are owner-only like the rest.
+alter table public.todos add column if not exists sensitive boolean not null default false;
+alter table public.todo_events add column if not exists sensitive boolean not null default false;
+-- Each user's To-do settings: the PIN's hash (sha256 of user id + PIN, hex), nothing else for now.
+create table if not exists public.todo_settings (
+  owner_id   uuid primary key default auth.uid() references public.profiles (id) on delete cascade,
+  pin_hash   text check (pin_hash is null or pin_hash ~ '^[0-9a-f]{64}$'),
+  updated_at timestamptz not null default now()
+);
+alter table public.todo_settings enable row level security;
+drop policy if exists "todo settings own" on public.todo_settings;
+create policy "todo settings own" on public.todo_settings for all
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid() and not coalesce((select suspended from public.profiles where id = auth.uid()), false));
 -- The event a task is for; deleting the event keeps the task, without it.
 alter table public.todos add column if not exists event_id uuid references public.todo_events (id) on delete set null;
 create index if not exists todos_event_idx on public.todos (event_id);
+-- Kept on its event only (out of the rest of the app) until published from the event's page.
+alter table public.todos add column if not exists event_only boolean not null default false;
 
 -- ───────────────────────── Storage (uploaded images / videos) ─────────────────────────
 insert into storage.buckets (id, name, public, file_size_limit)

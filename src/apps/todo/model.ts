@@ -503,6 +503,13 @@ export function remember(key: string, value: string) {
     /* not kept */
   }
 }
+export function forget(key: string) {
+  try {
+    localStorage.removeItem(`todo.${key}`);
+  } catch {
+    /* nothing kept anyway */
+  }
+}
 export function recall(key: string): string | null {
   try {
     return localStorage.getItem(`todo.${key}`);
@@ -526,4 +533,14 @@ export function sameContacts(a: TodoContact[], b: TodoContact[]): boolean {
   const key = (cs: TodoContact[]) =>
     JSON.stringify(cs.filter((c) => c.first.trim() || c.last.trim() || c.phone.trim() || c.email.trim()).map((c) => [c.first, c.last, c.phone, c.email, c.note].map((x) => x.trim())));
   return key(a) === key(b);
+}
+
+/** Kept on its event only: it, or a task it's under, is `event_only` (and still has its event). */
+export function isEventOnly(t: Todo, byId: Map<string, Todo>): boolean {
+  const seen = new Set<string>();
+  for (let x: Todo | undefined = t; x && !seen.has(x.id); x = x.root_id ? byId.get(x.root_id) : undefined) {
+    seen.add(x.id);
+    if (x.event_only && x.event_id) return true;
+  }
+  return false;
 }

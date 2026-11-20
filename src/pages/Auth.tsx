@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
-import { OAUTH_LABELS } from '../lib/util';
+import { markFreshSignIn, markOAuthPending, OAUTH_LABELS } from '../lib/util';
 import { TURNSTILE_SITE_KEY } from '../lib/captcha';
 import { Turnstile } from '../components/Turnstile';
 import type { OAuthProvider } from '../lib/types';
@@ -40,6 +40,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     setErr('');
     setBusy(true);
     try {
+      markOAuthPending();
       await api.signInWithOAuth(provider, from);
       // Live site: the browser is now leaving for the provider, so stay busy. Demo: signed in already.
     } catch (e2) {
@@ -58,7 +59,10 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     }
     setBusy(true);
     try {
-      if (mode === 'login') await api.signIn(email, password, captcha || undefined);
+      if (mode === 'login') {
+        await api.signIn(email, password, captcha || undefined);
+        markFreshSignIn();
+      }
       else {
         const r = await api.signUp(email, password, name, captcha || undefined);
         if (r.needsConfirmation) setInfo(t('checkEmail'));

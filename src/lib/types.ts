@@ -312,6 +312,16 @@ export interface Todo {
   goal: boolean;
   /** The event it's for (a `TodoEvent`), or null. */
   event_id: string | null;
+  /**
+   * Kept on its event only (with everything under it): out of Today, the pool, tags, journeys and done until it's
+   * published from the event's page. Tasks created on an event's page start so.
+   */
+  event_only: boolean;
+  /**
+   * Sensitive (a top-level task only): it and everything under it show blurred until the to-do PIN is entered.
+   * A privacy screen for the device, not encryption: the row is as private as any other (owner only).
+   */
+  sensitive: boolean;
   /** Tasks that have to be finished first. */
   depends_on: string[];
   /** The task this one was derived from (null: a root purpose). */
@@ -365,9 +375,16 @@ export interface TodoEvent {
   contacts: TodoContact[];
   tips: TodoEventTip[];
   items: TodoEventItem[];
+  /** Shown blurred until the to-do PIN is entered (like a sensitive task). */
+  sensitive: boolean;
   position: number;
   created_at: string;
   updated_at: string;
+}
+
+/** The user's To-do settings: for now the PIN's hash (sha256 of user id + PIN), null until one is set. */
+export interface TodoSettings {
+  pin_hash: string | null;
 }
 
 export type TodoEventDraft = Partial<Omit<TodoEvent, 'id' | 'owner_id' | 'created_at' | 'updated_at'>> & { id?: string };
@@ -454,4 +471,7 @@ export interface Api {
   saveTodoEvent(e: TodoEventDraft): Promise<TodoEvent>;
   /** Deletes events; tasks that pointed at them keep going, without an event. */
   deleteTodoEvents(ids: string[]): Promise<void>;
+  /** The user's To-do settings (PIN hash); defaults when none are saved or the live table isn't there yet. */
+  getTodoSettings(): Promise<TodoSettings>;
+  saveTodoSettings(s: TodoSettings): Promise<void>;
 }

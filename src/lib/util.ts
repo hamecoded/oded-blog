@@ -541,6 +541,7 @@ export function todoEventFields(d: TodoEventDraft, base?: TodoEvent) {
       const text = clip(o.text, 300).trim();
       return text ? { id: idOf(o), text, done: !!o.done, at: stamp(o.at) } : null;
     }),
+    sensitive: !!pick('sensitive'),
     position: numOrNull(pick('position')) ?? Date.now(),
   };
 }
@@ -586,6 +587,9 @@ export function todoFields(d: TodoDraft, base?: Todo) {
     link: cleanLink(pick('link')),
     goal: !!pick('goal'),
     event_id: (pick('event_id') as string | null | undefined) || null,
+    // Only meaningful with an event: a task without one is never hidden.
+    event_only: !!pick('event_only') && !!pick('event_id'),
+    sensitive: !!pick('sensitive'),
     depends_on: deps.slice(0, 50),
     root_id: ref('root_id'),
     prev_id: ref('prev_id'),
@@ -641,4 +645,43 @@ export function looksMachineMade(text: string | null | undefined): boolean {
 export function needsReview(p: Pick<Profile, 'display_name' | 'username' | 'email' | 'review_reason'>): boolean {
   if (p.review_reason === 'approved') return false;
   return !!p.review_reason || looksMachineMade(p.display_name) || looksMachineMade(p.email?.split('@')[0]);
+}
+
+// ── Fresh sign-in (the To-do app lets a forgotten PIN be reset only right after signing in) ──
+
+const SIGNED_IN_AT = 'blog.signedInAt';
+const OAUTH_PENDING = 'blog.oauthPending';
+
+/** Notes that the user has just signed in (password, or back from a sign-in service). */
+export function markFreshSignIn() {
+  try {
+    localStorage.setItem(SIGNED_IN_AT, String(Date.now()));
+    localStorage.removeItem(OAUTH_PENDING);
+  } catch {
+    /* not kept: a PIN reset then needs another sign-in */
+  }
+}
+/** Before leaving for a sign-in service: the return is a fresh sign-in too. */
+export function markOAuthPending() {
+  try {
+    localStorage.setItem(OAUTH_PENDING, '1');
+  } catch {
+    /* not kept */
+  }
+}
+export function oauthPending(): boolean {
+  try {
+    return localStorage.getItem(OAUTH_PENDING) === '1';
+  } catch {
+    return false;
+  }
+}
+/** Whether the user signed in within the last `minutes`. */
+export function signedInWithin(minutes: number): boolean {
+  try {
+    const at = Number(localStorage.getItem(SIGNED_IN_AT));
+    return at > 0 && Date.now() - at < minutes * 60_000;
+  } catch {
+    return false;
+  }
 }

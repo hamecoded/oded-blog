@@ -51,3 +51,6 @@ export function tagHue(name: string): number {
   for (const ch of name.toLowerCase()) h = (h * 31 + ch.codePointAt(0)!) % 3600;
   return Math.round(h / 10) % 360;
 }
+
+/** What a blurred sensitive title shows instead of the real one (the same for every item, so length tells nothing). */
+export const VEIL = '••••••••••••';

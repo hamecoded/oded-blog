@@ -4,6 +4,7 @@ import { Ctx, type Prefs } from './app';
 import { DICTS, type TKey } from './i18n';
 import { DEFAULT_FONT, ensureFonts, fontStack } from './fonts';
 import type { Profile } from './types';
+import { markFreshSignIn, oauthPending } from './util';
 
 const PREFS_KEY = 'blog.prefs';
 
@@ -36,11 +37,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    // Back from a sign-in service (Google…) with a session: that's a fresh sign-in (see markFreshSignIn).
+    const fresh = (u: Profile | null) => {
+      if (u && oauthPending()) markFreshSignIn();
+    };
     api.currentUser().then((u) => {
+      fresh(u);
       setUser(u);
       setAuthReady(true);
     });
     return api.onAuthChange((u) => {
+      fresh(u);
       setUser(u);
       setAuthReady(true);
     });

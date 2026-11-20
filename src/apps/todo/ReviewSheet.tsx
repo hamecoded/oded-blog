@@ -2,7 +2,7 @@ import { useRef, useState, type CSSProperties } from 'react';
 import { ArrowUpToLine, CircleCheck, CircleSlash, Inbox, Lock } from 'lucide-react';
 import { Sheet } from '../../components/Sheet';
 import type { Lang, Todo, TodoDraft } from '../../lib/types';
-import { TYPE_ICON } from './look';
+import { TYPE_ICON, VEIL } from './look';
 import { blockers, dayLabel, levelKeys } from './model';
 import { RemindField } from './RemindField';
 import { Segmented } from './Segmented';
@@ -29,7 +29,10 @@ export function ReviewSheet({
   onDecide,
   onAll,
   onClose,
+  veil,
 }: {
+  /** Sensitive and locked: shown blurred here too (names hidden). */
+  veil: (t: Todo) => boolean;
   open: boolean;
   leftovers: Todo[];
   byId: Map<string, Todo>;
@@ -133,10 +136,10 @@ export function ReviewSheet({
               </span>
               {root && (
                 <span className="todo-card-root" dir="auto">
-                  {tt('partOf')} {root.title}
+                  {tt('partOf')} {veil(root) ? VEIL : root.title}
                 </span>
               )}
-              <h3 dir="auto">{task.title || tt('untitled')}</h3>
+              <h3 dir="auto" className={veil(task) ? 'todo-veil' : undefined}>{veil(task) ? VEIL : task.title || tt('untitled')}</h3>
               {task.description && (
                 <p className="todo-card-desc" dir="auto">
                   {task.description}
@@ -144,7 +147,7 @@ export function ReviewSheet({
               )}
               {waitFor.length > 0 && (
                 <p className="todo-wait">
-                  <Lock size={14} aria-hidden /> {tt('blockedBy', { list: waitFor.map((w) => w.title).join(', ') })}
+                  <Lock size={14} aria-hidden /> {tt('blockedBy', { list: waitFor.map((w) => (veil(w) ? VEIL : w.title)).join(', ') })}
                 </p>
               )}
               <span className="todo-card-st muted small">{tt(`st_${task.status}`)}</span>

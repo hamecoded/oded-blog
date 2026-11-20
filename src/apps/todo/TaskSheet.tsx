@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  CalendarClock,
+  EyeOff,
+  SlidersHorizontal,
   CalendarDays,
   CalendarOff,
   ExternalLink,
@@ -23,7 +26,7 @@ import { cleanLink } from '../../lib/util';
 import type { Lang, Todo, TodoComment, TodoContact, TodoDatum, TodoDraft, TodoEvent, TodoLogEntry, TodoStatus, TodoType } from '../../lib/types';
 import { CommentsField, ContactsField, DataField, Fold, LabelField, LogField, StageTrack, TypePicker } from './fields';
 import { blockers, childTier, dayLabel, depthOf, descendants, heightOf, hostOf, isGoal, isOpen, levelKeys, sameContacts, tagsIn, nestTasks, SIZES, stepsOf, tierOf, xpFor } from './model';
-import { TYPE_ICON } from './look';
+import { TYPE_ICON, VEIL } from './look';
 import { RemindField } from './RemindField';
 import { Segmented } from './Segmented';
 import { useTt } from './strings';
@@ -48,6 +51,7 @@ interface Form {
   tags: string[];
   link: string;
   event_id: string | null;
+  event_only: boolean;
   depends_on: string[];
   data: TodoDatum[];
   contacts: TodoContact[];
@@ -71,6 +75,7 @@ const formOf = (t: TodoDraft): Form => ({
   tags: t.tags ?? [],
   link: t.link ?? '',
   event_id: t.event_id ?? null,
+  event_only: t.event_only ?? false,
   depends_on: t.depends_on ?? [],
   data: t.data ?? [],
   contacts: t.contacts ?? [],
@@ -122,6 +127,9 @@ export function TaskSheet({
   onSetGoal,
   onMoved,
   events,
+  veil,
+  veilEvent,
+  onSensitive,
   onPlayQuest,
 }: {
   /** The task open in the sheet; null with a draft for a new one, null without a draft when closed. */
@@ -148,6 +156,11 @@ export function TaskSheet({
   onMoved?: (task: Todo, toToday: boolean) => void;
   /** The user's events, for the "Event" field. */
   events: TodoEvent[];
+  /** Sensitive and locked right now: its name is blurred in this form's menus. */
+  veil: (t: Todo) => boolean;
+  veilEvent: (e: TodoEvent) => boolean;
+  /** Marks a top-level task sensitive (blurred until the PIN), or takes the mark off. */
+  onSensitive: (task: Todo, on: boolean) => void;
   onPlayQuest: (id: string) => void;
 }) {
   const tt = useTt();
@@ -222,11 +235,6 @@ export function TaskSheet({
     .filter((o) => isOpen(o) && !family.has(o.id) && !form.depends_on.includes(o.id) && !o.depends_on.includes(task?.id ?? '-'))
     .sort((a, b) => a.title.localeCompare(b.title, lang));
   const waitFor = task && isOpen(task) ? blockers({ ...task, depends_on: form.depends_on }, byId) : [];
-  const dayOptions = [
-    { value: today, label: tt('today') },
-    { value: '', label: tt('pool') },
-    ...(form.day && form.day !== today ? [{ value: form.day, label: tt('onDay', { day: dayLabel(form.day, today, lang, tt) }) }] : []),
-  ];
   const level = (k: keyof typeof levelKeys, short?: boolean) =>
     levelKeys[k].map((lk, i) => ({ value: i, label: short && k === 'complexity' ? SIZES[i] : tt(lk), title: tt(lk) }));
   // Parents it could move under: not itself or anything under it, and deep enough room for what hangs below it
@@ -243,7 +251,7 @@ export function TaskSheet({
     const d = depthOf(o, byId);
     return {
       value: o.id,
-      label: o.title || tt('untitled'),
+      label: veil(o) ? `${VEIL} (${tt('veiled')})` : o.title || tt('untitled'),
       level: d,
       icon: <Icon size={15} aria-hidden className={`todo-menu-ic ty-${o.type}`} />,
       // The tier only where it says something: a step or action, or a task that has steps (a purpose).
@@ -297,6 +305,7 @@ export function TaskSheet({
             byId={byId}
             lang={lang}
             onOpen={go}
+            veil={veil}
             onAddKid={focusAddStep}
             onGoal={(on) => {
               if (!task) return;
@@ -306,9 +315,17 @@ export function TaskSheet({
           />
         </div>
 
-        {/* The task's flow comes first: its subtasks, its stage, what it waits for and what it belongs to.
-            Then what it is and where it sits; levels and dates after that. */}
+        {/* The task's flow comes first: its stage and its subtasks. Then its details and main link, and three sections:
+            what it's tied to (depends on, part of, event, tags), its options (type, levels, size, sensitive) and its
+            dates (deadline, due, estimate, reminder). Where it is (Today or the pool) is the move button in the footer. */}
         <h2 className="todo-flow-h">{tt('flowTitle')}</h2>
+        <StageTrack value={form.status} onChange={(v) => set('status', v)} />
+        {waitFor.length > 0 && (
+          <p className="todo-wait">
+            <Lock size={14} aria-hidden /> {tt('blockedBy', { list: waitFor.map((w) => w.title || tt('untitled')).join(', ') })}
+          </p>
+        )}
+
         {task && (
           <section className="todo-sec todo-kids">
             <h3>
@@ -354,72 +371,7 @@ export function TaskSheet({
           </section>
         )}
 
-        <StageTrack value={form.status} onChange={(v) => set('status', v)} />
-        {waitFor.length > 0 && (
-          <p className="todo-wait">
-            <Lock size={14} aria-hidden /> {tt('blockedBy', { list: waitFor.map((w) => w.title || tt('untitled')).join(', ') })}
-          </p>
-        )}
-
-        <section className="todo-sec">
-          <h3>{tt('dependsOn')}</h3>
-          {form.depends_on.length === 0 && <p className="muted small">{tt('noDeps')}</p>}
-          {form.depends_on.length > 0 && (
-            <ul className="todo-deps">
-              {form.depends_on.map((id) => {
-                const d = byId.get(id);
-                if (!d) return null;
-                return (
-                  <li key={id} className={isOpen(d) ? undefined : 'is-done'}>
-                    <button type="button" className="todo-dep-name" onClick={() => go(id)} dir="auto">
-                      {d.title || tt('untitled')}
-                    </button>
-                    <button type="button" className="icon-btn sm" onClick={() => set('depends_on', form.depends_on.filter((x) => x !== id))} aria-label={tt('delete')}>
-                      <X size={16} />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {depCandidates.length > 0 && (
-            <SelectMenu
-              label={tt('addDependency')}
-              value={null}
-              placeholder={tt('addDependency')}
-              searchPlaceholder={tt('searchTasks')}
-              empty={tt('noMatches')}
-              options={outlineOptions(depCandidates)}
-              onChange={(id) => set('depends_on', [...form.depends_on, id])}
-            />
-          )}
-        </section>
-
-        {parentOptions.length + (parent ? 1 : 0) > 0 && (
-          <div className="todo-sec todo-parent">
-            <h3>
-              <ListTree size={16} aria-hidden /> {tt('partOfField')}
-            </h3>
-            <SelectMenu
-              label={tt('partOfField')}
-              value={parentId ?? ''}
-              placeholder={tt('standalone')}
-              searchPlaceholder={tt('searchTasks')}
-              empty={tt('noMatches')}
-              options={[
-                { value: '', label: tt('standalone'), icon: <FlagOff size={15} aria-hidden className="todo-menu-ic is-none" />, note: tt('standaloneNote') },
-                ...outlineOptions((parent ? [parent] : []).concat(parentOptions)),
-              ]}
-              onChange={(v) => {
-                if (!task) return setDraftParent(v || null);
-                commit();
-                onMoveUnder(task, v || null);
-              }}
-            />
-            <span className="muted small">{tt(task ? 'partOfHint' : 'partOfHintNew')}</span>
-          </div>
-        )}
-
+        {/* What it is: details and its main link. */}
         <textarea
           className="todo-desc"
           value={form.description}
@@ -455,97 +407,175 @@ export function TaskSheet({
           {form.link.trim() && !openable && <span className="muted small">{tt('linkInvalid')}</span>}
         </div>
 
-        <div className="todo-grid">
-          <div className="todo-field wide">
-            <span className="todo-field-l">{tt('where')}</span>
-            {kids.length > 0 ? (
-              <p className="muted small todo-note">{tt('parentOffToday')}</p>
-            ) : (
-              <Segmented label={tt('where')} value={form.day ?? ''} onChange={(v) => set('day', v || null)} options={dayOptions} />
+        {/* Three sections: what it's tied to, its options, its dates. */}
+        <section className="todo-part">
+          <h3 className="todo-part-h">
+            <Link2 size={17} aria-hidden /> {tt('partLinks')}
+          </h3>
+          <section className="todo-sec">
+            <h3>{tt('dependsOn')}</h3>
+            {form.depends_on.length === 0 && <p className="muted small">{tt('noDeps')}</p>}
+            {form.depends_on.length > 0 && (
+              <ul className="todo-deps">
+                {form.depends_on.map((id) => {
+                  const d = byId.get(id);
+                  if (!d) return null;
+                  return (
+                    <li key={id} className={isOpen(d) ? undefined : 'is-done'}>
+                      <button type="button" className="todo-dep-name" onClick={() => go(id)} dir="auto">
+                        {d.title || tt('untitled')}
+                      </button>
+                      <button type="button" className="icon-btn sm" onClick={() => set('depends_on', form.depends_on.filter((x) => x !== id))} aria-label={tt('delete')}>
+                        <X size={16} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
-          </div>
-        </div>
+            {depCandidates.length > 0 && (
+              <SelectMenu
+                label={tt('addDependency')}
+                value={null}
+                placeholder={tt('addDependency')}
+                searchPlaceholder={tt('searchTasks')}
+                empty={tt('noMatches')}
+                options={outlineOptions(depCandidates)}
+                onChange={(id) => set('depends_on', [...form.depends_on, id])}
+              />
+            )}
+          </section>
+          {parentOptions.length + (parent ? 1 : 0) > 0 && (
+            <div className="todo-sec todo-parent">
+              <h3>
+                <ListTree size={16} aria-hidden /> {tt('partOfField')}
+              </h3>
+              <SelectMenu
+                label={tt('partOfField')}
+                value={parentId ?? ''}
+                placeholder={tt('standalone')}
+                searchPlaceholder={tt('searchTasks')}
+                empty={tt('noMatches')}
+                options={[
+                  { value: '', label: tt('standalone'), icon: <FlagOff size={15} aria-hidden className="todo-menu-ic is-none" />, note: tt('standaloneNote') },
+                  ...outlineOptions((parent ? [parent] : []).concat(parentOptions)),
+                ]}
+                onChange={(v) => {
+                  if (!task) return setDraftParent(v || null);
+                  commit();
+                  onMoveUnder(task, v || null);
+                }}
+              />
+              <span className="muted small">{tt(task ? 'partOfHint' : 'partOfHintNew')}</span>
+            </div>
+          )}
+          {(events.length > 0 || form.event_id) && (
+            <div className="todo-field">
+              <span className="todo-field-l">
+                <CalendarDays size={15} aria-hidden /> {tt('eventField')}
+              </span>
+              <SelectMenu
+                label={tt('eventField')}
+                value={form.event_id ?? ''}
+                placeholder={tt('eventNone')}
+                searchPlaceholder={tt('searchTasks')}
+                empty={tt('noMatches')}
+                options={[
+                  { value: '', label: tt('eventNone'), icon: <CalendarOff size={15} aria-hidden className="todo-menu-ic is-none" />, note: tt('eventNoneNote') },
+                  ...[...events]
+                    .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'))
+                    .map((e) => ({
+                      value: e.id,
+                      label: veilEvent(e) ? `${VEIL} (${tt('veiled')})` : e.title || tt('untitled'),
+                      icon: <CalendarDays size={15} aria-hidden className="todo-menu-ic" />,
+                      note: e.date ? dayLabel(e.date, today, lang, tt) : undefined,
+                    })),
+                ]}
+                onChange={(v) => set('event_id', v || null)}
+              />
+              <span className="muted small">{tt('eventHint')}</span>
+              {form.event_id && (
+                <label className="todo-sensitive-row todo-eventonly">
+                  <CalendarDays size={17} aria-hidden />
+                  <span>
+                    <strong>{tt('eventOnly')}</strong>
+                    <span className="muted small">{tt('eventOnlyHint')}</span>
+                  </span>
+                  <input type="checkbox" role="switch" checked={form.event_only} onChange={(e) => set('event_only', e.target.checked)} />
+                </label>
+              )}
+            </div>
+          )}
+          <LabelField
+            label={tt('tags')}
+            values={form.tags}
+            onChange={(v) => set('tags', v)}
+            suggest={tagsIn(all).map((l) => l.name)}
+            prefix="#"
+            placeholder={tt('addTag')}
+            hint={tt('tagsHint')}
+          />
+        </section>
 
-        {(events.length > 0 || form.event_id) && (
+        <section className="todo-part">
+          <h3 className="todo-part-h">
+            <SlidersHorizontal size={17} aria-hidden /> {tt('partOptions')}
+          </h3>
           <div className="todo-field">
-            <span className="todo-field-l">
-              <CalendarDays size={15} aria-hidden /> {tt('eventField')}
-            </span>
-            <SelectMenu
-              label={tt('eventField')}
-              value={form.event_id ?? ''}
-              placeholder={tt('eventNone')}
-              searchPlaceholder={tt('searchTasks')}
-              empty={tt('noMatches')}
-              options={[
-                { value: '', label: tt('eventNone'), icon: <CalendarOff size={15} aria-hidden className="todo-menu-ic is-none" />, note: tt('eventNoneNote') },
-                ...[...events]
-                  .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'))
-                  .map((e) => ({
-                    value: e.id,
-                    label: e.title || tt('untitled'),
-                    icon: <CalendarDays size={15} aria-hidden className="todo-menu-ic" />,
-                    note: e.date ? dayLabel(e.date, today, lang, tt) : undefined,
-                  })),
-              ]}
-              onChange={(v) => set('event_id', v || null)}
-            />
-            <span className="muted small">{tt('eventHint')}</span>
+            <span className="todo-field-l">{tt('type')}</span>
+            <TypePicker value={form.type} onChange={(v) => set('type', v)} />
           </div>
-        )}
-
-        <div className="todo-field">
-          <span className="todo-field-l">{tt('type')}</span>
-          <TypePicker value={form.type} onChange={(v) => set('type', v)} />
-        </div>
-
-        <LabelField
-          label={tt('tags')}
-          values={form.tags}
-          onChange={(v) => set('tags', v)}
-          suggest={tagsIn(all).map((l) => l.name)}
-          prefix="#"
-          placeholder={tt('addTag')}
-          hint={tt('tagsHint')}
-        />
-
-        {/* Levels and dates */}
-        <div className="todo-grid">
-          <div className="todo-field">
-            <span className="todo-field-l">{tt('priority')}</span>
-            <Segmented label={tt('priority')} value={form.priority} onChange={(v) => set('priority', v)} options={level('priority')} tone="level" />
+          <div className="todo-grid">
+            <div className="todo-field">
+              <span className="todo-field-l">{tt('priority')}</span>
+              <Segmented label={tt('priority')} value={form.priority} onChange={(v) => set('priority', v)} options={level('priority')} tone="level" />
+            </div>
+            <div className="todo-field">
+              <span className="todo-field-l">{tt('urgency')}</span>
+              <Segmented label={tt('urgency')} value={form.urgency} onChange={(v) => set('urgency', v)} options={level('urgency')} tone="level" />
+            </div>
           </div>
-          <div className="todo-field">
-            <span className="todo-field-l">{tt('urgency')}</span>
-            <Segmented label={tt('urgency')} value={form.urgency} onChange={(v) => set('urgency', v)} options={level('urgency')} tone="level" />
-          </div>
-          <div className="todo-dates wide">
-            <label className="todo-field">
-              <span className="todo-field-l">{tt('deadline')}</span>
-              <input type="date" value={form.deadline ?? ''} onChange={(e) => set('deadline', e.target.value || null)} dir="ltr" />
-            </label>
-            <label className="todo-field">
-              <span className="todo-field-l">{tt('dueDate')}</span>
-              <input type="date" value={form.due_date ?? ''} onChange={(e) => set('due_date', e.target.value || null)} dir="ltr" />
-            </label>
-          </div>
-        </div>
-
-        <div className="todo-grid">
-          <div className="todo-field wide">
-            <RemindField label={tt('remindOn')} value={form.remind_on} onChange={(v) => set('remind_on', v)} today={today} />
-          </div>
-          <div className="todo-field wide">
+          <div className="todo-field todo-cx">
             <span className="todo-field-l">{tt('complexity')}</span>
             <Segmented label={tt('complexity')} value={form.complexity} onChange={(v) => set('complexity', v)} options={level('complexity', true)} />
           </div>
-          <div className="todo-dates wide">
-            <label className="todo-field">
-              <span className="todo-field-l">{tt('estimateDate')}</span>
-              <input type="date" value={form.estimate_date ?? ''} onChange={(e) => set('estimate_date', e.target.value || null)} dir="ltr" />
+          {/* Sensitive: top-level tasks only (it covers everything under them). */}
+          {task && !task.root_id && (
+            <label className="todo-sensitive-row">
+              <EyeOff size={17} aria-hidden />
+              <span>
+                <strong>{tt('sensitive')}</strong>
+                <span className="muted small">{tt('sensitiveHint')}</span>
+              </span>
+              <input type="checkbox" role="switch" checked={task.sensitive} onChange={(e) => onSensitive(task, e.target.checked)} />
             </label>
+          )}
+        </section>
+
+        <section className="todo-part">
+          <h3 className="todo-part-h">
+            <CalendarClock size={17} aria-hidden /> {tt('partDates')}
+          </h3>
+          <div className="todo-grid">
+            <div className="todo-dates wide">
+              <label className="todo-field">
+                <span className="todo-field-l">{tt('deadline')}</span>
+                <input type="date" value={form.deadline ?? ''} onChange={(e) => set('deadline', e.target.value || null)} dir="ltr" />
+              </label>
+              <label className="todo-field">
+                <span className="todo-field-l">{tt('dueDate')}</span>
+                <input type="date" value={form.due_date ?? ''} onChange={(e) => set('due_date', e.target.value || null)} dir="ltr" />
+              </label>
+              <label className="todo-field">
+                <span className="todo-field-l">{tt('estimateDate')}</span>
+                <input type="date" value={form.estimate_date ?? ''} onChange={(e) => set('estimate_date', e.target.value || null)} dir="ltr" />
+              </label>
+            </div>
+            <div className="todo-field wide">
+              <RemindField label={tt('remindOn')} value={form.remind_on} onChange={(v) => set('remind_on', v)} today={today} />
+            </div>
           </div>
-        </div>
+        </section>
 
         <div className="todo-folds">
           <Fold title={tt('dataTitle')} count={form.data.length} icon={<Database size={16} aria-hidden />}>
@@ -595,7 +625,7 @@ export function TaskSheet({
               className={`btn ghost todo-move-btn${form.day === today ? ' to-pool' : ''}`}
               onClick={() => {
                 const toToday = form.day !== today;
-                commit({ ...form, day: toToday ? today : null });
+                commit({ ...form, day: toToday ? today : null, ...(toToday ? { event_only: false } : {}) });
                 onMoved?.(task, toToday);
                 onClose();
               }}

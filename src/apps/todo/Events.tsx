@@ -1,9 +1,10 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
-import { ArrowUpFromLine, CalendarDays, CalendarPlus, Lightbulb, ListChecks, Plus, Sparkles, Trash2, Users, X } from 'lucide-react';
+import { ArrowUpFromLine, CalendarDays, CalendarPlus, EyeOff, Lightbulb, ListChecks, LockKeyhole, Plus, Sparkles, Trash2, Users, X } from 'lucide-react';
 import type { Lang, Todo, TodoContact, TodoEvent, TodoEventDraft, TodoEventTip } from '../../lib/types';
 import { uid } from '../../lib/util';
 import { ContactsField } from './fields';
 import { dayLabel, daysBetween, isOpen, sameContacts } from './model';
+import { VEIL } from './look';
 import { useTt } from './strings';
 
 /** The date as a calendar leaf: month above, day below. */
@@ -50,7 +51,10 @@ export function EventsList({
   uiDir,
   onOpen,
   onCreate,
+  veiled,
 }: {
+  /** Sensitive and locked: the card shows blurred, and opening it asks for the PIN (the app decides). */
+  veiled: (e: TodoEvent) => boolean;
   events: TodoEvent[];
   all: Todo[];
   today: string;
@@ -66,6 +70,23 @@ export function EventsList({
   const past = events.filter((e) => e.date && e.date < today).sort((a, b) => b.date!.localeCompare(a.date!));
 
   const card = (e: TodoEvent) => {
+    if (veiled(e)) {
+      return (
+        <li key={e.id}>
+          <button type="button" className="todo-ev-card is-veiled" onClick={() => onOpen(e.id)} aria-label={tt('tipVeiled')}>
+            <span className="todo-ev-leaf is-none" aria-hidden>
+              <LockKeyhole size={22} />
+            </span>
+            <span className="todo-ev-txt">
+              <strong className="todo-veil" aria-hidden>
+                {VEIL}
+              </strong>
+              <span className="todo-ev-when">{tt('tipVeiled')}</span>
+            </span>
+          </button>
+        </li>
+      );
+    }
     const tasks = all.filter((t) => t.event_id === e.id && t.status !== 'quit');
     const done = tasks.filter((t) => !isOpen(t)).length;
     const openItems = e.items.filter((i) => !i.done).length;
@@ -181,7 +202,10 @@ export function EventPage({
   onDelete,
   onPromote,
   onNewTask,
+  onSensitive,
 }: {
+  /** Marks the event sensitive (blurred until the PIN), or takes the mark off. */
+  onSensitive: (on: boolean) => void;
   ev: TodoEvent;
   /** Its tasks, drawn by the app (rows with their own actions). */
   tasks: ReactNode;
@@ -234,6 +258,11 @@ export function EventPage({
           <CalendarDays size={16} aria-hidden />
           <span>{tt('eventDate')}</span>
           <input type="date" value={ev.date ?? ''} onChange={(e) => onSave({ date: e.target.value || null })} lang={lang} />
+        </label>
+        <label className="todo-ev-sensitive" data-tip={tt('sensitiveHint')}>
+          <EyeOff size={16} aria-hidden />
+          <span>{tt('sensitive')}</span>
+          <input type="checkbox" role="switch" checked={ev.sensitive} onChange={(e) => onSensitive(e.target.checked)} />
         </label>
         <textarea
           value={description}

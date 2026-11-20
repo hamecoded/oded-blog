@@ -8936,3 +8936,226 @@ body:has(.err-screen) .fab {
   background: color-mix(in srgb, #16a34a 12%, var(--surface));
   color: #16a34a;
 }
+
+/* ───── To-do sensitive items and the PIN (PinSheet.tsx) ───── */
+/* A blurred stand-in (the real name isn't on the page): dots, softened, so the row still reads as a row. */
+.todo-veil {
+  filter: blur(4px);
+  letter-spacing: 0.08em;
+  user-select: none;
+}
+.todo-row.is-veiled {
+  background: repeating-linear-gradient(135deg, var(--surface), var(--surface) 10px, color-mix(in srgb, var(--surface-2) 70%, var(--surface)) 10px 20px);
+}
+.todo-row.is-veiled .todo-check {
+  background: var(--surface-2);
+  color: var(--muted);
+  box-shadow: none;
+}
+.todo-m.veil {
+  color: var(--muted);
+}
+.todo-quest-card.is-veiled,
+.todo-ev-card.is-veiled {
+  background: repeating-linear-gradient(135deg, var(--surface), var(--surface) 10px, color-mix(in srgb, var(--surface-2) 70%, var(--surface)) 10px 20px);
+  border-bottom-color: var(--border);
+}
+.todo-quest-card.is-veiled .todo-ring {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+/* The lock on the app icon's corner: closed (gold) while sensitive items are blurred, open (green) while they show. */
+.todo-hud-home {
+  overflow: visible;
+}
+.todo-lockbadge {
+  position: absolute;
+  inset-block-end: -6px;
+  inset-inline-end: -8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--tg-gold);
+  color: #3b2a00;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.3);
+}
+.todo-lockbadge.is-open {
+  background: #22c55e;
+  color: #053b18;
+}
+/* The "sensitive" switches: on a top-level task's form, and in an event's details. */
+.todo-sensitive-row,
+.todo-ev-sensitive {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px dashed var(--border);
+  cursor: pointer;
+}
+.todo-sensitive-row > span {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.todo-ev-sensitive > span {
+  flex: 1;
+}
+.todo-sensitive-row input[type='checkbox'],
+.todo-ev-sensitive input[type='checkbox'] {
+  appearance: none;
+  flex-shrink: 0;
+  position: relative;
+  width: 44px;
+  height: 26px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--tg-track);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.todo-sensitive-row input[type='checkbox']::after,
+.todo-ev-sensitive input[type='checkbox']::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  inset-inline-start: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: inset-inline-start 0.15s;
+}
+.todo-sensitive-row input[type='checkbox']:checked,
+.todo-ev-sensitive input[type='checkbox']:checked {
+  background: var(--accent);
+}
+.todo-sensitive-row input[type='checkbox']:checked::after,
+.todo-ev-sensitive input[type='checkbox']:checked::after {
+  inset-inline-start: 21px;
+}
+/* The PIN keypad: four slots that fill, a shake on a wrong code, big round keys. */
+.todo-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0 12px;
+  text-align: center;
+}
+.todo-pin-badge {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 72px;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  background: linear-gradient(160deg, var(--accent), color-mix(in srgb, var(--accent-2) 75%, var(--accent)));
+  color: #fff;
+}
+.todo-pin-hint {
+  max-width: 300px;
+  margin: 0;
+  color: var(--muted);
+}
+.todo-pin-slots {
+  display: flex;
+  gap: 14px;
+  margin: 4px 0;
+}
+.todo-pin-slots span {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  transition: background 0.1s, transform 0.1s;
+}
+.todo-pin-slots span.on {
+  border-color: var(--accent);
+  background: var(--accent);
+  transform: scale(1.1);
+}
+.todo-pin-slots.is-wrong {
+  animation: todo-pin-shake 0.4s;
+}
+.todo-pin-wrong {
+  margin: -4px 0 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+.todo-pin-keys {
+  display: grid;
+  grid-template-columns: repeat(3, 68px);
+  gap: 12px;
+}
+.todo-pin-keys button {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  border-bottom-width: 3px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.6rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.todo-pin-keys button:active {
+  transform: translateY(2px);
+  border-bottom-width: 1px;
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+}
+.todo-pin-keys button.is-back {
+  display: grid;
+  place-items: center;
+  background: none;
+  border-color: transparent;
+  color: var(--muted);
+}
+.todo-pin-forgot {
+  margin-top: 2px;
+}
+@keyframes todo-pin-shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-9px); }
+  40%, 80% { transform: translateX(9px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .todo-pin-slots.is-wrong {
+    animation: none;
+  }
+}
+/* The task form's three sections (connections, options, dates): titled cards with their fields inside. */
+.todo-part {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 12px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-2) 35%, var(--surface));
+}
+.todo-part-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 -2px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed var(--border);
+  font-size: 1rem;
+  color: var(--accent);
+}
+.todo-part .todo-sec h3,
+.todo-part .todo-parent h3 {
+  font-size: 0.85rem;
+  color: var(--muted);
+}

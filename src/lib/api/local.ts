@@ -11,6 +11,7 @@ import type {
   Possession,
   Todo,
   TodoEvent,
+  TodoSettings,
   Post,
   PostDraft,
   Profile,
@@ -61,6 +62,7 @@ interface Db {
   possessions: Possession[];
   todos: Todo[];
   todoEvents: TodoEvent[];
+  todoSettings: (TodoSettings & { owner_id: string })[];
 }
 
 const DB_NAME = 'bilingual-blog';
@@ -167,6 +169,7 @@ export function createLocalApi(): Api {
         possessions: stored.possessions ?? [],
         todos: stored.todos ?? [],
         todoEvents: stored.todoEvents ?? [],
+        todoSettings: stored.todoSettings ?? [],
       };
       if (await ensureAdmin(cache)) await idbSet('db', cache);
     } else {
@@ -195,6 +198,7 @@ export function createLocalApi(): Api {
         possessions: [],
         todos: [],
         todoEvents: [],
+        todoSettings: [],
       };
       await ensureAdmin(cache);
       await idbSet('db', cache);
@@ -656,6 +660,7 @@ export function createLocalApi(): Api {
       d.possessions = d.possessions.filter((x) => x.owner_id !== userId);
       d.todos = d.todos.filter((x) => x.owner_id !== userId);
       d.todoEvents = d.todoEvents.filter((x) => x.owner_id !== userId);
+      d.todoSettings = d.todoSettings.filter((x) => x.owner_id !== userId);
       d.groups.forEach((g) => {
         g.member_ids = g.member_ids.filter((x) => x !== userId);
         if (g.created_by === userId) g.created_by = null;
@@ -944,6 +949,21 @@ export function createLocalApi(): Api {
       d.todoEvents = d.todoEvents.filter((x) => !drop.has(x.id));
       // Like "on delete set null" in schema.sql: the tasks stay, without the event.
       d.todos = d.todos.map((t) => (t.event_id && drop.has(t.event_id) ? { ...t, event_id: null } : t));
+      await persist();
+    },
+
+    // To-do settings: one row per user, owner only (the "todo settings own" policy in schema.sql).
+    async getTodoSettings() {
+      const u = await requireMe();
+      const s = (await db()).todoSettings.find((x) => x.owner_id === u.id);
+      return { pin_hash: s?.pin_hash ?? null };
+    },
+
+    async saveTodoSettings(s) {
+      const u = await requireMe();
+      const d = await db();
+      const row = { owner_id: u.id, pin_hash: typeof s.pin_hash === 'string' && /^[0-9a-f]{64}$/.test(s.pin_hash) ? s.pin_hash : null };
+      d.todoSettings = [...d.todoSettings.filter((x) => x.owner_id !== u.id), row];
       await persist();
     },
   };

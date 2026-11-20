@@ -508,6 +508,8 @@ export function createSupabaseApi(url: string, key: string): Api {
       const fields = (f: ReturnType<typeof todoFields>) => {
         const out: Partial<typeof f> = { ...f };
         if (!('event_id' in t)) delete out.event_id;
+        if (!('sensitive' in t)) delete out.sensitive;
+        if (!('event_only' in t)) delete out.event_only;
         return out;
       };
       if (t.id) {
@@ -531,16 +533,34 @@ export function createSupabaseApi(url: string, key: string): Api {
     },
 
     async saveTodoEvent(e) {
+      // `sensitive` is sent only when the change sets it (works before the column exists).
+      const fields = (f: ReturnType<typeof todoEventFields>) => {
+        const out: Partial<typeof f> = { ...f };
+        if (!('sensitive' in e)) delete out.sensitive;
+        return out;
+      };
       if (e.id) {
         const current = check(await sb.from('todo_events').select('*').eq('id', e.id).single()) as TodoEvent;
-        return check(await sb.from('todo_events').update(todoEventFields(e, current)).eq('id', e.id).select().single()) as TodoEvent;
+        return check(await sb.from('todo_events').update(fields(todoEventFields(e, current))).eq('id', e.id).select().single()) as TodoEvent;
       }
-      return check(await sb.from('todo_events').insert(todoEventFields(e)).select().single()) as TodoEvent;
+      return check(await sb.from('todo_events').insert(fields(todoEventFields(e))).select().single()) as TodoEvent;
     },
 
     async deleteTodoEvents(ids) {
       // todos.event_id is "on delete set null": the tasks stay, without the event.
       if (ids.length) check(await sb.from('todo_events').delete().in('id', ids));
+    },
+
+    // To-do settings: "todo settings own" limits it to the signed-in user's row.
+    async getTodoSettings() {
+      const res = await sb.from('todo_settings').select('pin_hash').maybeSingle();
+      if (res.error) return { pin_hash: null }; // table not there yet: no PIN
+      return { pin_hash: (res.data as { pin_hash: string | null } | null)?.pin_hash ?? null };
+    },
+
+    async saveTodoSettings(s) {
+      const pin = typeof s.pin_hash === 'string' && /^[0-9a-f]{64}$/.test(s.pin_hash) ? s.pin_hash : null;
+      check(await sb.from('todo_settings').upsert({ pin_hash: pin }, { onConflict: 'owner_id' }));
     },
   };
   return api;

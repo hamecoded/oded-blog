@@ -7,6 +7,17 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-20 12:04
+
+- Fixed: To-do sensitive items showed unblurred right after being marked (choosing the PIN unlocked them): marking one now hides it at once and closes its form, and choosing a PIN doesn't unlock anything; the PIN is needed to see it
+- Removed: To-do task form's "where" row (Today / pool): the footer's move button already does it
+- Changed: To-do task form grouped into titled sections after the stage and steps: details and main link, then Connections (depends on, part of, event, tags), Options (type, priority, urgency, complexity, sensitive) and Dates (deadline, due, estimate, reminder)
+- Changed: To-do event tasks created on an event's page stay on that event only (out of Today, the pool, tags, journeys, done and the morning review) until "To the pool" publishes them; a task's form has an "On this event only" switch, and putting it on a day publishes it; items made into tasks are published as before
+- Added: schema.sql: `todos.event_only`; run `npm run db:update`
+- Added: To-do sensitive items: a top-level task (with everything under it) or an event can be marked sensitive; it then shows blurred everywhere (rows, journeys, events, topic cards, menus, the morning review) until the 4-digit to-do PIN is entered, and stays visible until the lock on the app icon is pressed; the PIN is chosen the first time something is marked, kept as a hash on the account, and a forgotten one can be replaced within 15 minutes of signing in
+- Added: schema.sql: `todos.sensitive`, `todo_events.sensitive` and the `todo_settings` table (PIN hash, owner-only RLS); run `npm run db:update`
+- Changed: To-do task form order: the stage track above the steps; complexity and the main link above "depends on"
+
 ## 2026-11-20 11:15
 
 - Changed: To-do app: opening /apps/todo always starts on Today (no longer the tab used last); a refresh keeps the tab in the address (?tab=…)

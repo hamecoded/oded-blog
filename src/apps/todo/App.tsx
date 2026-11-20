@@ -3,18 +3,20 @@ import { useLocation } from 'react-router-dom';
 import {
   AlarmClock,
   ArrowDownUp,
-  CalendarDays,
   ArrowLeft,
   ArrowRight,
-  GripVertical,
   Bell,
+  CalendarDays,
   CheckCheck,
   ChevronDown,
   Flag,
+  GripVertical,
   Hash,
   Inbox,
   Layers,
   ListTodo,
+  LockKeyhole,
+  LockKeyholeOpen,
   SlidersHorizontal,
   Sun,
   Swords,
@@ -23,7 +25,7 @@ import {
 import { api } from '../../lib/api';
 import { errorText, useApp } from '../../lib/app';
 import type { Todo, TodoDraft, TodoEvent, TodoEventDraft } from '../../lib/types';
-import { todoFields } from '../../lib/util';
+import { sha256Hex, todoFields } from '../../lib/util';
 import { FxLayer } from './FxLayer';
 import { Fx } from './fx';
 import { Hud } from './Hud';
@@ -40,6 +42,7 @@ import {
   isoDay,
   isReminded,
   goalStage,
+  isEventOnly,
   hasLabel,
   inTagOrder,
   positionBetween,
@@ -54,6 +57,7 @@ import {
   nestTasks,
   parseQuick,
   progressOf,
+  forget,
   recall,
   relink,
   reparent,
@@ -65,8 +69,9 @@ import {
   type GroupKey,
   type SortKey,
 } from './model';
-import { tagHue, TYPE_ICON } from './look';
+import { tagHue, TYPE_ICON, VEIL } from './look';
 import { SelectMenu } from './SelectMenu';
+import { PinSheet, type PinMode } from './PinSheet';
 import { EventHead, EventPage, EventsList } from './Events';
 import { useOutlineDrag, type Place } from './outlineDrag';
 import { Picker } from './Picker';
@@ -121,6 +126,31 @@ export default function TodoApp() {
   const [eventsMissing, setEventsMissing] = useState(false);
   /** The event open in the Events tab; null shows the list. */
   const [eventId, setEventId] = useState<string | null>(null);
+  // ── Sensitive items: blurred until the PIN is entered; then shown until the lock button is pressed. ──
+  /** The PIN's hash (sha256 of user id + PIN); undefined while loading, null when none is set. */
+  const [pinHash, setPinHash] = useState<string | null | undefined>(undefined);
+  /**
+   * Unlocked stays so (through refreshes) until the lock button: remembered as the PIN hash it was unlocked with,
+   * so a PIN changed on another device locks this one again.
+   */
+  const [unlockedWith, setUnlockedWith] = useState(() => recall('unlocked'));
+  const unlocked = !!pinHash && unlockedWith === pinHash;
+  const setUnlocked = (on: boolean) => {
+    const v = on && pinHash ? pinHash : null;
+    setUnlockedWith(v);
+    if (v) remember('unlocked', v);
+    else forget('unlocked');
+  };
+  /** The PIN sheet, and what to do once it's done (open the item that asked for it). */
+  const [pinAsk, setPinAsk] = useState<{ mode: PinMode; then?: () => void } | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    api
+      .getTodoSettings()
+      .then((s) => setPinHash(s.pin_hash))
+      .catch(() => setPinHash(null));
+  }, [user]);
+
   // A link can ask for a tab (the blog's top bar "Tags" link opens the Tags tab): `state.todoTab`.
   const loc = useLocation();
   const askedTab = (loc.state as { todoTab?: Tab } | null)?.todoTab;
@@ -236,6 +266,8 @@ export default function TodoApp() {
   const all = useMemo(() => rows ?? [], [rows]);
   const byId = useMemo(() => new Map(all.map((r) => [r.id, r])), [all]);
   const stats = useMemo(() => statsOf(all, today), [all, today]);
+  /** Every task but those kept on their event only (see `event_only`): what Today, the pool, tags, journeys and done show. */
+  const pub = useMemo(() => all.filter((r) => !isEventOnly(r, byId)), [all, byId]);
   /** Tasks that have subtasks. They never sit on Today themselves (nor come up as leftovers): only their subtasks do. */
   const parents = useMemo(
     () => new Set([...all.map((r) => r.root_id).filter((x): x is string => !!x), ...all.filter((r) => r.goal && !r.root_id).map((r) => r.id)]),
@@ -243,16 +275,16 @@ export default function TodoApp() {
   );
   const leftovers = useMemo(
     () =>
-      all
+      pub
         .filter((r) => isLeftover(r, today) && !parents.has(r.id))
         .sort((a, b) => (a.day ?? '').localeCompare(b.day ?? '') || b.priority - a.priority),
-    [all, today, parents],
+    [pub, today, parents],
   );
-  const todayAll = useMemo(() => all.filter((r) => r.day === today && r.status !== 'quit' && !parents.has(r.id)), [all, today, parents]);
+  const todayAll = useMemo(() => pub.filter((r) => r.day === today && r.status !== 'quit' && !parents.has(r.id)), [pub, today, parents]);
   const todayList = useMemo(() => sortTasks(todayAll, sort, today, byId), [todayAll, sort, today, byId]);
-  const reminded = useMemo(() => sortTasks(all.filter((r) => isReminded(r, today)), 'smart', today, byId), [all, today, byId]);
+  const reminded = useMemo(() => sortTasks(pub.filter((r) => isReminded(r, today)), 'smart', today, byId), [pub, today, byId]);
   // A goal with no steps yet is only a name on the journeys page: it joins the pool once it has something to do.
-  const pool = useMemo(() => all.filter((r) => !r.day && isOpen(r) && !(r.goal && !all.some((x) => x.root_id === r.id))), [all]);
+  const pool = useMemo(() => pub.filter((r) => !r.day && isOpen(r) && !(r.goal && !all.some((x) => x.root_id === r.id))), [pub, all]);
   const poolShown = useMemo(() => {
     const f = pool.filter((r) =>
       filter === 'reminded' ? isReminded(r, today) : filter === 'due' ? !!(r.due_date || r.deadline) : filter === 'blocked' ? blockers(r, byId).length > 0 || r.status === 'blocked' : true,
@@ -260,9 +292,9 @@ export default function TodoApp() {
     return sortTasks(f, sort, today, byId);
   }, [pool, filter, sort, today, byId]);
   const purposes = useMemo(() => {
-    const list = all.filter((r) => isGoal(r, all) || (r.id === questId && !r.root_id));
+    const list = pub.filter((r) => isGoal(r, all) || (r.id === questId && !r.root_id));
     return list.sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || b.updated_at.localeCompare(a.updated_at));
-  }, [all, questId]);
+  }, [pub, all, questId]);
   const quest = questId ? byId.get(questId) : undefined;
   /** The journeys list as chosen: filtered by stage and tag, then in the chosen order. */
   const questsShown = useMemo(() => {
@@ -288,7 +320,7 @@ export default function TodoApp() {
   };
   const finished = useMemo(() => {
     // A goal with no steps yet has nothing to show for it, so it stays out of the archive.
-    const list = all.filter((r) => !isOpen(r) && !(r.goal && !all.some((x) => x.root_id === r.id))).sort((a, b) => (b.done_at ?? b.updated_at).localeCompare(a.done_at ?? a.updated_at));
+    const list = pub.filter((r) => !isOpen(r) && !(r.goal && !all.some((x) => x.root_id === r.id))).sort((a, b) => (b.done_at ?? b.updated_at).localeCompare(a.done_at ?? a.updated_at));
     const groups: { day: string; items: Todo[] }[] = [];
     list.slice(0, 300).forEach((r) => {
       const d = isoDay(new Date(r.done_at ?? r.updated_at));
@@ -297,7 +329,7 @@ export default function TodoApp() {
       else groups.push({ day: d, items: [r] });
     });
     return groups;
-  }, [all]);
+  }, [pub, all]);
 
   const reviewOpen = leftovers.length > 0 && (reviewChoice ?? promptedOn !== today);
   const closeReview = () => {
@@ -361,8 +393,13 @@ export default function TodoApp() {
     toast(tt('eventPromoted', { title: item.text }));
   };
   const pickQuest = (id: string | null) => {
-    setQuestId(id);
-    window.scrollTo({ top: 0 });
+    const go = () => {
+      setQuestId(id);
+      window.scrollTo({ top: 0 });
+    };
+    const q = id ? byId.get(id) : undefined;
+    if (q && !unlocked && q.sensitive) setPinAsk({ mode: pinHash ? 'unlock' : 'set', then: go });
+    else go();
   };
 
   // ── Changes: shown at once, then saved; on failure the list reloads. Stage and day moves are logged. ──
@@ -496,7 +533,7 @@ export default function TodoApp() {
   };
   const outline = useOutlineDrag(poolSiblings, placeStep);
   /** The open topic's open tasks, top-level ones in the topic's order (its outline nests the rest under them). */
-  const topicOpenOf = () => (topic ? inTagOrder(topicTasks(all, topic).filter(isOpen)) : []);
+  const topicOpenOf = () => (topic ? inTagOrder(topicTasks(pub, topic).filter(isOpen)) : []);
   /**
    * What a dragged row in a topic moves among: a step whose parent is shown too stays among its shown siblings
    * (as in the pool); a top-level row moves among the topic's top-level rows.
@@ -595,9 +632,68 @@ export default function TodoApp() {
     setDraft({ ...placeOf(), ...(q.title ? q : {}), ...extra });
     setText('');
   };
-  const openTask = (id: string) => {
+  // ── Sensitive items ──
+  /** The top-level task a task belongs to (itself when it's top-level): its `sensitive` covers all under it. */
+  const rootOf = (t: Todo) => {
+    let r = t;
+    const seen = new Set<string>();
+    while (r.root_id && !seen.has(r.id)) {
+      seen.add(r.id);
+      const up = byId.get(r.root_id);
+      if (!up) break;
+      r = up;
+    }
+    return r;
+  };
+  const isSensitive = (t: Todo) => rootOf(t).sensitive;
+  /** Blurred right now: sensitive, and the PIN not entered (or locked again). */
+  const isVeiled = (t: Todo) => !unlocked && isSensitive(t);
+  const eventVeiled = (e: TodoEvent) => !unlocked && e.sensitive;
+  const hashPin = (pin: string) => sha256Hex(`${user?.id ?? ''}:${pin}`);
+  /** Asks for the PIN (or to choose one, when there's none yet), then does `then`. */
+  const askPin = (then?: () => void) => setPinAsk({ mode: pinHash ? 'unlock' : 'set', then });
+  /** Does `go` now, or after the PIN when the item is blurred. `go` must not ask again (it runs before the re-render). */
+  const guard = (veiled: boolean, go: () => void) => (veiled ? askPin(go) : go());
+  /** Blurs the sensitive items again; whatever sensitive is open closes. `also` counts as sensitive too (just marked). */
+  const lock = (quiet = false, also?: { task?: string; event?: string }) => {
+    setUnlocked(false);
+    const open = openId ? byId.get(openId) : undefined;
+    if (open && (isSensitive(open) || rootOf(open).id === also?.task)) closeSheetRaw();
+    const q = questId ? byId.get(questId) : undefined;
+    if (q && (isSensitive(q) || q.id === also?.task)) setQuestId(null);
+    if (eventId && (events.find((e) => e.id === eventId)?.sensitive || eventId === also?.event)) setEventId(null);
+    if (!quiet) toast(tt('locked'));
+  };
+  /** Marks a top-level task sensitive (choosing a PIN first if there's none yet), or takes the mark off. */
+  const setSensitive = (task: Todo, on: boolean) => {
+    const apply = () => {
+      update([{ id: task.id, sensitive: on }]);
+      toast(tt(on ? 'sensitiveOn' : 'sensitiveOff', { title: task.title || tt('untitled') }));
+      // Marked sensitive: it's hidden at once (the PIN is needed to see it again), and its form closes.
+      if (on) lock(true, { task: task.id });
+    };
+    if (on && !pinHash) setPinAsk({ mode: 'set', then: apply });
+    else apply();
+  };
+  const setEventSensitive = (ev: TodoEvent, on: boolean) => {
+    const apply = () => {
+      saveEvent(ev.id, { sensitive: on });
+      toast(tt(on ? 'sensitiveOn' : 'sensitiveOff', { title: ev.title || tt('untitled') }));
+      if (on) lock(true, { event: ev.id });
+    };
+    if (on && !pinHash) setPinAsk({ mode: 'set', then: apply });
+    else apply();
+  };
+  const closeSheetRaw = () => {
+    setOpenId(null);
     setDraft(null);
-    setOpenId(id);
+  };
+  const openTask = (id: string) => {
+    const t = byId.get(id);
+    guard(!!t && isVeiled(t), () => {
+      setDraft(null);
+      setOpenId(id);
+    });
   };
   const closeSheet = () => {
     setOpenId(null);
@@ -620,7 +716,8 @@ export default function TodoApp() {
   const eventNameOf = (task: Todo) => {
     if (!task.event_id || (tab === 'events' && task.event_id === eventId)) return undefined;
     const ev = events.find((e) => e.id === task.event_id);
-    return ev ? ev.title || tt('untitled') : undefined;
+    if (!ev) return undefined;
+    return eventVeiled(ev) ? VEIL : ev.title || tt('untitled');
   };
   const row = (task: Todo, extra?: { showRemind?: boolean; action?: ReactNode; hideRoot?: boolean }, level = 0) => {
     const look = level ? outline.rowLook(task.id) : {};
@@ -633,7 +730,8 @@ export default function TodoApp() {
         today={today}
         lang={lang}
         eventName={eventNameOf(task)}
-        onToggle={toggle}
+        veiled={isVeiled(task)}
+        onToggle={(x, from) => guard(isVeiled(x), () => toggle(x, from))}
         onOpen={(x) => openTask(x.id)}
         {...extra}
         {...(level
@@ -956,10 +1054,18 @@ export default function TodoApp() {
                     <GripVertical size={18} />
                   </button>
                 )}
-                <button type="button" className="todo-quest-card" onClick={() => pickQuest(p.id)}>
+                <button type="button" className={`todo-quest-card${isVeiled(p) ? ' is-veiled' : ''}`} onClick={() => pickQuest(p.id)}>
                   <span className="todo-ring" style={{ '--p': pr } as React.CSSProperties}>
-                    {Math.round(pr * 100)}%
+                    {isVeiled(p) ? <LockKeyhole size={18} aria-label={tt('veiled')} /> : `${Math.round(pr * 100)}%`}
                   </span>
+                  {isVeiled(p) ? (
+                    <span className="todo-quest-txt">
+                      <strong className="todo-veil" aria-hidden>
+                        {VEIL}
+                      </strong>
+                      <span className="muted small">{tt('tipVeiled')}</span>
+                    </span>
+                  ) : (
                   <span className="todo-quest-txt">
                     <strong dir="auto">{p.title || tt('untitled')}</strong>
                     <span className="muted small">
@@ -972,6 +1078,7 @@ export default function TodoApp() {
                       </span>
                     )}
                   </span>
+                  )}
                 </button>
               </li>
             );
@@ -981,8 +1088,8 @@ export default function TodoApp() {
     </>
   );
 
-  const tags = tagsIn(all);
-  const topicAll = topic ? topicTasks(all, topic) : [];
+  const tags = tagsIn(pub);
+  const topicAll = topic ? topicTasks(pub, topic) : [];
   const topicOpen = inTagOrder(topicAll.filter(isOpen));
   const topicDone = topicAll.filter((r) => !isOpen(r));
   // The topic as an outline, like the pool: steps under their parent, foldable.
@@ -1040,7 +1147,7 @@ export default function TodoApp() {
   );
   // Open tasks not yet in the open topic, offered to bring in (a goal brings everything under it along).
   const inTopic = new Set(topicAll.map((r) => r.id));
-  const topicCandidates = topic ? all.filter((r) => isOpen(r) && !inTopic.has(r.id)) : [];
+  const topicCandidates = topic ? pub.filter((r) => isOpen(r) && !inTopic.has(r.id)) : [];
   const assignToTopic = (id: string) => {
     const t = byId.get(id);
     if (!t || !topic) return;
@@ -1062,7 +1169,7 @@ export default function TodoApp() {
               const goalish = isGoal(o, all);
               return {
                 value: o.id,
-                label: o.title || tt('untitled'),
+                label: isVeiled(o) ? `${VEIL} (${tt('veiled')})` : o.title || tt('untitled'),
                 level,
                 icon: <Icon size={15} aria-hidden className={`todo-menu-ic ty-${o.type}`} />,
                 note: goalish ? tt('assignWithSteps', { n: descendants(o.id, all).filter(isOpen).length }) : o.root_id ? tt(`tier_${tierOf(depthOf(o, byId))}`) : undefined,
@@ -1091,11 +1198,12 @@ export default function TodoApp() {
                 byId={byId}
                 today={today}
                 lang={lang}
-                onToggle={toggle}
+                onToggle={(x, from) => guard(isVeiled(x), () => toggle(x, from))}
                 onOpen={(x) => openTask(x.id)}
                 showRemind
                 hideTag={topic}
                 eventName={eventNameOf(r)}
+                veiled={isVeiled(r)}
                 hideRoot={level > 0}
                 action={topicActs(r, kids, hidden)}
                 className={[level > 0 ? 'is-nested' : '', ...block, look.className].filter(Boolean).join(' ') || undefined}
@@ -1151,7 +1259,7 @@ export default function TodoApp() {
       <p className="muted small todo-topics-sub">{tt('tagsSub')}</p>
       <ul className="todo-topics">
         {tags.map((l) => {
-          const items = topicTasks(all, l.name);
+          const items = topicTasks(pub, l.name);
           const open = inTagOrder(items.filter(isOpen));
           const done = items.length - open.length;
           const onToday = open.filter((r) => r.day === today).length;
@@ -1182,12 +1290,12 @@ export default function TodoApp() {
                       isGoal(r, all) ? (
                         <span key={r.id} dir="auto" className="is-goal">
                           <Flag size={12} aria-hidden />
-                          <span className="t">{r.title || tt('untitled')}</span>
+                          <span className={`t${isVeiled(r) ? ' todo-veil' : ''}`}>{isVeiled(r) ? VEIL : r.title || tt('untitled')}</span>
                           <em dir="ltr">{Math.round(progressOf(r, all) * 100)}%</em>
                         </span>
                       ) : (
-                        <span key={r.id} dir="auto" className={r.day === today ? 'is-today' : undefined}>
-                          {r.title || tt('untitled')}
+                        <span key={r.id} dir="auto" className={isVeiled(r) ? 'todo-veil' : r.day === today ? 'is-today' : undefined}>
+                          {isVeiled(r) ? VEIL : r.title || tt('untitled')}
                         </span>
                       ),
                     )}
@@ -1242,7 +1350,21 @@ export default function TodoApp() {
             r,
             {
               action:
-                r.day === today ? (
+                // Kept on the event only: "To the pool" publishes it (with what's under it) to the rest of the app.
+                r.event_only ? (
+                  <button
+                    type="button"
+                    className="todo-today-btn to-pool"
+                    onClick={() => {
+                      update([{ id: r.id, event_only: false }]);
+                      toast(tt('eventPublished', { title: r.title || tt('untitled') }));
+                    }}
+                    data-tip={tt('eventPublishHint')}
+                  >
+                    <Inbox size={15} aria-hidden />
+                    {tt('eventPublish')}
+                  </button>
+                ) : isEventOnly(r, byId) ? undefined : r.day === today ? (
                   <span className="todo-on-today" data-tip={tt('tipOnToday')}>
                     <Sun size={14} aria-hidden />
                     {tt('tagOnToday')}
@@ -1273,7 +1395,8 @@ export default function TodoApp() {
       onSave={(p) => saveEvent(event.id, p)}
       onDelete={() => deleteEvent(event.id)}
       onPromote={(itemId) => void promoteItem(event, itemId)}
-      onNewTask={() => openNew({ day: null, event_id: event.id, title: '' })}
+      onNewTask={() => openNew({ day: null, event_id: event.id, event_only: true, title: '' })}
+      onSensitive={(on) => setEventSensitive(event, on)}
     />
   ) : (
     <EventsList
@@ -1282,12 +1405,39 @@ export default function TodoApp() {
       today={today}
       lang={lang}
       uiDir={uiDir}
+      veiled={eventVeiled}
       onOpen={(id) => {
-        setEventId(id);
-        window.scrollTo({ top: 0 });
+        const ev = events.find((e) => e.id === id);
+        guard(!!ev && eventVeiled(ev), () => {
+          setEventId(id);
+          window.scrollTo({ top: 0 });
+        });
       }}
       onCreate={(d) => void createEvent(d)}
     />
+  );
+
+  /**
+   * The app icon, and on its corner the lock for sensitive items (once there are any): closed while they're
+   * blurred (tap: the PIN), open while they show (tap: blur them again).
+   */
+  const hasSensitive = all.some((r) => r.sensitive) || events.some((e) => e.sensitive);
+  const homeAndLock = (
+    <>
+      <HomeLink />
+      {hasSensitive && (
+        <button
+          type="button"
+          className={`todo-lockbadge${unlocked ? ' is-open' : ''}`}
+          onClick={() => (unlocked ? lock() : askPin())}
+          aria-label={unlocked ? tt('lock') : tt('unlock')}
+          aria-pressed={!unlocked}
+          data-tip={unlocked ? tt('lock') : tt('unlock')}
+        >
+          {unlocked ? <LockKeyholeOpen size={13} strokeWidth={2.6} aria-hidden /> : <LockKeyhole size={13} strokeWidth={2.6} aria-hidden />}
+        </button>
+      )}
+    </>
   );
 
   const doneView =
@@ -1336,7 +1486,7 @@ export default function TodoApp() {
         {tab === 'tags' && topicHead}
         {tab === 'events' && eventHead}
         {/* The same game bar on every tab: on Today it counts the day's list, elsewhere the level's XP. */}
-        <Hud home={<HomeLink />} mode={tab === 'today' ? 'day' : 'xp'} onLevel={() => setLevelsOpen(true)} stats={stats} done={doneToday} total={todayAll.length} pal={pal} reduced={reduced} lang={lang} tt={tt} />
+        <Hud home={homeAndLock} mode={tab === 'today' ? 'day' : 'xp'} onLevel={() => setLevelsOpen(true)} stats={stats} done={doneToday} total={todayAll.length} pal={pal} reduced={reduced} lang={lang} tt={tt} />
         {canAdd && (
           <form className={`todo-add${text.trim() ? ' has-text' : ''}`} onSubmit={quickAdd}>
             <input
@@ -1422,6 +1572,9 @@ export default function TodoApp() {
         onReorder={reorder}
         onMoved={(t, toToday) => toast(tt(toToday ? 'movedToToday' : 'movedToPool', { title: t.title || tt('untitled') }))}
         events={events}
+        veil={isVeiled}
+        veilEvent={eventVeiled}
+        onSensitive={setSensitive}
         onMoveUnder={moveUnder}
         onSetGoal={setGoal}
         onPlayQuest={(id) => {
@@ -1440,6 +1593,7 @@ export default function TodoApp() {
         onDecide={decide}
         onAll={decideAll}
         onClose={closeReview}
+        veil={isVeiled}
       />
       <UndoBar
         undo={undo}
@@ -1449,6 +1603,35 @@ export default function TodoApp() {
         }}
         onClose={() => setUndo(null)}
       />
+      {pinAsk && (
+        <PinSheet
+          mode={pinAsk.mode}
+          onClose={() => setPinAsk(null)}
+          onCheck={async (pin) => {
+            if ((await hashPin(pin)) !== pinHash) return false;
+            setUnlocked(true);
+            const then = pinAsk.then;
+            setPinAsk(null);
+            then?.();
+            return true;
+          }}
+          onSet={async (pin) => {
+            const h = await hashPin(pin);
+            try {
+              await api.saveTodoSettings({ pin_hash: h });
+            } catch (e) {
+              toast(errorText(e, t));
+              return;
+            }
+            // Choosing a PIN doesn't unlock: only typing it to open something does.
+            setPinHash(h);
+            toast(tt('pinSaved'));
+            const then = pinAsk.then;
+            setPinAsk(null);
+            then?.();
+          }}
+        />
+      )}
       <LevelsSheet open={levelsOpen} onClose={() => setLevelsOpen(false)} stats={stats} />
       <TipLayer root={rootEl} />
       <FxLayer fx={fx} reduced={reduced} font={pal?.font ?? 'system-ui, sans-serif'} />

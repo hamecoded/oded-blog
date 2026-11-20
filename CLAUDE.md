@@ -163,6 +163,22 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   `cleanContact()` splits older names); `vcard.ts` builds a vCard 3.0 (event name as TITLE). iOS: opened as a text/vcard
   blob in a new tab (Safari shows "Create New Contact"; the share sheet has no Contacts target); Android: the share
   sheet; else it downloads `contact.vcf`.
+  Event-only tasks: `todos.event_only` (with an `event_id`; `isEventOnly()` covers what's under it) keeps a task on its
+  event's page only: Today, pool, tags, journeys, done and the review are built from `pub` (all minus those). Tasks made
+  on an event's page start event-only; "To the pool" there, the form's switch, or putting it on a day publishes it.
+  **Sensitive items (2026-11-20, `PinSheet.tsx`):** `todos.sensitive` (top-level tasks; `rootOf()` makes it cover
+  everything under them) and `todo_events.sensitive`. Locked, they render as `VEIL` dots (look.ts; the real name isn't
+  in the DOM) in rows (`TaskRow` `veiled`), journey/event/topic cards, the form's menus (`veil` / `veilEvent` props),
+  the `DrillBar` goals menu and the `ReviewSheet`; opening one goes through `guard()` → the PIN. The PIN is a hash
+  (`sha256Hex(userId + ':' + pin)`) in `todo_settings` (Api `getTodoSettings` / `saveTodoSettings`). Unlocked (only by typing
+  the PIN to open something; choosing one doesn't) stays until the lock badge on the app icon, remembered as
+  `todo.unlocked` = the hash it was unlocked with. Marking an item sensitive locks at once (`lock(true, also)`). "Forgot it?"
+  allows a new PIN within 15 minutes of a sign-in (`markFreshSignIn()` in Auth.tsx / AppProvider for OAuth returns,
+  `signedInWithin()`), since checking the password again would hit the sign-in CAPTCHA. A privacy screen, not encryption.
+  The task form's order: title + `DrillBar`, stage track, steps, description, main link, then three `.todo-part`
+  sections: Connections (depends on, part of, event, tags), Options (type, priority, urgency, complexity, sensitive),
+  Dates (deadline, due, estimate, reminder); folds (data, contacts, comments, log) last. Today / pool is the
+  footer's move button only.
 - **Error page (2026-11-20):** `components/ErrorScreen.tsx` is the router's `errorElement` (on a pathless route inside
   `Layout`, so the blog's frame stays; also on the root and `/:site` routes) and `AppErrorBoundary` wraps everything in
   main.tsx. `lib/errorReport.ts` sorts a crash into a plain-words kind (`readError()`: update / offline / notFound /

@@ -1,9 +1,10 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { Bell, CalendarClock, CalendarDays, Clock, CornerDownRight, ExternalLink, Flag, Flame, Hourglass, ListTree, Lock } from 'lucide-react';
+import { Bell, CalendarClock, CalendarDays, Clock, CornerDownRight, ExternalLink, Flag, Flame, Hourglass, ListTree, Lock, LockKeyhole } from 'lucide-react';
 import type { Lang, Todo } from '../../lib/types';
-import { STATUS_ICON, tagHue, TYPE_ICON } from './look';
+import { STATUS_ICON, tagHue, TYPE_ICON, VEIL } from './look';
 import { blockers, childTier, dayLabel, depthOf, hostOf, isGoal, isOpen, SIZES, stepsOf, tierOf, xpFor } from './model';
 import { useTt } from './strings';
+
 
 export interface Origin {
   x: number;
@@ -27,6 +28,7 @@ export function TaskRow({
   hideRoot,
   hideTag,
   eventName,
+  veiled,
   className,
   rowStyle,
 }: {
@@ -45,6 +47,8 @@ export function TaskRow({
   hideRoot?: boolean;
   /** A tag not to show on the row: the topic it's listed under in the Tags tab. */
   hideTag?: string;
+  /** Sensitive and locked: drawn as a blurred placeholder (no title, details or actions); tapping it asks for the PIN. */
+  veiled?: boolean;
   /** The name of the event it's for, shown as a chip (left out on that event's own page). */
   eventName?: string;
   /** Extra class and style for the row (a row being dragged into a new place). */
@@ -189,6 +193,27 @@ export function TaskRow({
   }
 
   const style = { '--prog': kids.length ? kidsDone / kids.length : 0 } as CSSProperties;
+  if (veiled) {
+    return (
+      <li className={`todo-row is-veiled${className ? ` ${className}` : ''}`} style={rowStyle} data-id={task.id}>
+        {className?.includes('is-nested') && <span className="todo-guide" aria-hidden />}
+        <button type="button" className="todo-check" onClick={() => onOpen(task)} aria-label={tt('tipVeiled')} data-tip={tt('tipVeiled')}>
+          <LockKeyhole size={17} strokeWidth={2.4} />
+        </button>
+        <button type="button" className="todo-main" onClick={() => onOpen(task)} aria-label={tt('tipVeiled')}>
+          <span className="todo-title todo-veil" aria-hidden>
+            {VEIL}
+          </span>
+          <span className="todo-meta">
+            <span className="todo-m veil">
+              <LockKeyhole size={11} aria-hidden />
+              {tt('veiled')}
+            </span>
+          </span>
+        </button>
+      </li>
+    );
+  }
   return (
     <li
       className={`todo-row ty-${task.type} p${task.priority} is-${task.status}${blocked ? ' is-blocked' : ''}${goal ? ' is-goal' : ''}${depth ? ` is-${tierOf(depth)}` : ''}${className ? ` ${className}` : ''}`}

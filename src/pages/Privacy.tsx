@@ -69,7 +69,8 @@ function English() {
       <p>
         The To-do list app keeps each signed-in user's tasks and events, including any contacts, tips, notes and comments
         you add to them. Only you can see them; not other users and not the blog's manager. "Save to phone contacts" hands
-        a contact card to your own device; nothing is sent anywhere else.
+        a contact card to your own device; nothing is sent anywhere else. If you set a to-do PIN (to blur items you mark
+        sensitive), only a one-way hash of it is stored, never the PIN itself.
       </p>
       <h2>Who can see it</h2>
       <p>
@@ -140,7 +141,8 @@ function Hebrew() {
       <p>
         אפליקציית "רשימת משימות" שומרת את המשימות והאירועים של כל משתמש מחובר, כולל אנשי קשר, טיפים, הערות ותגובות שמוסיפים
         להם. רק אתם רואים אותם: לא משתמשים אחרים ולא מנהל הבלוג. "שמירה באנשי הקשר בטלפון" מעבירה כרטיס איש קשר למכשיר שלכם
-        בלבד, ושום דבר לא נשלח למקום אחר.
+        בלבד, ושום דבר לא נשלח למקום אחר. אם קובעים קוד PIN למשימות (כדי לטשטש פריטים שסומנו כרגישים), נשמר רק גיבוב חד-כיווני
+        שלו, אף פעם לא הקוד עצמו.
       </p>
       <h2>מי רואה מה</h2>
       <p>
