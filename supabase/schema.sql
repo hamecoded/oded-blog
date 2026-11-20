@@ -763,6 +763,8 @@ create policy "todo settings own" on public.todo_settings for all
 -- The event a task is for; deleting the event keeps the task, without it.
 alter table public.todos add column if not exists event_id uuid references public.todo_events (id) on delete set null;
 create index if not exists todos_event_idx on public.todos (event_id);
+-- Runs alongside the step before it (a parallel group; the next step waits for the whole group).
+alter table public.todos add column if not exists parallel boolean not null default false;
 -- Kept on its event only (out of the rest of the app) until published from the event's page.
 alter table public.todos add column if not exists event_only boolean not null default false;
 

@@ -31,6 +31,7 @@ import { RemindField } from './RemindField';
 import { Segmented } from './Segmented';
 import { useTt } from './strings';
 import { SelectMenu, type MenuOption } from './SelectMenu';
+import { CopyButton } from './CopyButton';
 import { DrillBar } from './DrillBar';
 import { StepList } from './StepList';
 import { type Origin } from './TaskRow';
@@ -289,6 +290,7 @@ export function TaskSheet({
                 }
               }}
             />
+            <CopyButton text={form.title} />
             {openable && (
               <a className="icon-btn sm todo-open-link" href={openable} target="_blank" rel="noopener noreferrer" aria-label={tt('openLink')} data-tip={tt('openLinkTo', { host: hostOf(openable) })}>
                 <ExternalLink size={18} />
@@ -351,7 +353,7 @@ export function TaskSheet({
             )}
             {kids.length === 0 && <p className="muted small">{tt(depth === 0 ? 'deriveHint_step' : 'deriveHint_action')}</p>}
             {kids.length > 0 && (
-              <StepList kids={kids} all={all} byId={byId} today={today} lang={lang} onToggle={onToggle} onOpen={go} onReorder={(from, to) => onReorder(task, from, to)} />
+              <StepList kids={kids} all={all} byId={byId} today={today} lang={lang} onToggle={onToggle} onOpen={go} onReorder={(from, to) => onReorder(task, from, to)} onParallel={(st, on) => onSave(st.id, { parallel: on })} />
             )}
             <form
               className="todo-add-step"

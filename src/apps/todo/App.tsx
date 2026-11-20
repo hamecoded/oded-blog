@@ -29,7 +29,7 @@ import { sha256Hex, todoFields } from '../../lib/util';
 import { FxLayer } from './FxLayer';
 import { Fx } from './fx';
 import { Hud } from './Hud';
-import { useAppChrome, usePalette, useReducedMotion, useToday } from './hooks';
+import { useAppChrome, useHomeScreenApp, usePalette, useReducedMotion, useToday } from './hooks';
 import {
   addDays,
   blockers,
@@ -114,6 +114,7 @@ export default function TodoApp() {
   const tt = useTt();
   const today = useToday();
   useAppChrome();
+  useHomeScreenApp(tt('homeName'));
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
   const pal = usePalette(rootEl);
   const reduced = useReducedMotion();
@@ -168,7 +169,25 @@ export default function TodoApp() {
     const v = recall('group') as GroupKey | 'list' | null;
     return !v || v === 'list' ? 'none' : v; // grouping by list went with the lists
   });
+  /** The pool's own grouping (Today's is `group`): by tag unless changed, so a tag's tasks sit together. */
+  const [poolGroup, setPoolGroupState] = useState<GroupKey>(() => (recall('poolGroup') as GroupKey | null) ?? 'tag');
   const [filter, setFilter] = useState<PoolFilter>('all');
+  /** Groups folded away in a grouped list (`<grouping>:<group id>`), remembered. */
+  const [shutGroups, setShutGroups] = useState<Set<string>>(() => {
+    try {
+      return new Set(JSON.parse(recall('shutGroups') ?? '[]') as string[]);
+    } catch {
+      return new Set();
+    }
+  });
+  const toggleGroup = (key: string) =>
+    setShutGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      remember('shutGroups', JSON.stringify([...next]));
+      return next;
+    });
   const [questSort, setQuestSortState] = useState<QuestSort>(() => {
     const v = recall('questSort') as QuestSort | null;
     return v && QUEST_SORTS.includes(v) ? v : 'mine';
@@ -213,7 +232,7 @@ export default function TodoApp() {
   const [promptedOn, setPromptedOn] = useState(() => recall('reviewed'));
   const [levelsOpen, setLevelsOpen] = useState(false);
   /** The last completion (or quit) that can still be taken back; replaced by the next one. */
-  const [undo, setUndo] = useState<{ key: number; text: string; patches: Patch[] } | null>(null);
+  const [undo, setUndo] = useState<{ key: number; text: 'undoDone' | 'undoQuit' | 'undoReopen'; task: Todo; patches: Patch[] } | null>(null);
   /** Pool tasks folded shut (their subtasks hidden); kept per browser. */
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try {
@@ -350,6 +369,10 @@ export default function TodoApp() {
     setSortState(v);
     remember('sort', v);
   };
+  const setPoolGroup = (v: GroupKey) => {
+    setPoolGroupState(v);
+    remember('poolGroup', v);
+  };
   const setGroup = (v: GroupKey) => {
     setGroupState(v);
     remember('group', v);
@@ -482,15 +505,17 @@ export default function TodoApp() {
     }
   };
   /** Offers, for a few seconds, to put tasks back exactly as they were (stage, day list, log). */
-  const offerUndo = (text: string, before: Todo[]) =>
-    setUndo({ key: Date.now(), text, patches: before.map((t) => ({ id: t.id, status: t.status, day: t.day, log: t.log })) });
+  const offerUndo = (text: 'undoDone' | 'undoQuit' | 'undoReopen', task: Todo) =>
+    setUndo({ key: Date.now(), text, task, patches: [{ id: task.id, status: task.status, day: task.day, log: task.log }] });
   const toggle = (task: Todo, from?: Origin) => {
     if (isOpen(task)) {
       update([{ id: task.id, status: 'completed' }]);
       celebrate(task, from);
-      offerUndo(tt('undoDone', { title: task.title || tt('untitled') }), [task]);
+      offerUndo('undoDone', task);
     } else {
       update([{ id: task.id, status: 'inprogress', day: task.day && task.day < today ? today : task.day }]);
+      // Unticked by mistake (in the Done list, say): the same undo puts it back as it was.
+      offerUndo('undoReopen', task);
     }
   };
   /**
@@ -595,10 +620,10 @@ export default function TodoApp() {
     if (d === 'done') {
       update([{ id: task.id, status: 'completed' }]);
       celebrate(task);
-      offerUndo(tt('undoDone', { title: task.title || tt('untitled') }), [task]);
+      offerUndo('undoDone', task);
     } else if (d === 'drop') {
       update([{ id: task.id, status: 'quit' }]);
-      offerUndo(tt('undoQuit', { title: task.title || tt('untitled') }), [task]);
+      offerUndo('undoQuit', task);
     }
     else update([{ id: task.id, ...refine, day: d === 'today' ? today : null }]);
   };
@@ -649,6 +674,23 @@ export default function TodoApp() {
   /** Blurred right now: sensitive, and the PIN not entered (or locked again). */
   const isVeiled = (t: Todo) => !unlocked && isSensitive(t);
   const eventVeiled = (e: TodoEvent) => !unlocked && e.sensitive;
+  /**
+   * An outline with locked items shut: what's under a blurred item isn't listed at all (not even as dots, which
+   * would tell how much is there), and the blurred item itself has nothing to fold.
+   */
+  const shutLocked = <R extends { task: Todo; level: number; kids?: number; hidden?: number }>(rows: R[]): R[] =>
+    rows.filter((x) => !(x.level > 0 && isVeiled(x.task))).map((x) => (x.level === 0 && isVeiled(x.task) && x.kids ? { ...x, kids: 0, hidden: 0 } : x));
+  /** A flat list with one blurred row per locked item, however many of its tasks are in it. */
+  const oneLockedEach = (list: Todo[]) => {
+    const seen = new Set<string>();
+    return list.filter((r) => {
+      if (!isVeiled(r)) return true;
+      const id = rootOf(r).id;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  };
   const hashPin = (pin: string) => sha256Hex(`${user?.id ?? ''}:${pin}`);
   /** Asks for the PIN (or to choose one, when there's none yet), then does `then`. */
   const askPin = (then?: () => void) => setPinAsk({ mode: pinHash ? 'unlock' : 'set', then });
@@ -786,48 +828,85 @@ export default function TodoApp() {
       {tt('toPoolShort')}
     </button>
   );
-  /** A list split by the chosen grouping; each group a labelled block. */
-  /** A list split by the chosen grouping; with `nest`, steps sit indented under their parent within a group. */
+  /**
+   * A list split by the chosen grouping; with `nest`, steps sit indented under their parent within a group. A group's
+   * heading folds it away (remembered per grouping and group: `shutGroups`).
+   */
   const grouped = (list: Todo[], rowExtra?: (r: Todo) => { showRemind?: boolean; action?: ReactNode }, by: GroupKey = group, nest = false) =>
-    groupTasks(list, by, tt).map((g) => (
-      <section key={g.id || '-'} className="todo-group">
-        {g.label && (
-          <h2 className="todo-group-h" dir="auto">
-            {g.label} <span className="muted">{g.items.length}</span>
-          </h2>
-        )}
-        <ul className={`todo-list${nest ? ' is-outline' : ''}${nest && outline.dragging ? ' is-sorting' : ''}`}>
-          {nest
-            ? foldOutline(nestTasks(g.items, all), collapsed).map(({ task: r, level, kids, hidden }) => {
-                const extra = rowExtra?.(r);
-                if (!level && !kids) return row(r, extra, level);
-                const shut = hidden > 0;
-                const action = (
-                  <span className="todo-acts">
-                    {kids > 0 && (
-                      <button
-                        type="button"
-                        className={`todo-fold-btn${shut ? ' is-shut' : ''}`}
-                        onClick={() => toggleFold(r.id)}
-                        aria-expanded={!shut}
-                        aria-label={shut ? tt('expandN', { n: hidden }) : tt('collapse')}
-                        data-tip={shut ? tt('expandN', { n: hidden }) : tt('collapse')}
-                      >
-                        <ChevronDown size={16} aria-hidden />
-                        {shut && <span>{hidden}</span>}
-                      </button>
-                    )}
-                    {level > 0 && gripFor(r)}
-                    {extra?.action}
+    groupTasks(
+      list,
+      by,
+      tt,
+      nest ? (t) => (t.root_id ? rootOf(t).tags : t.tags) : undefined,
+      // In the pool by tag, goals come first, each with its steps; then the loose tasks by their tags.
+      nest && by === 'tag' ? { id: '*goals', label: tt('goals'), has: (t) => isGoal(rootOf(t), all) } : undefined,
+    ).map((g) => {
+      const key = `${by}:${g.id}`;
+      const shut = !!g.label && shutGroups.has(key);
+      return (
+        <section key={g.id || '-'} className={`todo-group${shut ? ' is-shut' : ''}`}>
+          {shut && (
+            // Folded: the group as one row, looking like the tasks around it; tapping it opens the group again.
+            <ul className="todo-list">
+              <li
+                className={`todo-row todo-group-row${g.id === '*goals' ? ' is-goals' : ''}`}
+                style={by === 'tag' && g.id && g.id !== '*goals' ? ({ '--h': tagHue(g.id) } as React.CSSProperties) : undefined}
+              >
+                <button type="button" className="todo-group-row-main" onClick={() => toggleGroup(key)} aria-expanded={false} dir="auto">
+                  <span className="todo-group-row-icon" aria-hidden>
+                    {g.id === '*goals' ? <Flag size={18} /> : by === 'tag' && g.id ? <Hash size={18} /> : <Layers size={18} />}
                   </span>
-                );
-                return row(r, { ...extra, action }, level);
-              })
-            : g.items.map((r) => row(r, rowExtra?.(r)))}
-        </ul>
-      </section>
-    ));
-  const viewBar = (opts: { sort?: boolean; groups?: GroupKey[]; children?: ReactNode; extra?: ReactNode }) => (
+                  <span className="todo-group-row-name">{g.id === '*goals' || !(by === 'tag' && g.id) ? g.label : g.label.replace(/^#/, '')}</span>
+                  <span className="todo-group-row-n">{g.items.length === 1 ? tt('groupItem1') : tt('groupItems', { n: g.items.length })}</span>
+                  <ChevronDown size={18} aria-hidden className="todo-group-chev" />
+                </button>
+              </li>
+            </ul>
+          )}
+          {g.label && !shut && (
+            <h2 className="todo-group-h" dir="auto">
+              <button type="button" className="todo-group-toggle" onClick={() => toggleGroup(key)} aria-expanded={!shut}>
+                <ChevronDown size={15} aria-hidden className="todo-group-chev" />
+                {g.label} <span className="muted">{g.items.length}</span>
+              </button>
+            </h2>
+          )}
+          {!shut && (
+            <ul className={`todo-list${nest ? ' is-outline' : ''}${nest && outline.dragging ? ' is-sorting' : ''}`}>
+              {nest
+                ? shutLocked(foldOutline(nestTasks(g.items, all), collapsed)).map(({ task: r, level, kids, hidden }) => {
+                    const extra = rowExtra?.(r);
+                    if (!level && !kids) return row(r, extra, level);
+                    const shut = hidden > 0;
+                    const action = (
+                      <span className="todo-acts">
+                        {kids > 0 && (
+                          <button
+                            type="button"
+                            className={`todo-fold-btn${shut ? ' is-shut' : ''}`}
+                            onClick={() => toggleFold(r.id)}
+                            aria-expanded={!shut}
+                            aria-label={shut ? tt('expandN', { n: hidden }) : tt('collapse')}
+                            data-tip={shut ? tt('expandN', { n: hidden }) : tt('collapse')}
+                          >
+                            <ChevronDown size={16} aria-hidden />
+                            {shut && <span>{hidden}</span>}
+                          </button>
+                        )}
+                        {level > 0 && gripFor(r)}
+                        {extra?.action}
+                      </span>
+                    );
+                    return row(r, { ...extra, action }, level);
+                  })
+                : g.items.map((r) => row(r, rowExtra?.(r)))}
+            </ul>
+          )}
+        </section>
+      );
+    });
+  /** `grouping`: a view with its own grouping (the pool's); else Today's `group`. */
+  const viewBar = (opts: { sort?: boolean; groups?: GroupKey[]; grouping?: [GroupKey, (v: GroupKey) => void]; children?: ReactNode; extra?: ReactNode }) => (
     <div className="todo-viewbar">
       {opts.children}
       <span className="todo-viewbar-end">
@@ -836,9 +915,9 @@ export default function TodoApp() {
           <Picker
             label={tt('groupBy')}
             icon={<Layers size={15} aria-hidden />}
-            value={group}
+            value={opts.grouping?.[0] ?? group}
             options={opts.groups.map((g) => ({ value: g, label: tt(`group_${g}`) }))}
-            onChange={setGroup}
+            onChange={opts.grouping?.[1] ?? setGroup}
           />
         )}
         {opts.sort && (
@@ -921,6 +1000,7 @@ export default function TodoApp() {
       {viewBar({
         sort: true,
         groups: GROUPS,
+        grouping: [poolGroup, setPoolGroup],
         children: (
           <span className="todo-chips">
             {(
@@ -944,7 +1024,7 @@ export default function TodoApp() {
           <p>{tt('emptyPool')}</p>
         </div>
       ) : (
-        grouped(poolShown, (r) => ({ showRemind: true, action: toTodayBtn(r) }), group, true)
+        grouped(poolShown, (r) => ({ showRemind: true, action: toTodayBtn(r) }), poolGroup, true)
       )}
     </>
   );
@@ -1093,7 +1173,7 @@ export default function TodoApp() {
   const topicOpen = inTagOrder(topicAll.filter(isOpen));
   const topicDone = topicAll.filter((r) => !isOpen(r));
   // The topic as an outline, like the pool: steps under their parent, foldable.
-  const topicRows = foldOutline(nestTasks(topicOpen, all), collapsed);
+  const topicRows = shutLocked(foldOutline(nestTasks(topicOpen, all), collapsed));
   /** Whether row `i` sits under a goal: its top-level row (the nearest level-0 row above it) is one. */
   const goalBlock = (i: number) => {
     let j = i;
@@ -1345,7 +1425,7 @@ export default function TodoApp() {
     const list = sortTasks([...set.values()], 'smart', today, byId);
     return list.length === 0 ? null : (
       <ul className="todo-list is-outline">
-        {nestTasks(list, all).map(({ task: r, level }) =>
+        {shutLocked(nestTasks(list, all)).map(({ task: r, level }) =>
           row(
             r,
             {
@@ -1424,7 +1504,12 @@ export default function TodoApp() {
   const hasSensitive = all.some((r) => r.sensitive) || events.some((e) => e.sensitive);
   const homeAndLock = (
     <>
-      <HomeLink />
+      <HomeLink
+        onHome={() => {
+          closeSheetRaw();
+          setTab('today');
+        }}
+      />
       {hasSensitive && (
         <button
           type="button"
@@ -1447,14 +1532,17 @@ export default function TodoApp() {
         <p>{tt('emptyDone')}</p>
       </div>
     ) : (
-      finished.map((g) => (
-        <section key={g.day} className="todo-group">
-          <h2 className="todo-group-h">
-            {dayLabel(g.day, today, lang, tt)} <span className="muted">{g.items.length}</span>
-          </h2>
-          <ul className="todo-list">{g.items.map((r) => row(r))}</ul>
-        </section>
-      ))
+      finished.map((g) => {
+        const items = oneLockedEach(g.items);
+        return (
+          <section key={g.day} className="todo-group">
+            <h2 className="todo-group-h">
+              {dayLabel(g.day, today, lang, tt)} <span className="muted">{items.length}</span>
+            </h2>
+            <ul className="todo-list">{items.map((r) => row(r))}</ul>
+          </section>
+        );
+      })
     );
 
   const nav: { id: Tab; label: TKey; icon: typeof Sun; n?: number; dot?: boolean }[] = [
@@ -1596,7 +1684,8 @@ export default function TodoApp() {
         veil={isVeiled}
       />
       <UndoBar
-        undo={undo}
+        // The title is blurred too while the task is sensitive and locked.
+        undo={undo && { key: undo.key, text: tt(undo.text, { title: isVeiled(undo.task) ? VEIL : undo.task.title || tt('untitled') }) }}
         onUndo={() => {
           if (undo) update(undo.patches, true);
           setUndo(null);

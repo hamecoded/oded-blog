@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import { markFreshSignIn, markOAuthPending, OAUTH_LABELS } from '../lib/util';
-import { TURNSTILE_SITE_KEY } from '../lib/captcha';
+import { CAPTCHA_OFF_LOCALLY, TURNSTILE_SITE_KEY } from '../lib/captcha';
 import { Turnstile } from '../components/Turnstile';
 import type { OAuthProvider } from '../lib/types';
 import { usePageTitle } from './usePageTitle';
@@ -24,6 +24,11 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   const [captcha, setCaptcha] = useState('');
   const [captchaRound, setCaptchaRound] = useState(0);
   const [captchaDown, setCaptchaDown] = useState(false);
+  /** The check's error code when it failed ('' while fine); the form says so and offers to run it again. */
+  const [captchaFail, setCaptchaFail] = useState('');
+  /** The check has been running for a while: say what the button is waiting for. */
+  const [slowRound, setSlowRound] = useState(-1);
+  const [busyWith, setBusyWith] = useState<'form' | 'oauth'>('form');
   const [trap, setTrap] = useState('');
   const [openedAt] = useState(() => Date.now());
   usePageTitle(mode === 'login' ? t('login') : t('signup'));
@@ -38,6 +43,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
 
   async function oauth(provider: OAuthProvider) {
     setErr('');
+    setBusyWith('oauth');
     setBusy(true);
     try {
       markOAuthPending();
@@ -57,6 +63,7 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
       setInfo(t('checkEmail'));
       return;
     }
+    setBusyWith('form');
     setBusy(true);
     try {
       if (mode === 'login') {
@@ -70,6 +77,8 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
     } catch (e2) {
       const m = e2 instanceof Error ? e2.message : '';
       if (m === 'auth/held') setInfo(t('accountHeld'));
+      // Turned away for the missing check on a local address: say so plainly (the note above says what to do).
+      else if (m === 'auth/captcha' && CAPTCHA_OFF_LOCALLY) setErr(t('captchaLocalRejected'));
       else setErr(errorText(e2, t));
       // Each Turnstile token works once: get a fresh one for the next try.
       setCaptcha('');
@@ -80,6 +89,26 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
   }
   // Wait for the check's token, unless Cloudflare couldn't be reached (Supabase then decides on its own).
   const waitingForCheck = !!TURNSTILE_SITE_KEY && !captcha && !captchaDown;
+  useEffect(() => {
+    if (!waitingForCheck || captchaFail) return;
+    const id = setTimeout(() => setSlowRound(captchaRound), 8000);
+    return () => clearTimeout(id);
+  }, [waitingForCheck, captchaFail, captchaRound]);
+  const slow = slowRound === captchaRound;
+  /** Runs the check again from the start (a fresh widget). */
+  const retryCheck = () => {
+    setCaptchaFail('');
+    setCaptcha('');
+    setCaptchaRound((n) => n + 1);
+  };
+  // Why the button is off, said under it (a disabled button alone doesn't tell anyone anything).
+  const whyOff = busy
+    ? t(busyWith === 'oauth' ? 'oauthLeaving' : 'signingIn')
+    : captchaFail
+      ? t('humanCheckFailed', { code: captchaFail })
+      : waitingForCheck
+        ? t(slow ? 'humanCheckSlow' : 'humanCheck')
+        : '';
 
   return (
     <div className="auth">
@@ -133,12 +162,31 @@ export function AuthPage({ mode }: { mode: 'login' | 'signup' }) {
                 onChange={(e) => setTrap(e.target.value)}
               />
             )}
-            <Turnstile onToken={setCaptcha} onUnavailable={() => setCaptchaDown(true)} resetKey={captchaRound} lang={prefs.uiLang} />
+            <Turnstile
+              onToken={(tok) => {
+                setCaptcha(tok);
+                if (tok) setCaptchaFail('');
+              }}
+              onUnavailable={() => setCaptchaDown(true)}
+              onError={setCaptchaFail}
+              resetKey={captchaRound}
+              lang={prefs.uiLang}
+            />
+            {CAPTCHA_OFF_LOCALLY && <p className="notice auth-local">{t('captchaLocal')}</p>}
             {err && <p className="error">{err}</p>}
-            <button className="btn primary block" disabled={busy || waitingForCheck}>
+            <button className="btn primary block" disabled={busy || waitingForCheck} aria-describedby={whyOff ? 'auth-why-off' : undefined}>
               {mode === 'login' ? t('login') : t('signup')}
             </button>
-            {waitingForCheck && <p className="hint center">{t('humanCheck')}</p>}
+            {whyOff && (
+              <p id="auth-why-off" className="hint center" aria-live="polite">
+                {whyOff}
+              </p>
+            )}
+            {captchaFail && !busy && (
+              <button type="button" className="btn ghost sm auth-retry" onClick={retryCheck}>
+                {t('humanCheckRetry')}
+              </button>
+            )}
             {mode === 'signup' && <p className="hint">{t('firstAdmin')}</p>}
           </form>
           {providers.length > 0 && (

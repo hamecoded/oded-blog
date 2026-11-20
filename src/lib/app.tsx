@@ -44,6 +44,7 @@ export function usePrintLock(allowed: boolean) {
 export function errorText(e: unknown, t: AppCtx['t']): string {
   const m = e instanceof Error ? e.message : String(e);
   if (m === 'auth/invalid') return t('invalidLogin');
+  if (m.startsWith('db/missing-column:')) return t('dbNeedsUpdate', { col: m.slice('db/missing-column:'.length) });
   if (/auth\/exists|already registered/i.test(m)) return t('accountExists');
   if (m === 'auth/forbidden' || /row-level security|permission/i.test(m)) return t('forbidden');
   if (m === 'auth/required') return t('loginToComment');

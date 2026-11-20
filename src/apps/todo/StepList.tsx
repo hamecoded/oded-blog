@@ -1,5 +1,6 @@
 import { useRef, useState, type CSSProperties } from 'react';
-import { GripVertical } from 'lucide-react';
+import { ArrowDown, Columns2, GripVertical } from 'lucide-react';
+import { useApp } from '../../lib/app';
 import type { Lang, Todo } from '../../lib/types';
 import { useTt } from './strings';
 import { TaskRow, type Origin } from './TaskRow';
@@ -36,7 +37,10 @@ export function StepList({
   onToggle,
   onOpen,
   onReorder,
+  onParallel,
 }: {
+  /** Marks a step as running alongside the one before it (or back to after it). */
+  onParallel: (step: Todo, on: boolean) => void;
   kids: Todo[];
   all: Todo[];
   byId: Map<string, Todo>;
@@ -47,6 +51,14 @@ export function StepList({
   onReorder: (from: number, to: number) => void;
 }) {
   const tt = useTt();
+  const { toast } = useApp();
+  /** Joins a step to the one before it (or back to after it), and says so: the change shows on the map as a fork. */
+  const setParallel = (s: Todo, prev: Todo, on: boolean) => {
+    onParallel(s, on);
+    const a = s.title || tt('untitled');
+    const b = prev.title || tt('untitled');
+    toast(tt(on ? 'parallelNowOn' : 'parallelNowOff', { a, b }));
+  };
   const listRef = useRef<HTMLOListElement>(null);
   const start = useRef<Start | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -102,6 +114,7 @@ export function StepList({
     return 0;
   };
 
+  // Steps done in parallel read as one card here: TaskRow marks the group's rows, and the CSS joins them up.
   return (
     <ol ref={listRef} className={`todo-list todo-steps${drag ? ' is-sorting' : ''}`}>
       {kids.map((s, i) => {
@@ -121,6 +134,22 @@ export function StepList({
             onToggle={onToggle}
             onOpen={() => onOpen(s.id)}
             action={
+              <span className="todo-acts">
+              {i > 0 && (
+                // A switch, labelled with what the step does now: after the one before it, or alongside it.
+                <button
+                  type="button"
+                  role="switch"
+                  className={`todo-par-btn${s.parallel ? ' is-on' : ''}`}
+                  onClick={() => setParallel(s, kids[i - 1], !s.parallel)}
+                  aria-checked={s.parallel}
+                  aria-label={tt('parallelSwitch', { b: kids[i - 1].title || tt('untitled') })}
+                  data-tip={tt(s.parallel ? 'parallelOff' : 'parallelOn')}
+                >
+                  {s.parallel ? <Columns2 size={14} aria-hidden /> : <ArrowDown size={14} aria-hidden />}
+                  <span>{tt(s.parallel ? 'parallel' : 'sequential')}</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="icon-btn sm todo-grip"
@@ -140,6 +169,7 @@ export function StepList({
               >
                 <GripVertical size={18} />
               </button>
+              </span>
             }
           />
         );

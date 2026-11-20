@@ -5,6 +5,7 @@ import { uid } from '../../lib/util';
 import { ContactsField } from './fields';
 import { dayLabel, daysBetween, isOpen, sameContacts } from './model';
 import { VEIL } from './look';
+import { CopyButton } from './CopyButton';
 import { useTt } from './strings';
 
 /** The date as a calendar leaf: month above, day below. */
@@ -246,14 +247,17 @@ export function EventPage({
   return (
     <div className="todo-ev-page" dir={uiDir}>
       <section className="todo-sec todo-ev-details">
-        <input
-          className="todo-ev-title-in"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onBlur={() => title.trim() !== ev.title && onSave({ title: title.trim() || ev.title })}
-          aria-label={tt('title')}
-          dir="auto"
-        />
+        <div className="todo-ev-title-row">
+          <input
+            className="todo-ev-title-in"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => title.trim() !== ev.title && onSave({ title: title.trim() || ev.title })}
+            aria-label={tt('title')}
+            dir="auto"
+          />
+          <CopyButton text={title} />
+        </div>
         <label className="todo-ev-date-row">
           <CalendarDays size={16} aria-hidden />
           <span>{tt('eventDate')}</span>
@@ -291,6 +295,7 @@ export function EventPage({
                   aria-label={it.text}
                 />
                 <span dir="auto">{it.text}</span>
+                <CopyButton text={it.text} />
                 {!it.done && (
                   <button type="button" className="todo-ev-promote" onClick={() => onPromote(it.id)} data-tip={tt('eventPromote')}>
                     <ArrowUpFromLine size={14} aria-hidden /> {tt('eventPromote')}
@@ -342,6 +347,7 @@ export function EventPage({
                   <span>{tt(`kind_${tip.kind}`)}</span>
                 </button>
                 <span dir="auto">{tip.text}</span>
+                <CopyButton text={tip.text} />
                 <button type="button" className="icon-btn sm" onClick={() => onSave({ tips: ev.tips.filter((x) => x.id !== tip.id) })} aria-label={tt('delete')}>
                   <X size={16} />
                 </button>

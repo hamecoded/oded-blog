@@ -43,7 +43,14 @@ const BUCKET = 'media';
 const REQUEST_SELECT = '*, user:profiles!role_requests_user_id_fkey(display_name, username, role)';
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
-  if (res.error) throw new Error(res.error.message);
+  if (res.error) {
+    // A column the app uses but the database doesn't have yet (schema.sql not run since it came): say which, so the
+    // fix (npm run db:update) is plain, instead of the change silently springing back.
+    const col =
+      /could not find the '([\w]+)' column/i.exec(res.error.message)?.[1] ?? /column "?(?:\w+\.)?([\w]+)"? (?:of relation "\w+" )?does not exist/i.exec(res.error.message)?.[1];
+    if (col) throw new Error(`db/missing-column:${col}`);
+    throw new Error(res.error.message);
+  }
   return res.data;
 }
 
@@ -510,6 +517,7 @@ export function createSupabaseApi(url: string, key: string): Api {
         if (!('event_id' in t)) delete out.event_id;
         if (!('sensitive' in t)) delete out.sensitive;
         if (!('event_only' in t)) delete out.event_only;
+        if (!('parallel' in t)) delete out.parallel;
         return out;
       };
       if (t.id) {

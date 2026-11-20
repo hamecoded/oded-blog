@@ -175,6 +175,26 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   `todo.unlocked` = the hash it was unlocked with. Marking an item sensitive locks at once (`lock(true, also)`). "Forgot it?"
   allows a new PIN within 15 minutes of a sign-in (`markFreshSignIn()` in Auth.tsx / AppProvider for OAuth returns,
   `signedInWithin()`), since checking the password again would hit the sign-in CAPTCHA. A privacy screen, not encryption.
+  The undo bar ("Done: <title>") keeps the task, not its text, so it shows `VEIL` too while locked.
+  Outlines go through `shutLocked()` (nothing under a locked item is listed, not even as dots, and it has no fold);
+  the Done page through `oneLockedEach()` (one blurred row per locked item).
+  **Parallel steps (2026-11-20):** `todos.parallel` on a step = done alongside the step before it (its `prev_id`). A run
+  of parallel steps is one group (`stepGroups()` in model.ts): all open at once, and the step after waits for the
+  whole group (`blockers()`). Toggle: the Columns2 button in `StepList`. `TaskRow` finds a step's group itself, so
+  every list marks it (`todo-par-row` / `par-first|mid|last`, "{n} in parallel" on the first); the form's step list
+  also joins the rows into one card (CSS under `.todo-steps`). `QuestMap` puts a group on one row: the road
+  stops at a fork point (`RoadPoint.split`), `branches` run fork → each step → join, and its labels get `labelW`.
+  The pool has its own grouping (`poolGroup`, default 'tag'); `groupTasks(…, tagsOf, lead)` groups a step by its root's
+  tags, and in the pool by tag the order is untagged standalone tasks, then `lead` (goals with their steps, "Goals"), then tags. Group headings fold
+  (`shutGroups`, remembered as `<grouping>:<group id>`); a folded group renders as one `.todo-group-row` card instead.
+  Reopening a done task offers the undo too ('undoReopen').
+  **Copy title:** `CopyButton.tsx` (uses `copyText` from lib/errorReport.ts) in the task form's title row, the event
+  title and each event item and tip; every task, step and action has a form, so that covers them all.
+  **Home screen (iOS):** while the app is open `useHomeScreenApp()` (hooks.ts) swaps the page's manifest,
+  apple-touch-icon and home-screen name for `public/todo-app/` (outside `/apps/todo` so the host never mistakes it
+  for the route), so Share → Add to Home Screen adds the to-do app, full screen, opening on Today. The icon PNGs were
+  rendered from the lucide ListTodo glyph on the app's gradient; redo them if the icon or colours change.
+  The app icon (`HomeLink`) now goes to Today (closing any open form); the Apps page is reached from the blog menu.
   The task form's order: title + `DrillBar`, stage track, steps, description, main link, then three `.todo-part`
   sections: Connections (depends on, part of, event, tags), Options (type, priority, urgency, complexity, sensitive),
   Dates (deadline, due, estimate, reminder); folds (data, contacts, comments, log) last. Today / pool is the
@@ -199,7 +219,10 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   Cloudflare Turnstile on sign-up/sign-in (`VITE_TURNSTILE_SITE_KEY`, `src/lib/captcha.ts`,
   `components/Turnstile.tsx`); Supabase verifies the token once CAPTCHA is switched on there (README §8.8: deploy the
   key first). `captcha.ts` switches Turnstile off in demo mode and on local hosts (localhost, IPs, `.local`),
-  where the widget can't run. `t()` now fills `{name}` placeholders: `t('deletedUsers', { n })`.
+  where the widget can't run. Against the live backend that means Supabase turns local sign-ins away, so the form
+  says so (`CAPTCHA_OFF_LOCALLY`); `VITE_TURNSTILE_ON_LOCALHOST=1` keeps it on locally once localhost is allowed on
+  the widget in Cloudflare. The form always says why the sign-in button is off (signing in, waiting for the check,
+  slow check after 8 s, or the check's error code with a "run it again" button). `t()` now fills `{name}` placeholders: `t('deletedUsers', { n })`.
 - **Homepage:** no big title. Posts start right under a slim search-and-tags row, as
   compact cards with side thumbnails, so as many posts as possible fit on the first screen.
   Other list pages still use the large cards.
@@ -274,6 +297,7 @@ Supabase project `tbwskzgkmoztdejeiyhz`); `.deploy.json` records the last deploy
   render (the `shownFor` pattern in `UserSheets.tsx` and `dialogs.tsx`).
 - **Error codes** like `auth/forbidden` or `user/self` are thrown by the API and turned
   into translated messages in `errorText()` (`src/lib/app.tsx`).
+  `check()` in supabase.ts turns "column … missing" into `db/missing-column:<col>`, shown as "run npm run db:update".
 - **Log every feature or fix in [CHANGES.md](CHANGES.md)** under `## Unreleased`, as you make it:
   `- Added: <short what>: <details>` (or `Fixed:` / `Changed:` / `Removed:`). The deploy builds the commit
   message from these lines (subject from the short parts, full lines in the body) and moves them under the

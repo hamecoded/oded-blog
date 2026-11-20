@@ -7,6 +7,29 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-20 14:16
+
+- Changed: To-do steps' parallel toggle is a labelled switch ("After it" / "In parallel") and confirms the change by naming both steps; the map shows the fork
+- Fixed: A change the live database couldn't save because a column is missing (schema.sql not run) sprang back silently: it now says which column and to run `npm run db:update`
+- Changed: Post editor's summary is an always-visible field under the title (it was folded away): empty, it shows the automatic summary from the post's first lines as its placeholder, and a line under it says where the summary appears
+- Fixed: To-do parallel steps showed as a group only in the task form: every list (a goal's steps in the pool, tags, Today, events) now marks the group, outlined and tinted, its first step saying how many run in parallel
+- Added: To-do grouped lists fold: tap a group's heading to collapse it (remembered); a folded group shows as one row in the task-card look (its tag's colour and how many items it holds), and tapping it opens the group
+- Changed: To-do pool by tag lists untagged standalone tasks first, then the goals (each with its steps) under "Goals", then the other tasks by tag
+- Changed: To-do journey map draws parallel steps as branches: the road forks into the group's steps and joins again before the next step, each branch turning gold on its own; their labels wrap within their own column
+- Changed: To-do task form shows parallel steps as one joined card, its first row saying how many run in parallel
+- Added: To-do undo when a done task is reopened (unticked on the Done page, for example)
+- Changed: To-do pool groups by tag by default (its own grouping, apart from Today's), with a goal's steps staying under the goal's tags
+- Fixed: To-do locked (sensitive) items still listed their subtasks as rows of dots in the pool, tags and an event's tasks: what's under a locked item is hidden until it's unlocked, and the Done page shows one row per locked item
+- Changed: Post editor's code-snippet language bar no longer opens by itself when the cursor enters a code block (it got in the way while writing); it opens from the code button in the toolbar
+- Added: To-do parallel steps: a step can run alongside the one before it (the side-by-side button in the steps list), so a group of steps is open at once and the next step waits for the whole group; the journey map draws the group as a forked row
+- Added: schema.sql: `todos.parallel`; run `npm run db:update`
+- Fixed: To-do undo bar showed a sensitive task's title after locking (e.g. on the Done page): it's blurred too now
+- Added: To-do copy-title button (clipboard icon) in the task form, on an event's title and on each event item and tip
+- Added: To-do iPhone home-screen app: Share → Add to Home Screen from the to-do app adds the to-do app itself (its own icon and name, full screen, opening on Today)
+- Changed: To-do app icon goes to Today (from any tab) instead of the Apps page
+- Added: Sign-in page says why the sign-in button is off (signing in, waiting for the "are you human" check, a slow or failed check with a "run it again" button)
+- Fixed: Sign-in on localhost against the live site was turned away without saying why: the page now explains that the human check can't run on a local address and what to do; `VITE_TURNSTILE_ON_LOCALHOST=1` turns the check on locally
+
 ## 2026-11-20 12:04
 
 - Fixed: To-do sensitive items showed unblurred right after being marked (choosing the PIN unlocked them): marking one now hides it at once and closes its form, and choosing a PIN doesn't unlock anything; the PIN is needed to see it

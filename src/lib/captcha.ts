@@ -11,7 +11,15 @@ const CONFIGURED_KEY = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | unde
  */
 const LOCAL_HOST = /^(localhost|\d{1,3}(\.\d{1,3}){3}|\[?[\da-f]*:[\da-f:]*\]?|.+\.local)$/i;
 const DEMO = !import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY;
-export const TURNSTILE_SITE_KEY = CONFIGURED_KEY && !DEMO && !LOCAL_HOST.test(location.hostname) ? CONFIGURED_KEY : '';
+/** Opt-in for local testing against the live backend: localhost added to the widget's hostnames in Cloudflare. */
+const ON_LOCAL = import.meta.env.VITE_TURNSTILE_ON_LOCALHOST === '1';
+const LOCAL = LOCAL_HOST.test(location.hostname) && !ON_LOCAL;
+export const TURNSTILE_SITE_KEY = CONFIGURED_KEY && !DEMO && !LOCAL ? CONFIGURED_KEY : '';
+/**
+ * The live backend wants the check (a key is configured), but this is a local address where it's off: Supabase
+ * will turn the sign-in away, so the form says why up front.
+ */
+export const CAPTCHA_OFF_LOCALLY = !!CONFIGURED_KEY && !DEMO && LOCAL;
 
 export interface TurnstileApi {
   render(el: HTMLElement, opts: Record<string, unknown>): string;

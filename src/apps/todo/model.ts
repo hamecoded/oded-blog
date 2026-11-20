@@ -66,9 +66,37 @@ export const isReminded = (t: Todo, today: string) => {
 };
 
 /** The open tasks this one waits for: its dependencies, and the sibling step before it. */
+/**
+ * What a task waits for: what it depends on, and the open steps of the group before it. Siblings form groups: a
+ * step marked `parallel` joins the group of the step before it, so a group's steps are done in any order, and the
+ * step after a group waits for all of it.
+ */
 export function blockers(t: Todo, byId: Map<string, Todo>): Todo[] {
-  const ids = [...t.depends_on, ...(t.prev_id ? [t.prev_id] : [])];
-  return [...new Set(ids)].map((id) => byId.get(id)).filter((x): x is Todo => !!x && isOpen(x));
+  const prev = (x: Todo) => (x.prev_id ? byId.get(x.prev_id) : undefined);
+  // The first step of its own group…
+  let first: Todo = t;
+  const seen = new Set<string>([t.id]);
+  for (let p = prev(first); first.parallel && p && !seen.has(p.id); p = prev(first)) {
+    seen.add(p.id);
+    first = p;
+  }
+  // …and the whole group before that.
+  const before: string[] = [];
+  for (let p = prev(first); p && !seen.has(p.id); p = p.parallel ? prev(p) : undefined) {
+    seen.add(p.id);
+    before.push(p.id);
+  }
+  return [...new Set([...t.depends_on, ...before])].map((id) => byId.get(id)).filter((x): x is Todo => !!x && isOpen(x));
+}
+
+/** Siblings in their order, as groups: a step marked `parallel` shares the group of the one before it. */
+export function stepGroups(steps: Todo[]): Todo[][] {
+  const out: Todo[][] = [];
+  steps.forEach((s, i) => {
+    if (i > 0 && s.parallel && out.length) out[out.length - 1].push(s);
+    else out.push([s]);
+  });
+  return out;
 }
 
 /** Blocked by its status, or still waiting for something unfinished. */
@@ -318,10 +346,27 @@ export type GroupKey = 'none' | 'tag' | 'type' | 'status';
 
 /**
  * Splits tasks into labelled groups. A task with several tags shows under each of them; tasks with
- * none go last, under `none`. Groups keep the tasks' order.
+ * none go last, under `none`. Groups keep the tasks' order. `tagsOf` says which tags a task is grouped by (the pool
+ * passes its top-level task's, so a step stays under its parent). With `lead` (the pool by tag): untagged standalone
+ * tasks first, then the lead group (goals), then the tags.
  */
-export function groupTasks(list: Todo[], key: GroupKey, tt: Tt): { id: string; label: string; items: Todo[] }[] {
+export function groupTasks(
+  list: Todo[],
+  key: GroupKey,
+  tt: Tt,
+  tagsOf: (t: Todo) => string[] = (t) => t.tags,
+  /** Tasks taken out first into a group of their own at the top (the pool's goals, with their steps). */
+  lead?: { id: string; label: string; has: (t: Todo) => boolean },
+): { id: string; label: string; items: Todo[] }[] {
   if (key === 'none') return [{ id: '*', label: '', items: list }];
+  if (lead) {
+    // The pool: loose tasks without a tag first (by tag only), then the lead group (goals), then the rest.
+    const first = list.filter(lead.has);
+    const rest = groupTasks(list.filter((t) => !lead.has(t)), key, tt, tagsOf);
+    const loose = key === 'tag' ? rest.filter((g) => !g.id) : [];
+    const others = key === 'tag' ? rest.filter((g) => g.id) : rest;
+    return [...loose, ...(first.length ? [{ id: lead.id, label: lead.label, items: first }] : []), ...others];
+  }
   const groups = new Map<string, { id: string; label: string; items: Todo[] }>();
   const put = (id: string, label: string, t: Todo) => {
     if (!groups.has(id)) groups.set(id, { id, label, items: [] });
@@ -331,8 +376,9 @@ export function groupTasks(list: Todo[], key: GroupKey, tt: Tt): { id: string; l
     if (key === 'type') put(t.type, tt(`ty_${t.type}`), t);
     else if (key === 'status') put(t.status, tt(`st_${t.status}`), t);
     else {
-      if (!t.tags.length) put('', tt('noTag'), t);
-      t.tags.forEach((l) => put(l.toLowerCase(), `#${l}`, t));
+      const tags = tagsOf(t);
+      if (!tags.length) put('', tt('noTag'), t);
+      tags.forEach((l) => put(l.toLowerCase(), `#${l}`, t));
     }
   });
   const order =

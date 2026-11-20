@@ -589,6 +589,7 @@ export function todoFields(d: TodoDraft, base?: Todo) {
     event_id: (pick('event_id') as string | null | undefined) || null,
     // Only meaningful with an event: a task without one is never hidden.
     event_only: !!pick('event_only') && !!pick('event_id'),
+    parallel: !!pick('parallel'),
     sensitive: !!pick('sensitive'),
     depends_on: deps.slice(0, 50),
     root_id: ref('root_id'),

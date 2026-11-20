@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, ImagePlus, Trash2, X } from 'lucide-react';
 import { api } from '../lib/api';
 import { errorText, useApp } from '../lib/app';
 import type { Lang, Post, PostDraft, PostStatus } from '../lib/types';
-import { can, hasHebrew, postPath, titleDir, writtenExcerpt } from '../lib/util';
+import { can, hasHebrew, htmlToText, makeExcerpt, postPath, titleDir, writtenExcerpt } from '../lib/util';
 import { RichEditor } from '../editor/RichEditor';
 import { AudienceSheet } from '../components/Audience';
 import { VIS_ICON } from '../components/visIcons';
@@ -252,11 +252,20 @@ export function PostEditor() {
             </datalist>
           </div>
         </div>
-        <details className="excerpt-edit">
-          <summary>{t('excerpt')}</summary>
+        {/* The summary, always in view: left empty, the post's first lines are used (shown faded as the placeholder). */}
+        <label className="excerpt-edit">
+          <span className="excerpt-label">{t('excerpt')}</span>
           {/* Same rule as the title: RTL when there's Hebrew (even if it starts with an English word), else the post's language. */}
-          <textarea dir={titleDir(draft.excerpt, draft.lang)} rows={2} value={draft.excerpt} onChange={(e) => update({ excerpt: e.target.value })} />
-        </details>
+          <textarea
+            dir={titleDir(draft.excerpt || draft.title, draft.lang)}
+            rows={2}
+            value={draft.excerpt}
+            maxLength={500}
+            placeholder={makeExcerpt(htmlToText(draft.content_html, true)) || t('excerptHint')}
+            onChange={(e) => update({ excerpt: e.target.value })}
+          />
+          <span className="hint">{draft.excerpt.trim() ? t('excerptOwn') : t('excerptHint')}</span>
+        </label>
       </div>
 
       <div dir={dir}>

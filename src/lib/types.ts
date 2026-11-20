@@ -326,6 +326,11 @@ export interface Todo {
   depends_on: string[];
   /** The task this one was derived from (null: a root purpose). */
   root_id: string | null;
+  /**
+   * Runs alongside the sibling before it: a run of parallel steps is one group, done in any order; the step after the
+   * group waits for all of it. (False: it waits for the step before it, as usual.)
+   */
+  parallel: boolean;
   /** The sibling before and after it among its root's children. */
   prev_id: string | null;
   next_id: string | null;

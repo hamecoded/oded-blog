@@ -1694,14 +1694,26 @@ legend {
   min-height: 36px;
   outline: none;
 }
-.excerpt-edit summary {
-  cursor: pointer;
+.excerpt-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.excerpt-label {
   color: var(--muted);
   font-size: 0.9rem;
 }
+.excerpt-edit .hint {
+  font-size: 0.8rem;
+}
 .excerpt-edit textarea {
   width: 100%;
-  margin-top: 6px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+  resize: vertical;
+  field-sizing: content;
+  min-height: 3.2em;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -8067,6 +8079,9 @@ button.todo-drill-crumb:focus-visible {
   display: flex;
 }
 .todo-home {
+  padding: 0;
+  border: 0;
+  cursor: pointer;
   flex-shrink: 0;
   display: grid;
   place-items: center;
@@ -8600,7 +8615,14 @@ body:has(.err-screen) .fab {
 .todo-ev-page .todo-sec > .muted.small {
   margin: -4px 0 0;
 }
+.todo-ev-title-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .todo .todo-ev-title-in {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   padding: 4px 2px;
   border: 0;
@@ -9157,5 +9179,164 @@ body:has(.err-screen) .fab {
 .todo-part .todo-sec h3,
 .todo-part .todo-parent h3 {
   font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* Copy-the-title button: muted until used, a green tick once copied. */
+.todo-copy {
+  flex: none;
+  color: var(--muted);
+}
+.todo-copy.is-done {
+  color: #10b981;
+}
+.todo-copy:disabled {
+  opacity: 0.35;
+}
+/* Parallel steps: the toggle in the steps list, and the chip on the row. */
+.todo-par-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.todo-par-btn.is-on {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+}
+.todo-m.par {
+  color: var(--accent);
+}
+/* Sign-in: the note on local addresses, and the "run the check again" button under the reason the button is off. */
+.auth-local {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.auth .auth-retry {
+  align-self: center;
+}
+/* Parallel steps: outlined and tinted in every list; in the task form's steps they also join into one card. */
+.todo-par-row {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+}
+.todo-steps .par-first {
+  border-end-start-radius: 4px;
+  border-end-end-radius: 4px;
+  border-bottom-width: 1px;
+}
+.todo-steps .par-mid,
+.todo-steps .par-last {
+  margin-block-start: -5px;
+  border-start-start-radius: 4px;
+  border-start-end-radius: 4px;
+  border-top-style: dashed;
+}
+.todo-steps .par-mid {
+  border-end-start-radius: 4px;
+  border-end-end-radius: 4px;
+  border-bottom-width: 1px;
+}
+.todo-m.par.is-lead {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  font-weight: 700;
+}
+/* A grouped list's heading folds its group away (the chevron turns while it's shut). */
+.todo-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  margin-inline-start: -4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.todo-group-toggle:hover {
+  background: var(--surface-2);
+}
+.todo-group-chev {
+  transition: transform 0.15s;
+}
+.todo-group.is-shut .todo-group-chev {
+  transform: rotate(-90deg);
+}
+[dir='rtl'] .todo-group.is-shut .todo-group-chev {
+  transform: rotate(90deg);
+}
+/* A folded group: one row in the same card look as a task, in its tag's colour (gold for the goals). */
+.todo-group-row {
+  --tc: hsl(var(--h, 250) 70% 55%);
+  padding: 0;
+  border-style: dashed;
+  border-bottom-style: solid;
+}
+.todo-group-row.is-goals {
+  --tc: var(--gold, #f5b301);
+}
+.todo-group-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  padding-inline-start: 14px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.todo-group-row-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--tc) 18%, transparent);
+  color: var(--tc);
+}
+.todo-group-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+.todo-group-row-n {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+.todo-group-row .todo-group-chev {
+  flex: none;
   color: var(--muted);
 }

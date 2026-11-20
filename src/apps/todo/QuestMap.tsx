@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { Lang, Todo } from '../../lib/types';
 import { alpha, ctx2d, easeBack, rrect, shade, wrap } from './draw';
 import { useCanvasSize, type Palette } from './hooks';
-import { isBlocked, isOpen, stepsOf } from './model';
+import { isBlocked, isOpen, stepGroups, stepsOf } from './model';
 import type { Tt } from './strings';
 
 interface Node {
@@ -15,6 +15,24 @@ interface Node {
   i: number;
   task?: Todo;
   parent?: number;
+  /** How wide its label may be (narrower for a step sharing its row, so neighbours' labels never meet). */
+  labelW?: number;
+}
+/**
+ * A point on the road. The stretch from it to the next point is gold once row `row` is done; `split` marks where a
+ * parallel group's branches take over (no road from it to the next point: the branches run there instead).
+ */
+interface RoadPoint {
+  x: number;
+  y: number;
+  row: number;
+  split?: boolean;
+}
+/** One branch of a parallel group: into a step from the fork, or out of it to the join. Gold once `done`. */
+interface Branch {
+  from: { x: number; y: number };
+  to: { x: number; y: number };
+  done: boolean;
 }
 
 const GAP = 132;
@@ -24,34 +42,54 @@ const MAX_ACTIONS = 6;
 /** Where everything goes for a canvas `W` wide. Steps wind down a path; actions fan out beside their step. */
 function layout(purpose: Todo, all: Todo[], W: number) {
   const steps = stepsOf(purpose.id, all);
+  // Steps marked parallel share a row with the step before them: the road forks to each, then joins again.
+  const groups = stepGroups(steps);
   const amp = Math.min(W * 0.22, 120);
   const cx = W / 2;
   const nodes: Node[] = [];
-  const path: { x: number; y: number }[] = [];
-  steps.forEach((s, i) => {
-    const x = cx + amp * Math.sin(i * 1.2 + 0.4);
-    const y = TOP + i * GAP;
-    nodes.push({ kind: 'step', id: s.id, x, y, r: 30, i, task: s });
-    path.push({ x, y });
-    // Actions: on the side with more room, in an arc.
-    const acts = stepsOf(s.id, all);
-    const side = x <= cx ? 1 : -1;
-    const shown = acts.slice(0, MAX_ACTIONS);
-    shown.forEach((a, j) => {
-      const spread = Math.min(1.6, 0.42 * (shown.length - 1));
-      const ang = (shown.length === 1 ? 0 : -spread / 2 + (spread * j) / (shown.length - 1)) + (side > 0 ? 0 : Math.PI);
-      nodes.push({ kind: 'action', id: a.id, x: x + Math.cos(ang) * 62, y: y + Math.sin(ang) * 54, r: 12, i: j, task: a, parent: i });
+  const path: RoadPoint[] = [];
+  const branches: Branch[] = [];
+  let i = 0;
+  groups.forEach((group, g) => {
+    const y = TOP + g * GAP;
+    const m = group.length;
+    const centre = m === 1 ? cx + amp * Math.sin(g * 1.2 + 0.4) : cx;
+    const spacing = Math.min(104, (W - 40) / m);
+    // A parallel group: the road forks above the row into one branch per step, and the branches join below it.
+    const fork = { x: centre, y: y - GAP * 0.4 };
+    const join = { x: centre, y: y + GAP * 0.5 };
+    const prevDone = g === 0 || groups[g - 1].every((x) => x.status === 'completed');
+    if (m === 1) path.push({ x: centre, y, row: g });
+    else path.push({ ...fork, row: g, split: true }, { ...join, row: g });
+    group.forEach((s, k) => {
+      const x = m === 1 ? centre : Math.max(36, Math.min(W - 36, centre + (k - (m - 1) / 2) * spacing));
+      nodes.push({ kind: 'step', id: s.id, x, y, r: m === 1 ? 30 : 24, i, task: s, labelW: m === 1 ? undefined : spacing - 8 });
+      if (m > 1) {
+        branches.push({ from: fork, to: { x, y }, done: prevDone }, { from: { x, y }, to: join, done: s.status === 'completed' });
+      }
+      // Actions: on the side with more room, in an arc (under the step when it shares its row).
+      const acts = stepsOf(s.id, all);
+      const shown = acts.slice(0, MAX_ACTIONS);
+      const side = x <= cx ? 1 : -1;
+      shown.forEach((a, j) => {
+        const spread = Math.min(1.6, 0.42 * (shown.length - 1));
+        const base = m > 1 ? Math.PI / 2 : side > 0 ? 0 : Math.PI;
+        const ang = (shown.length === 1 ? 0 : -spread / 2 + (spread * j) / (shown.length - 1)) + base;
+        const reach = m > 1 ? 48 : 62;
+        nodes.push({ kind: 'action', id: a.id, x: x + Math.cos(ang) * reach, y: y + Math.sin(ang) * (m > 1 ? 46 : 54), r: 12, i: j, task: a, parent: i });
+      });
+      i++;
     });
   });
-  const n = steps.length;
+  const n = groups.length;
   const addX = cx + amp * Math.sin(n * 1.2 + 0.4) * (n ? 1 : 0);
   const addY = TOP + n * GAP;
-  nodes.push({ kind: 'add', id: 'add', x: addX, y: addY, r: 24, i: n });
-  path.push({ x: addX, y: addY });
+  nodes.push({ kind: 'add', id: 'add', x: addX, y: addY, r: 24, i: steps.length });
+  path.push({ x: addX, y: addY, row: n });
   const tY = addY + GAP * 0.85;
-  nodes.push({ kind: 'trophy', id: 'trophy', x: cx, y: tY, r: 36, i: n + 1 });
-  path.push({ x: cx, y: tY });
-  return { steps, nodes, path, height: tY + 80 };
+  nodes.push({ kind: 'trophy', id: 'trophy', x: cx, y: tY, r: 36, i: steps.length + 1 });
+  path.push({ x: cx, y: tY, row: n + 1 });
+  return { steps, groups, nodes, path, branches, height: tY + 80 };
 }
 
 /**
@@ -193,7 +231,9 @@ function drawMap(
   for (let i = 0; i < map.path.length - 1; i++) {
     const a = map.path[i];
     const b = map.path[i + 1];
-    const reached = i < map.steps.length && map.steps[i].status === 'completed';
+    if (a.split) continue; // a parallel group's branches run here instead
+    // A stretch of road is gold once the whole row (a step, or a parallel group) before it is done.
+    const reached = a.row < map.groups.length && map.groups[a.row].every((s) => s.status === 'completed');
     g.lineWidth = 18;
     g.strokeStyle = shade(pal.track, -0.06);
     seg({ x: a.x, y: a.y + 4 }, { x: b.x, y: b.y + 4 });
@@ -208,6 +248,17 @@ function drawMap(
     g.stroke();
     g.setLineDash([]);
   }
+
+  // A parallel group's branches: from the fork to each of its steps, and from each step to the join.
+  map.branches.forEach((b) => {
+    g.lineWidth = 12;
+    g.strokeStyle = shade(pal.track, -0.06);
+    seg({ x: b.from.x, y: b.from.y + 3 }, { x: b.to.x, y: b.to.y + 3 });
+    g.stroke();
+    g.strokeStyle = b.done ? pal.gold : pal.track;
+    seg(b.from, b.to);
+    g.stroke();
+  });
 
   // ── Stops ──
   map.nodes.forEach((n) => {
@@ -230,8 +281,10 @@ function drawMap(
     if (n.kind !== 'step' || appear(n.i) < 0.6) return;
     const task = n.task!;
     g.font = font(800, 13);
-    const lines = wrap(g, task.title || tt('untitled'), Math.min(170, W * 0.46), 2);
-    const lh = 16;
+    // A step sharing its row has a narrower label, in a smaller type, so it stays within its own column.
+    if (n.labelW) g.font = font(800, 12);
+    const lines = wrap(g, task.title || tt('untitled'), n.labelW ?? Math.min(170, W * 0.46), n.labelW ? 3 : 2);
+    const lh = n.labelW ? 15 : 16;
     const w = Math.max(...lines.map((l) => g.measureText(l).width)) + 14;
     const y0 = n.y + n.r + 12;
     rrect(g, n.x - w / 2, y0 - 3, w, lines.length * lh + 6, 8);

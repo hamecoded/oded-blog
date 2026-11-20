@@ -1,8 +1,8 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { Bell, CalendarClock, CalendarDays, Clock, CornerDownRight, ExternalLink, Flag, Flame, Hourglass, ListTree, Lock, LockKeyhole } from 'lucide-react';
+import { Bell, CalendarClock, CalendarDays, Clock, CornerDownRight, ExternalLink, Flag, Flame, Hourglass, ListTree, Lock, LockKeyhole, Columns2 } from 'lucide-react';
 import type { Lang, Todo } from '../../lib/types';
 import { STATUS_ICON, tagHue, TYPE_ICON, VEIL } from './look';
-import { blockers, childTier, dayLabel, depthOf, hostOf, isGoal, isOpen, SIZES, stepsOf, tierOf, xpFor } from './model';
+import { blockers, childTier, dayLabel, depthOf, hostOf, isGoal, isOpen, SIZES, stepGroups, stepsOf, tierOf, xpFor } from './model';
 import { useTt } from './strings';
 
 
@@ -59,6 +59,10 @@ export function TaskRow({
   const Icon = STATUS_ICON[task.status];
   const TypeIcon = TYPE_ICON[task.type];
   const depth = depthOf(task, byId);
+  // Its parallel group among its siblings (steps done side by side), when it's in one: every list marks the group
+  // (outlined and tinted), its first row saying how many run together, the others "in parallel".
+  const parGroup = task.root_id ? stepGroups(stepsOf(task.root_id, all)).find((g) => g.some((x) => x.id === task.id)) : undefined;
+  const par = parGroup && parGroup.length > 1 ? { at: parGroup[0].id === task.id ? 'first' : parGroup[parGroup.length - 1].id === task.id ? 'last' : 'mid', size: parGroup.length } : null;
   const kids = stepsOf(task.id, all);
   const kidsDone = kids.filter((s) => s.status === 'completed').length;
   const root = task.root_id ? byId.get(task.root_id) : undefined;
@@ -169,6 +173,15 @@ export function TaskRow({
       </span>,
     );
   }
+  // A step in a parallel group: the first says how many run together, the others that they run alongside.
+  if (par) {
+    meta.push(
+      <span key="par" className={`todo-m par${par.at === 'first' ? ' is-lead' : ''}`} data-tip={tt(par.at === 'first' ? 'tipParallelGroup' : 'tipParallel')}>
+        <Columns2 size={11} aria-hidden />
+        {par.at === 'first' ? tt('parallelGroup', { n: par.size }) : tt('parallel')}
+      </span>,
+    );
+  }
   if (eventName) {
     meta.push(
       <span key="ev" className="todo-m event" dir="auto" data-tip={tt('tipEvent', { e: eventName })}>
@@ -216,7 +229,7 @@ export function TaskRow({
   }
   return (
     <li
-      className={`todo-row ty-${task.type} p${task.priority} is-${task.status}${blocked ? ' is-blocked' : ''}${goal ? ' is-goal' : ''}${depth ? ` is-${tierOf(depth)}` : ''}${className ? ` ${className}` : ''}`}
+      className={`todo-row ty-${task.type} p${task.priority} is-${task.status}${blocked ? ' is-blocked' : ''}${goal ? ' is-goal' : ''}${depth ? ` is-${tierOf(depth)}` : ''}${par ? ` todo-par-row par-${par.at}` : ''}${className ? ` ${className}` : ''}`}
       style={rowStyle ? { ...style, ...rowStyle } : style}
       data-id={task.id}
     >

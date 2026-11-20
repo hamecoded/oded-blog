@@ -1,0 +1,16 @@
+{
+  "id": "../apps/todo",
+  "name": "To-do · oded.me",
+  "short_name": "משימות",
+  "start_url": "../apps/todo?tab=today",
+  "scope": "../apps/todo",
+  "display": "standalone",
+  "dir": "auto",
+  "lang": "he",
+  "background_color": "#14151b",
+  "theme_color": "#10b981",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

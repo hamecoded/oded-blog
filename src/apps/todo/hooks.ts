@@ -47,6 +47,31 @@ export function useAppChrome() {
   }, []);
 }
 
+/**
+ * "Add to Home Screen" from the to-do app adds the to-do app itself, not the blog: while it's open, the page's
+ * manifest, touch icon and home-screen name are the app's own (public/todo-app/), so the icon opens straight on
+ * Today, full screen. The blog's are put back when the app closes.
+ */
+export function useHomeScreenApp(name: string) {
+  useEffect(() => {
+    const base = `${import.meta.env.BASE_URL}todo-app/`;
+    const swap = (selector: string, attr: 'href' | 'content', value: string) => {
+      const el = document.querySelector(selector);
+      const before = el?.getAttribute(attr);
+      el?.setAttribute(attr, value);
+      return () => {
+        if (el && before != null) el.setAttribute(attr, before);
+      };
+    };
+    const undo = [
+      swap('link[rel="manifest"]', 'href', `${base}manifest.webmanifest`),
+      swap('link[rel="apple-touch-icon"]', 'href', `${base}icon-180.png`),
+      swap('meta[name="apple-mobile-web-app-title"]', 'content', name),
+    ];
+    return () => undo.forEach((u) => u());
+  }, [name]);
+}
+
 /** The colours canvas drawings use, read from the CSS tokens so they follow the light/dark theme. */
 export interface Palette {
   text: string;

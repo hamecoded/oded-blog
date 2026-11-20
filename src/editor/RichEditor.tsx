@@ -166,13 +166,14 @@ export function RichEditor({
   const mathSelected = selected?.type.name === 'math' ? selected : null;
   const inCode = !!editor?.isActive('codeBlock');
 
-  // Show contextual controls as soon as an image/video is tapped or the caret enters a code block.
+  // Show the media controls as soon as an image/video is tapped. A code block's language bar does not open by
+  // itself (it got in the way while typing or moving through a post): the caret in a code block only adds the
+  // code button to the toolbar, and the bar opens from there. Leaving the block or the media closes its bar.
   // (Adjusted during render when the selection context changes, not in an effect.)
   const [shownFor, setShownFor] = useState<{ media: typeof mediaSelected; inCode: boolean }>({ media: null, inCode: false });
   if (shownFor.media !== mediaSelected || shownFor.inCode !== inCode) {
     setShownFor({ media: mediaSelected, inCode });
     if (mediaSelected) setPanel('media');
-    else if (inCode) setPanel((p) => (p === null || p === 'media' || p === 'insert' ? 'code' : p));
     else setPanel((p) => (p === 'media' || p === 'code' ? null : p));
   }
 
@@ -318,7 +319,15 @@ export function RichEditor({
                 <Btn icon={<Clapperboard />} label={t('rec_video')} onClick={() => setRecording('video')} wide />
                 <Btn icon={<Mic />} label={t('rec_audio')} onClick={() => setRecording('audio')} wide />
                 <Btn icon={<Sigma />} label={t('ed_math')} onClick={() => setDialog('math')} wide />
-                <Btn icon={<CodeXml />} label={t('ed_codeBlock')} onClick={() => chain().setCodeBlock().run()} wide />
+                <Btn
+                  icon={<CodeXml />}
+                  label={t('ed_codeBlock')}
+                  onClick={() => {
+                    chain().setCodeBlock().run();
+                    setPanel(null);
+                  }}
+                  wide
+                />
                 <Btn icon={<Link2 />} label={t('ed_link')} onClick={() => setDialog('link')} wide />
                 <Btn icon={<Minus />} label={t('ed_hr')} onClick={() => chain().setHorizontalRule().run()} wide />
               </>
