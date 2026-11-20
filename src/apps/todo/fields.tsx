@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
-import { Mail, Phone, Plus, Send, X } from 'lucide-react';
+import { Check, Mail, Pencil, Phone, Plus, Save, Send, UserPlus, X } from 'lucide-react';
 import type { Lang, TodoComment, TodoContact, TodoDatum, TodoLogEntry, TodoStatus, TodoType } from '../../lib/types';
 import { TODO_TYPES } from '../../lib/util';
 import { STATUS_ICON, TYPE_ICON } from './look';
 import { SIDE_STATES, STAGES } from './model';
+import { saveToContacts } from './vcard';
 import { useTt, type TKey } from './strings';
 
 /**
@@ -229,43 +230,158 @@ export function DataField({ rows, onChange }: { rows: TodoDatum[]; onChange: (r:
   );
 }
 
-/** People involved: name, phone, email and a note, with call and mail links. */
-export function ContactsField({ rows, onChange }: { rows: TodoContact[]; onChange: (r: TodoContact[]) => void }) {
+/**
+ * People involved: first and last name, phone, email and a note, with call and mail links and a button that adds
+ * the person to the phone's contacts (a vCard, `jobTitle` as the job title: the event they belong to).
+ * With `onSave`, a saved contact shows as a card (initials, name, phone, email, note) with an edit button that
+ * opens it in the editing fields again; Save there stores the contacts and turns it back into a card. Without
+ * `onSave` (a task not created yet) every contact stays in its editing fields.
+ */
+export function ContactsField({
+  rows,
+  onChange,
+  jobTitle,
+  dirty,
+  onSave,
+}: {
+  rows: TodoContact[];
+  onChange: (r: TodoContact[]) => void;
+  jobTitle?: string;
+  /** Whether the contacts have changes not saved yet (the Save button lights up). */
+  dirty?: boolean;
+  onSave?: () => void;
+}) {
   const tt = useTt();
-  const set = (i: number, k: keyof TodoContact, v: string) => onChange(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const [sent, setSent] = useState<number | null>(null);
+  /** The contacts open for editing (by position); the rest show as cards. New and empty ones start open. */
+  const [editing, setEditing] = useState<Set<number>>(() => new Set(rows.flatMap((c, i) => (c.name || c.phone || c.email ? [] : [i]))));
+  const open = (i: number) => !onSave || editing.has(i);
+  const setOpen = (i: number, on: boolean) =>
+    setEditing((e) => {
+      const n = new Set(e);
+      if (on) n.add(i);
+      else n.delete(i);
+      return n;
+    });
+  const set = (i: number, k: keyof TodoContact, v: string) =>
+    onChange(
+      rows.map((r, j) => {
+        if (j !== i) return r;
+        const n = { ...r, [k]: v };
+        return { ...n, name: [n.first, n.last].map((x) => x.trim()).filter(Boolean).join(' ') };
+      }),
+    );
+  const remove = (i: number) => {
+    onChange(rows.filter((_, j) => j !== i));
+    // The open ones after it move up one place.
+    setEditing((e) => new Set([...e].filter((j) => j !== i).map((j) => (j > i ? j - 1 : j))));
+  };
+  const toPhone = (c: TodoContact, i: number, iconOnly: boolean) =>
+    (c.name || c.phone || c.email) && (
+      <button
+        type="button"
+        className={iconOnly ? `icon-btn sm todo-contact-ic${sent === i ? ' is-done' : ''}` : `todo-contact-save${sent === i ? ' is-done' : ''}`}
+        onClick={async () => {
+          if (await saveToContacts(c, jobTitle)) setSent(i);
+        }}
+        aria-label={tt('toPhone')}
+        data-tip={jobTitle ? tt('toPhoneHint', { title: jobTitle }) : tt('toPhone')}
+      >
+        {sent === i ? <Check size={iconOnly ? 16 : 15} aria-hidden /> : <UserPlus size={iconOnly ? 16 : 15} aria-hidden />}
+        {!iconOnly && (sent === i ? tt('toPhoneDone') : tt('toPhone'))}
+      </button>
+    );
+
   return (
     <div className="todo-contacts">
-      {rows.map((c, i) => (
-        <div key={i} className="todo-contact">
-          <div className="todo-contact-top">
-            <input value={c.name} onChange={(e) => set(i, 'name', e.target.value)} placeholder={tt('contactName')} aria-label={tt('contactName')} dir="auto" />
-            {c.phone && (
-              <a className="icon-btn sm" href={`tel:${c.phone.replace(/[^\d+]/g, '')}`} aria-label={tt('call')} title={tt('call')}>
-                <Phone size={16} />
-              </a>
-            )}
-            {c.email && (
-              <a className="icon-btn sm" href={`mailto:${c.email}`} aria-label={tt('sendMail')} title={tt('sendMail')}>
-                <Mail size={16} />
-              </a>
-            )}
-            <button type="button" className="icon-btn sm" onClick={() => onChange(rows.filter((_, j) => j !== i))} aria-label={tt('delete')}>
-              <X size={16} />
-            </button>
+      {rows.map((c, i) =>
+        open(i) ? (
+          <div key={i} className="todo-contact">
+            <div className="todo-contact-top">
+              <input value={c.first} onChange={(e) => set(i, 'first', e.target.value)} placeholder={tt('firstName')} aria-label={tt('firstName')} dir="auto" autoComplete="off" />
+              <input value={c.last} onChange={(e) => set(i, 'last', e.target.value)} placeholder={tt('lastName')} aria-label={tt('lastName')} dir="auto" autoComplete="off" />
+              <button type="button" className="icon-btn sm" onClick={() => remove(i)} aria-label={tt('delete')} data-tip={tt('delete')}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="todo-contact-row">
+              <input type="tel" value={c.phone} onChange={(e) => set(i, 'phone', e.target.value)} placeholder={tt('phone')} aria-label={tt('phone')} dir="ltr" />
+              <input type="email" value={c.email} onChange={(e) => set(i, 'email', e.target.value)} placeholder={tt('email')} aria-label={tt('email')} dir="ltr" />
+            </div>
+            <input value={c.note} onChange={(e) => set(i, 'note', e.target.value)} placeholder={tt('contactNote')} aria-label={tt('contactNote')} dir="auto" />
+            <div className="todo-contact-acts">
+              {onSave && (
+                <button
+                  type="button"
+                  className={`todo-contact-store${dirty ? ' is-dirty' : ''}`}
+                  disabled={!(c.name || c.phone || c.email)}
+                  onClick={() => {
+                    if (dirty) onSave();
+                    setOpen(i, false);
+                  }}
+                >
+                  <Save size={15} aria-hidden /> {tt('save')}
+                </button>
+              )}
+              {toPhone(c, i, false)}
+            </div>
           </div>
-          <div className="todo-contact-row">
-            <input type="tel" value={c.phone} onChange={(e) => set(i, 'phone', e.target.value)} placeholder={tt('phone')} aria-label={tt('phone')} dir="ltr" />
-            <input type="email" value={c.email} onChange={(e) => set(i, 'email', e.target.value)} placeholder={tt('email')} aria-label={tt('email')} dir="ltr" />
+        ) : (
+          <div key={i} className="todo-contact is-card">
+            <span className="todo-contact-av" aria-hidden>
+              {([c.first, c.last].map((x) => [...x.trim()][0] ?? '').join('') || [...(c.phone || c.email || '?')][0]).toUpperCase()}
+            </span>
+            <div className="todo-contact-info">
+              <strong dir="auto">{c.name || c.phone || c.email}</strong>
+              {c.phone && (
+                <a href={`tel:${c.phone.replace(/[^\d+]/g, '')}`} dir="ltr">
+                  {c.phone}
+                </a>
+              )}
+              {c.email && (
+                <a href={`mailto:${c.email}`} dir="ltr">
+                  {c.email}
+                </a>
+              )}
+              {c.note && (
+                <span className="muted small" dir="auto">
+                  {c.note}
+                </span>
+              )}
+            </div>
+            <div className="todo-contact-icons">
+              {c.phone && (
+                <a className="icon-btn sm todo-contact-ic" href={`tel:${c.phone.replace(/[^\d+]/g, '')}`} aria-label={tt('call')} data-tip={tt('call')}>
+                  <Phone size={16} />
+                </a>
+              )}
+              {c.email && (
+                <a className="icon-btn sm todo-contact-ic" href={`mailto:${c.email}`} aria-label={tt('sendMail')} data-tip={tt('sendMail')}>
+                  <Mail size={16} />
+                </a>
+              )}
+              {toPhone(c, i, true)}
+              <button type="button" className="icon-btn sm todo-contact-ic is-edit" onClick={() => setOpen(i, true)} aria-label={tt('contactEdit')} data-tip={tt('contactEdit')}>
+                <Pencil size={16} />
+              </button>
+            </div>
           </div>
-          <input value={c.note} onChange={(e) => set(i, 'note', e.target.value)} placeholder={tt('contactNote')} aria-label={tt('contactNote')} dir="auto" />
-        </div>
-      ))}
-      <button type="button" className="btn ghost sm" onClick={() => onChange([...rows, { name: '', phone: '', email: '', note: '' }])}>
+        ),
+      )}
+      <button
+        type="button"
+        className="btn ghost sm"
+        onClick={() => {
+          setOpen(rows.length, true);
+          onChange([...rows, { first: '', last: '', name: '', phone: '', email: '', note: '' }]);
+        }}
+      >
         <Plus size={16} /> {tt('addContact')}
       </button>
     </div>
   );
 }
+
 
 const when = (iso: string, lang: Lang) =>
   new Intl.DateTimeFormat(lang === 'he' ? 'he-IL' : 'en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));

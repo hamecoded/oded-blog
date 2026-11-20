@@ -10,7 +10,10 @@ import type {
   TagGroup,
   TagGroupConfig,
   Todo,
+  TodoContact,
   TodoDraft,
+  TodoEvent,
+  TodoEventDraft,
   TodoLogEntry,
   TodoStatus,
   TodoType,
@@ -502,6 +505,45 @@ export function cleanLink(v: unknown): string | null {
 }
 
 const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+
+/**
+ * A person on a task or event. First and last name are kept apart (as phone contacts keep them); a contact saved
+ * with only `name` (before 2026-11-20) is split at its first space. `name` is always the two together.
+ */
+function cleanContact(o: Record<string, unknown>): TodoContact | null {
+  let first = clip(o.first, 80);
+  let last = clip(o.last, 80);
+  if (!first && !last && o.name) {
+    const full = clip(o.name, 160).replace(/\s+/g, ' ');
+    const at = full.indexOf(' ');
+    first = at < 0 ? full : full.slice(0, at);
+    last = at < 0 ? '' : full.slice(at + 1);
+  }
+  const c = { first, last, name: [first, last].filter(Boolean).join(' '), phone: clip(o.phone, 40), email: clip(o.email, 200), note: clip(o.note, 500) };
+  return c.name || c.phone || c.email ? c : null;
+}
+
+/** An event's fields, cleaned and capped (mirrors the checks on `todo_events` in schema.sql). */
+export function todoEventFields(d: TodoEventDraft, base?: TodoEvent) {
+  const pick = <K extends keyof TodoEventDraft>(k: K) => (k in d ? d[k] : base?.[k as keyof TodoEvent]);
+  const day = clip(pick('date'), 10);
+  const idOf = (o: Record<string, unknown>) => (typeof o.id === 'string' && o.id ? o.id.slice(0, 64) : uid());
+  return {
+    title: clip(pick('title'), 300),
+    description: clip(pick('description'), 4000),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null,
+    contacts: records(pick('contacts'), 50, cleanContact),
+    tips: records(pick('tips'), 200, (o) => {
+      const text = clip(o.text, 2000).trim();
+      return text ? { id: idOf(o), kind: o.kind === 'insight' ? ('insight' as const) : ('tip' as const), text, at: stamp(o.at) } : null;
+    }),
+    items: records(pick('items'), 300, (o) => {
+      const text = clip(o.text, 300).trim();
+      return text ? { id: idOf(o), text, done: !!o.done, at: stamp(o.at) } : null;
+    }),
+    position: numOrNull(pick('position')) ?? Date.now(),
+  };
+}
 /**
  * Tasks used to have named lists as well as tags (until 2026-11-20). A row from back then still carries `lists`
  * (the demo's IndexedDB, or a live row read before schema.sql merged the column): those names become tags. When
@@ -543,6 +585,7 @@ export function todoFields(d: TodoDraft, base?: Todo) {
     tags: cleanLabels([...asList(pick('tags')), ...asList(oldLists(d, base))]),
     link: cleanLink(pick('link')),
     goal: !!pick('goal'),
+    event_id: (pick('event_id') as string | null | undefined) || null,
     depends_on: deps.slice(0, 50),
     root_id: ref('root_id'),
     prev_id: ref('prev_id'),
@@ -555,10 +598,7 @@ export function todoFields(d: TodoDraft, base?: Todo) {
       const value = clip(o.value, 2000);
       return key || value.trim() ? { key, value } : null;
     }),
-    contacts: records(pick('contacts'), 30, (o) => {
-      const c = { name: clip(o.name, 120).trim(), phone: clip(o.phone, 40).trim(), email: clip(o.email, 200).trim(), note: clip(o.note, 500) };
-      return c.name || c.phone || c.email ? c : null;
-    }),
+    contacts: records(pick('contacts'), 30, cleanContact),
     comments: records(pick('comments'), 200, (o) => {
       const text = clip(o.text, 4000).trim();
       return text ? { at: stamp(o.at), text } : null;

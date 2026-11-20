@@ -67,8 +67,9 @@ function English() {
         the photo.
       </p>
       <p>
-        The To-do list app keeps each signed-in user's tasks, including any contacts, notes and comments you add to them.
-        Only you can see them; not other users and not the blog's manager.
+        The To-do list app keeps each signed-in user's tasks and events, including any contacts, tips, notes and comments
+        you add to them. Only you can see them; not other users and not the blog's manager. "Save to phone contacts" hands
+        a contact card to your own device; nothing is sent anywhere else.
       </p>
       <h2>Who can see it</h2>
       <p>
@@ -137,8 +138,9 @@ function Hebrew() {
         ואקראית שלא מופיעה בשום מקום, אבל מי שיש לו את הכתובת המדויקת יכול לפתוח את התמונה.
       </p>
       <p>
-        אפליקציית "רשימת משימות" שומרת את המשימות של כל משתמש מחובר, כולל אנשי קשר, הערות ותגובות שמוסיפים להן. רק אתם רואים
-        אותן: לא משתמשים אחרים ולא מנהל הבלוג.
+        אפליקציית "רשימת משימות" שומרת את המשימות והאירועים של כל משתמש מחובר, כולל אנשי קשר, טיפים, הערות ותגובות שמוסיפים
+        להם. רק אתם רואים אותם: לא משתמשים אחרים ולא מנהל הבלוג. "שמירה באנשי הקשר בטלפון" מעבירה כרטיס איש קשר למכשיר שלכם
+        בלבד, ושום דבר לא נשלח למקום אחר.
       </p>
       <h2>מי רואה מה</h2>
       <p>

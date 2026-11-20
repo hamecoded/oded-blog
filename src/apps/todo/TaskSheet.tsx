@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  CalendarDays,
+  CalendarOff,
   ExternalLink,
   FlagOff,
   Link2,
@@ -18,9 +20,9 @@ import {
 } from 'lucide-react';
 import { Sheet } from '../../components/Sheet';
 import { cleanLink } from '../../lib/util';
-import type { Lang, Todo, TodoComment, TodoContact, TodoDatum, TodoDraft, TodoLogEntry, TodoStatus, TodoType } from '../../lib/types';
+import type { Lang, Todo, TodoComment, TodoContact, TodoDatum, TodoDraft, TodoEvent, TodoLogEntry, TodoStatus, TodoType } from '../../lib/types';
 import { CommentsField, ContactsField, DataField, Fold, LabelField, LogField, StageTrack, TypePicker } from './fields';
-import { blockers, childTier, dayLabel, depthOf, descendants, heightOf, hostOf, isGoal, isOpen, levelKeys, tagsIn, nestTasks, SIZES, stepsOf, tierOf, xpFor } from './model';
+import { blockers, childTier, dayLabel, depthOf, descendants, heightOf, hostOf, isGoal, isOpen, levelKeys, sameContacts, tagsIn, nestTasks, SIZES, stepsOf, tierOf, xpFor } from './model';
 import { TYPE_ICON } from './look';
 import { RemindField } from './RemindField';
 import { Segmented } from './Segmented';
@@ -45,6 +47,7 @@ interface Form {
   day: string | null;
   tags: string[];
   link: string;
+  event_id: string | null;
   depends_on: string[];
   data: TodoDatum[];
   contacts: TodoContact[];
@@ -67,6 +70,7 @@ const formOf = (t: TodoDraft): Form => ({
   day: t.day ?? null,
   tags: t.tags ?? [],
   link: t.link ?? '',
+  event_id: t.event_id ?? null,
   depends_on: t.depends_on ?? [],
   data: t.data ?? [],
   contacts: t.contacts ?? [],
@@ -81,7 +85,7 @@ const tidy = (f: Form): Form => ({
   link: f.link.trim(),
   description: f.description.trim(),
   data: f.data.filter((d) => d.key.trim() || d.value.trim()),
-  contacts: f.contacts.filter((c) => c.name.trim() || c.phone.trim() || c.email.trim()),
+  contacts: f.contacts.filter((c) => c.first.trim() || c.last.trim() || c.phone.trim() || c.email.trim()),
 });
 
 /** What changed between two forms, as a patch. */
@@ -117,6 +121,7 @@ export function TaskSheet({
   onMoveUnder,
   onSetGoal,
   onMoved,
+  events,
   onPlayQuest,
 }: {
   /** The task open in the sheet; null with a draft for a new one, null without a draft when closed. */
@@ -141,6 +146,8 @@ export function TaskSheet({
   onSetGoal: (task: Todo, on: boolean) => void;
   /** After the sheet's "to today" / "to the pool" button moved the task (for a toast). */
   onMoved?: (task: Todo, toToday: boolean) => void;
+  /** The user's events, for the "Event" field. */
+  events: TodoEvent[];
   onPlayQuest: (id: string) => void;
 }) {
   const tt = useTt();
@@ -459,6 +466,34 @@ export function TaskSheet({
           </div>
         </div>
 
+        {(events.length > 0 || form.event_id) && (
+          <div className="todo-field">
+            <span className="todo-field-l">
+              <CalendarDays size={15} aria-hidden /> {tt('eventField')}
+            </span>
+            <SelectMenu
+              label={tt('eventField')}
+              value={form.event_id ?? ''}
+              placeholder={tt('eventNone')}
+              searchPlaceholder={tt('searchTasks')}
+              empty={tt('noMatches')}
+              options={[
+                { value: '', label: tt('eventNone'), icon: <CalendarOff size={15} aria-hidden className="todo-menu-ic is-none" />, note: tt('eventNoneNote') },
+                ...[...events]
+                  .sort((a, b) => (a.date ?? '9999').localeCompare(b.date ?? '9999'))
+                  .map((e) => ({
+                    value: e.id,
+                    label: e.title || tt('untitled'),
+                    icon: <CalendarDays size={15} aria-hidden className="todo-menu-ic" />,
+                    note: e.date ? dayLabel(e.date, today, lang, tt) : undefined,
+                  })),
+              ]}
+              onChange={(v) => set('event_id', v || null)}
+            />
+            <span className="muted small">{tt('eventHint')}</span>
+          </div>
+        )}
+
         <div className="todo-field">
           <span className="todo-field-l">{tt('type')}</span>
           <TypePicker value={form.type} onChange={(v) => set('type', v)} />
@@ -517,7 +552,15 @@ export function TaskSheet({
             <DataField rows={form.data} onChange={(v) => set('data', v)} />
           </Fold>
           <Fold title={tt('contactsTitle')} count={form.contacts.length} icon={<Users size={16} aria-hidden />}>
-            <ContactsField rows={form.contacts} onChange={(v) => set('contacts', v)} />
+            <ContactsField
+              key={task?.id ?? 'new'}
+              rows={form.contacts}
+              onChange={(v) => set('contacts', v)}
+              jobTitle={events.find((e) => e.id === form.event_id)?.title || undefined}
+              // A new task is saved with its own Save button; an open one can store its contacts right here.
+              dirty={!!task && !sameContacts(form.contacts, task.contacts)}
+              onSave={task ? () => commit() : undefined}
+            />
           </Fold>
           <Fold title={tt('commentsTitle')} count={form.comments.length} icon={<MessageSquare size={16} aria-hidden />}>
             <CommentsField rows={form.comments} onChange={(v) => set('comments', v)} lang={lang} />

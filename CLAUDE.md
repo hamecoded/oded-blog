@@ -147,8 +147,19 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   "Today" (`toTodayBtn`) or an "on today" mark; done ones fold away below. A new topic is only a name until its
   first task: the form just opens it (`setTopic`), and `placeOf()` tags what's added there.
   "Add an existing task" (`SelectMenu`, `assignToTopic`) adds the tag to an open task not yet in the topic.
+  Inside an app the top bar drops Tags and Search, except that in the to-do app "Tags" stays and links to
+  `/apps/todo` with `state.todoTab = 'tags'`; the app follows a new navigation's `loc.key` (render-time compare).
   Journeys list (2026-11-20): `questsShown` filters by `goalStage()` and tag and sorts by `QuestSort` (remembered);
   in 'mine' (by `position`) a third `useOutlineDrag()` reorders it, one column, a drop setting `positionBetween()`.
+  **Events (2026-11-20, `Events.tsx`):** table `todo_events` ("todo events own" RLS) holds title, `date`, description and
+  jsonb `contacts`, `tips` (each `kind` 'tip' | 'insight'), `items` (cleaned by `todoEventFields()`); Api `listTodoEvents` / `saveTodoEvent` /
+  `deleteTodoEvents` in both backends. Items are not tasks: "Make it a task" (`promoteItem`) creates a todo in the pool
+  with `event_id` and drops the item. `todos.event_id` (on delete set null; local.ts clears it too) is the task's Event
+  field; supabase `saveTodo` sends `event_id` only when the change sets it, so saving works before the migration. A
+  missing table shows `eventsNotSetUp` in the tab only ('events/missing'). The bottom bar has Events where Tags was;
+  Tags opens from the blog's top bar. Contacts (`TodoContact`) have `first`/`last` (+ `name`, the two joined;
+  `cleanContact()` splits older names); `vcard.ts` builds a vCard 3.0 (event name as TITLE) and shares it (iPhone:
+  share sheet → Contacts) or downloads `contact.vcf`.
 - **Error page (2026-11-20):** `components/ErrorScreen.tsx` is the router's `errorElement` (on a pathless route inside
   `Layout`, so the blog's frame stays; also on the root and `/:site` routes) and `AppErrorBoundary` wraps everything in
   main.tsx. `lib/errorReport.ts` sorts a crash into a plain-words kind (`readError()`: update / offline / notFound /

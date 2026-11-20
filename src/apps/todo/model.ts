@@ -1,4 +1,4 @@
-import type { Lang, Todo, TodoDraft, TodoLogEntry, TodoStatus, TodoType } from '../../lib/types';
+import type { Lang, Todo, TodoContact, TodoDraft, TodoLogEntry, TodoStatus, TodoType } from '../../lib/types';
 import { TODO_TYPES } from '../../lib/util';
 import type { TKey, Tt } from './strings';
 
@@ -519,4 +519,11 @@ export function logFor(before: Todo, patch: TodoDraft, at = new Date().toISOStri
   if (patch.status && patch.status !== before.status) out.push({ at, kind: 'status', from: before.status, to: patch.status });
   if ('day' in patch && (patch.day ?? null) !== before.day) out.push({ at, kind: 'day', from: before.day, to: patch.day ?? null });
   return out;
+}
+
+/** Whether two contact lists say the same (names, phone, email, note; spaces around them don't count). */
+export function sameContacts(a: TodoContact[], b: TodoContact[]): boolean {
+  const key = (cs: TodoContact[]) =>
+    JSON.stringify(cs.filter((c) => c.first.trim() || c.last.trim() || c.phone.trim() || c.email.trim()).map((c) => [c.first, c.last, c.phone, c.email, c.note].map((x) => x.trim())));
+  return key(a) === key(b);
 }

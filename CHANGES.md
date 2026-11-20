@@ -7,8 +7,17 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
-## 2026-11-20 09:42
+## 2026-11-20 10:41
 
+- Fixed: To-do contact editing: space above the Save / phone-contacts buttons row
+- Changed: To-do saved contacts show as a card (initials, name, tappable phone and email, note, call / mail / phone-contacts icons) with an edit button that opens the editing fields again; Save there turns it back into a card
+- Added: To-do contacts have a Save button that lights up while there are unsaved changes (on an event it saves the event's contacts; on an open task it saves the task without closing it), then says "Saved"
+- Added: To-do events keep insights as well as tips ("Insights and tips"): pick the kind when adding, tap an entry's kind to switch it; older tips stay tips
+- Added: To-do Events tab (in place of Tags in the bottom bar; Tags stays in the top bar): events with a date, listed as coming up, not dated yet and past; each event has its details, items that stay out of the pool until made a task, its tasks, tips and contacts; deleting one keeps its tasks
+- Added: To-do task field "Event" ties a task to an event; the task shows the event as a chip and on the event's page
+- Changed: To-do contacts (on tasks and events) have first and last name, and "Save to phone contacts" hands the phone a contact card (vCard) with the event's name as the job title; older contacts' names are split at the first space
+- Added: schema.sql: `todo_events` table (owner-only RLS) and `todos.event_id` (on delete set null); run `npm run db:update`
+- Changed: In the to-do app the top bar's "Tags" link is back, and opens the app's own Tags tab (its topics)
 - Added: To-do tag topics can take in existing tasks: a searchable "Add an existing task" picker (in outline order, goals showing how much is under them) adds the tag; a goal brings its steps and actions along
 - Added: To-do Tags tab can start a new topic: name it and it opens empty with the add box ready; every task added there (quick add or with details) carries the tag, and the topic's card appears once it has one
 - Changed: To-do journeys page shows the same level bar as the other tabs (app icon, level, XP, streak); an open journey's heading row sits above it, like an open topic's

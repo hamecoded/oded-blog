@@ -10,6 +10,7 @@ import type {
   LikeInfo,
   Possession,
   Todo,
+  TodoEvent,
   Post,
   PostDraft,
   Profile,
@@ -30,6 +31,7 @@ import {
   normalizeTagGroup,
   OAUTH_LABELS,
   possessionFields,
+  todoEventFields,
   todoFields,
   OAUTH_PROVIDERS,
   RESERVED_SLUGS,
@@ -58,6 +60,7 @@ interface Db {
   tagGroups: TagGroup[];
   possessions: Possession[];
   todos: Todo[];
+  todoEvents: TodoEvent[];
 }
 
 const DB_NAME = 'bilingual-blog';
@@ -163,6 +166,7 @@ export function createLocalApi(): Api {
         tagGroups: stored.tagGroups ?? [],
         possessions: stored.possessions ?? [],
         todos: stored.todos ?? [],
+        todoEvents: stored.todoEvents ?? [],
       };
       if (await ensureAdmin(cache)) await idbSet('db', cache);
     } else {
@@ -190,6 +194,7 @@ export function createLocalApi(): Api {
         tagGroups: [],
         possessions: [],
         todos: [],
+        todoEvents: [],
       };
       await ensureAdmin(cache);
       await idbSet('db', cache);
@@ -650,6 +655,7 @@ export function createLocalApi(): Api {
       d.roleRequests = d.roleRequests.filter((r) => r.user_id !== userId);
       d.possessions = d.possessions.filter((x) => x.owner_id !== userId);
       d.todos = d.todos.filter((x) => x.owner_id !== userId);
+      d.todoEvents = d.todoEvents.filter((x) => x.owner_id !== userId);
       d.groups.forEach((g) => {
         g.member_ids = g.member_ids.filter((x) => x !== userId);
         if (g.created_by === userId) g.created_by = null;
@@ -899,6 +905,45 @@ export function createLocalApi(): Api {
       const d = await db();
       const drop = new Set(ids);
       d.todos = d.todos.filter((x) => !(drop.has(x.id) && x.owner_id === u.id));
+      await persist();
+    },
+
+    // To-do events: owner only, like tasks. Mirrors the "todo events own" policy in schema.sql.
+    async listTodoEvents() {
+      const u = await requireMe();
+      return (await db()).todoEvents
+        .filter((x) => x.owner_id === u.id)
+        .map((x) => ({ ...x, ...todoEventFields(x, x) }))
+        .sort((a, b) => a.position - b.position);
+    },
+
+    async saveTodoEvent(e) {
+      const u = await requireMe();
+      if (!can.useApps(u)) throw new Error('auth/forbidden');
+      const d = await db();
+      const now = new Date().toISOString();
+      const existing = e.id ? d.todoEvents.find((x) => x.id === e.id) : undefined;
+      if (e.id && (!existing || existing.owner_id !== u.id)) throw new Error('auth/forbidden');
+      const saved: TodoEvent = {
+        id: existing?.id ?? uid(),
+        owner_id: u.id,
+        ...todoEventFields(e, existing),
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+      };
+      if (existing) d.todoEvents[d.todoEvents.indexOf(existing)] = saved;
+      else d.todoEvents.push(saved);
+      await persist();
+      return saved;
+    },
+
+    async deleteTodoEvents(ids) {
+      const u = await requireMe();
+      const d = await db();
+      const drop = new Set(d.todoEvents.filter((x) => ids.includes(x.id) && x.owner_id === u.id).map((x) => x.id));
+      d.todoEvents = d.todoEvents.filter((x) => !drop.has(x.id));
+      // Like "on delete set null" in schema.sql: the tasks stay, without the event.
+      d.todos = d.todos.map((t) => (t.event_id && drop.has(t.event_id) ? { ...t, event_id: null } : t));
       await persist();
     },
   };

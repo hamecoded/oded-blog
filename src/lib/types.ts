@@ -248,6 +248,9 @@ export interface TodoDatum {
 }
 /** Someone the task involves. Every field is optional except the name. */
 export interface TodoContact {
+  /** First and last name, as a phone's contacts keep them; `name` is the two together (older rows: only `name`). */
+  first: string;
+  last: string;
   name: string;
   phone: string;
   email: string;
@@ -307,6 +310,8 @@ export interface Todo {
   link: string | null;
   /** Marked as a goal: a purpose shown in the journeys even before it has steps (promoted, or started as one). */
   goal: boolean;
+  /** The event it's for (a `TodoEvent`), or null. */
+  event_id: string | null;
   /** Tasks that have to be finished first. */
   depends_on: string[];
   /** The task this one was derived from (null: a root purpose). */
@@ -328,6 +333,44 @@ export interface Todo {
 }
 
 export type TodoDraft = Partial<Omit<Todo, 'id' | 'owner_id' | 'created_at' | 'updated_at'>> & { id?: string };
+
+/** Something to do in an event that isn't a task yet: it stays with the event (not in the pool) until promoted. */
+export interface TodoEventItem {
+  id: string;
+  text: string;
+  done: boolean;
+  at: string;
+}
+/** A tip ("bring an umbrella") or an insight ("the north beach is quieter") kept with an event. */
+export interface TodoEventTip {
+  id: string;
+  /** 'tip' (advice for doing it) or 'insight' (something learned or noticed); older entries are tips. */
+  kind: 'tip' | 'insight';
+  text: string;
+  at: string;
+}
+
+/**
+ * An event in the To-do app (a trip, a wedding, a move): a date to sort by, the people involved, tips, and items
+ * that aren't tasks until promoted. Tasks point at it with `Todo.event_id`. Private to its owner, like tasks: see
+ * the "todo events own" policy in supabase/schema.sql and the owner checks in api/local.ts.
+ */
+export interface TodoEvent {
+  id: string;
+  owner_id: string;
+  title: string;
+  description: string;
+  /** 'YYYY-MM-DD', or null when it isn't set yet (sorted last). */
+  date: string | null;
+  contacts: TodoContact[];
+  tips: TodoEventTip[];
+  items: TodoEventItem[];
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TodoEventDraft = Partial<Omit<TodoEvent, 'id' | 'owner_id' | 'created_at' | 'updated_at'>> & { id?: string };
 
 export interface Api {
   mode: 'supabase' | 'local';
@@ -406,4 +449,9 @@ export interface Api {
   /** Creates (no id) or updates one; returns the saved row. */
   saveTodo(t: TodoDraft): Promise<Todo>;
   deleteTodos(ids: string[]): Promise<void>;
+  /** The user's events (To-do app). Throws 'events/missing' when the live table isn't there yet. */
+  listTodoEvents(): Promise<TodoEvent[]>;
+  saveTodoEvent(e: TodoEventDraft): Promise<TodoEvent>;
+  /** Deletes events; tasks that pointed at them keep going, without an event. */
+  deleteTodoEvents(ids: string[]): Promise<void>;
 }

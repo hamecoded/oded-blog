@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   AlarmClock,
   ArrowDownUp,
+  CalendarDays,
   ArrowLeft,
   ArrowRight,
   GripVertical,
@@ -20,7 +22,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { errorText, useApp } from '../../lib/app';
-import type { Todo, TodoDraft } from '../../lib/types';
+import type { Todo, TodoDraft, TodoEvent, TodoEventDraft } from '../../lib/types';
 import { todoFields } from '../../lib/util';
 import { FxLayer } from './FxLayer';
 import { Fx } from './fx';
@@ -65,6 +67,7 @@ import {
 } from './model';
 import { tagHue, TYPE_ICON } from './look';
 import { SelectMenu } from './SelectMenu';
+import { EventHead, EventPage, EventsList } from './Events';
 import { useOutlineDrag, type Place } from './outlineDrag';
 import { Picker } from './Picker';
 import { QuestMap } from './QuestMap';
@@ -77,7 +80,7 @@ import { UndoBar } from './UndoBar';
 import { TaskSheet } from './TaskSheet';
 import { TipLayer } from './TipLayer';
 
-type Tab = 'today' | 'pool' | 'quests' | 'tags' | 'done';
+type Tab = 'today' | 'pool' | 'quests' | 'tags' | 'events' | 'done';
 type PoolFilter = 'all' | 'reminded' | 'due' | 'blocked';
 /** The journeys list: its order ('mine' is dragged by hand) and which ones it shows. */
 type QuestSort = 'mine' | 'progress' | 'recent' | 'deadline' | 'name';
@@ -92,7 +95,7 @@ function merge(list: Patch[]): Patch[] {
   return [...m.values()];
 }
 
-const TABS: Tab[] = ['today', 'pool', 'quests', 'tags', 'done'];
+const TABS: Tab[] = ['today', 'pool', 'quests', 'tags', 'events', 'done'];
 
 /**
  * To-do, played as a game: a fresh list every day, XP and levels for finished tasks, and purposes played as
@@ -113,7 +116,16 @@ export default function TodoApp() {
 
   const [rows, setRows] = useState<Todo[] | null>(null);
   const [missing, setMissing] = useState(false);
+  /** The user's events (the Events tab); `eventsMissing`: the live table isn't there yet. */
+  const [events, setEvents] = useState<TodoEvent[]>([]);
+  const [eventsMissing, setEventsMissing] = useState(false);
+  /** The event open in the Events tab; null shows the list. */
+  const [eventId, setEventId] = useState<string | null>(null);
+  // A link can ask for a tab (the blog's top bar "Tags" link opens the Tags tab): `state.todoTab`.
+  const loc = useLocation();
+  const askedTab = (loc.state as { todoTab?: Tab } | null)?.todoTab;
   const [tab, setTabState] = useState<Tab>(() => {
+    if (askedTab && TABS.includes(askedTab)) return askedTab;
     const v = recall('tab');
     if (v === 'lists') return 'tags'; // the Lists tab became the Tags tab
     return v && TABS.includes(v as Tab) ? (v as Tab) : 'today';
@@ -138,6 +150,18 @@ export default function TodoApp() {
   const [questId, setQuestId] = useState<string | null>(null);
   /** The tag open in the Tags tab (a topic); null shows every topic. */
   const [topic, setTopic] = useState<string | null>(null);
+  useEffect(() => remember('tab', tab), [tab]);
+  // Following that link while the app is already open: a new navigation (its own key) switches the tab, to its start.
+  const [seenNav, setSeenNav] = useState(loc.key);
+  if (loc.key !== seenNav) {
+    setSeenNav(loc.key);
+    if (askedTab && TABS.includes(askedTab)) {
+      setTabState(askedTab);
+      if (askedTab === 'tags') setTopic(null);
+      if (askedTab === 'quests') setQuestId(null);
+      if (askedTab === 'events') setEventId(null);
+    }
+  }
   /** null: the review opens by itself once a day when there are leftovers. */
   const [reviewChoice, setReviewChoice] = useState<boolean | null>(null);
   const [promptedOn, setPromptedOn] = useState(() => recall('reviewed'));
@@ -165,8 +189,20 @@ export default function TodoApp() {
     toast(errorText(e, t));
     void reload();
   };
-  const reload = () =>
+  const reloadEvents = () =>
     api
+      .listTodoEvents()
+      .then((r) => {
+        setEventsMissing(false);
+        setEvents(r);
+      })
+      .catch((e) => {
+        if (e instanceof Error && e.message === 'events/missing') setEventsMissing(true);
+        else toast(errorText(e, t));
+      });
+  const reload = () => {
+    void reloadEvents();
+    return api
       .listTodos()
       .then((r) => {
         setMissing(false);
@@ -177,6 +213,7 @@ export default function TodoApp() {
         else toast(errorText(e, t));
         setRows((r) => r ?? []);
       });
+  };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => void reload(), [user?.id]);
 
@@ -259,6 +296,7 @@ export default function TodoApp() {
     // The Journeys tab always opens on the list of journeys (a journey is picked from there).
     if (v === 'quests') setQuestId(null);
     if (v === 'tags') setTopic(null); // likewise the Tags tab opens on the topics
+    if (v === 'events') setEventId(null); // and the Events tab on the list of events
     window.scrollTo({ top: 0 });
   };
   const setSort = (v: SortKey) => {
@@ -268,6 +306,44 @@ export default function TodoApp() {
   const setGroup = (v: GroupKey) => {
     setGroupState(v);
     remember('group', v);
+  };
+  // ── Events: changed here at once, then saved; on failure they reload. ──
+  const saveEvent = (id: string, patch: TodoEventDraft) => {
+    setEvents((es) => es.map((e) => (e.id === id ? { ...e, ...patch, updated_at: new Date().toISOString() } : e)));
+    api.saveTodoEvent({ id, ...patch }).catch((e) => {
+      toast(errorText(e, t));
+      void reloadEvents();
+    });
+  };
+  const createEvent = async (d: TodoEventDraft) => {
+    try {
+      const saved = await api.saveTodoEvent(d);
+      setEvents((es) => [...es, saved]);
+      setEventId(saved.id);
+      window.scrollTo({ top: 0 });
+    } catch (e) {
+      toast(errorText(e, t));
+    }
+  };
+  /** Deleting an event keeps its tasks, without it (as "on delete set null" does in the database). */
+  const deleteEvent = (id: string) => {
+    setEvents((es) => es.filter((e) => e.id !== id));
+    setRows((rs) => rs?.map((r) => (r.event_id === id ? { ...r, event_id: null } : r)) ?? rs);
+    setEventId(null);
+    toast(tt('eventDeleted'));
+    api.deleteTodoEvents([id]).catch((e) => {
+      toast(errorText(e, t));
+      void reload();
+    });
+  };
+  /** An item becomes a real task for the event, in the pool; it leaves the event's items. */
+  const promoteItem = async (ev: TodoEvent, itemId: string) => {
+    const item = ev.items.find((i) => i.id === itemId);
+    if (!item) return;
+    const saved = await create({ title: item.text, day: null, event_id: ev.id });
+    if (!saved) return;
+    saveEvent(ev.id, { items: ev.items.filter((i) => i.id !== itemId) });
+    toast(tt('eventPromoted', { title: item.text }));
   };
   const pickQuest = (id: string | null) => {
     setQuestId(id);
@@ -525,6 +601,12 @@ export default function TodoApp() {
   }
 
   const doneToday = todayAll.filter((r) => r.status === 'completed').length;
+  /** The name of a task's event, for its row's chip; none on that event's own page. */
+  const eventNameOf = (task: Todo) => {
+    if (!task.event_id || (tab === 'events' && task.event_id === eventId)) return undefined;
+    const ev = events.find((e) => e.id === task.event_id);
+    return ev ? ev.title || tt('untitled') : undefined;
+  };
   const row = (task: Todo, extra?: { showRemind?: boolean; action?: ReactNode; hideRoot?: boolean }, level = 0) => {
     const look = level ? outline.rowLook(task.id) : {};
     return (
@@ -535,6 +617,7 @@ export default function TodoApp() {
         byId={byId}
         today={today}
         lang={lang}
+        eventName={eventNameOf(task)}
         onToggle={toggle}
         onOpen={(x) => openTask(x.id)}
         {...extra}
@@ -997,6 +1080,7 @@ export default function TodoApp() {
                 onOpen={(x) => openTask(x.id)}
                 showRemind
                 hideTag={topic}
+                eventName={eventNameOf(r)}
                 hideRoot={level > 0}
                 action={topicActs(r, kids, hidden)}
                 className={[level > 0 ? 'is-nested' : '', ...block, look.className].filter(Boolean).join(' ') || undefined}
@@ -1117,6 +1201,80 @@ export default function TodoApp() {
     </>
   );
 
+  const event = eventId ? events.find((e) => e.id === eventId) : undefined;
+  const eventHead = event && (
+    <EventHead
+      ev={event}
+      today={today}
+      lang={lang}
+      back={
+        <button type="button" className="icon-btn" onClick={() => setEventId(null)} aria-label={tt('allEvents')} data-tip={tt('allEvents')}>
+          <Back size={20} />
+        </button>
+      }
+    />
+  );
+  /** An event's tasks as an outline (a task for it brings what's under it), each with "Today" or its on-today mark. */
+  const eventTasks = (ev: TodoEvent) => {
+    const mine = all.filter((r) => r.event_id === ev.id && r.status !== 'quit');
+    const set = new Map<string, Todo>();
+    mine.forEach((r) => [r, ...descendants(r.id, all)].forEach((x) => x.status !== 'quit' && set.set(x.id, x)));
+    const list = sortTasks([...set.values()], 'smart', today, byId);
+    return list.length === 0 ? null : (
+      <ul className="todo-list is-outline">
+        {nestTasks(list, all).map(({ task: r, level }) =>
+          row(
+            r,
+            {
+              action:
+                r.day === today ? (
+                  <span className="todo-on-today" data-tip={tt('tipOnToday')}>
+                    <Sun size={14} aria-hidden />
+                    {tt('tagOnToday')}
+                  </span>
+                ) : isOpen(r) ? (
+                  toTodayBtn(r)
+                ) : undefined,
+              hideRoot: level > 0,
+            },
+            level,
+          ),
+        )}
+      </ul>
+    );
+  };
+  const eventsView = eventsMissing ? (
+    <div className="todo-blank">
+      <CalendarDays size={40} strokeWidth={1.5} aria-hidden />
+      <p>{tt('eventsNotSetUp')}</p>
+      <code dir="ltr">npm run db:update</code>
+    </div>
+  ) : event ? (
+    <EventPage
+      ev={event}
+      tasks={eventTasks(event)}
+      lang={lang}
+      uiDir={uiDir}
+      onSave={(p) => saveEvent(event.id, p)}
+      onDelete={() => deleteEvent(event.id)}
+      onPromote={(itemId) => void promoteItem(event, itemId)}
+      onNewTask={() => openNew({ day: null, event_id: event.id, title: '' })}
+    />
+  ) : (
+    <EventsList
+      events={events}
+      all={all}
+      today={today}
+      lang={lang}
+      uiDir={uiDir}
+      onOpen={(id) => {
+        setEventId(id);
+        window.scrollTo({ top: 0 });
+      }}
+      onCreate={(d) => void createEvent(d)}
+    />
+  );
+
   const doneView =
     finished.length === 0 ? (
       <div className="todo-blank">
@@ -1136,8 +1294,8 @@ export default function TodoApp() {
 
   const nav: { id: Tab; label: TKey; icon: typeof Sun; n?: number; dot?: boolean }[] = [
     // Today in the middle, within easy reach of the thumb; the pool on one side of it, the journeys on the other
-    // (in Hebrew, right to left: tags, pool, today, journeys, done).
-    { id: 'tags', label: 'tagsTab', icon: Hash },
+    // (in Hebrew, right to left: events, pool, today, journeys, done). Tags open from the blog's top bar.
+    { id: 'events', label: 'events', icon: CalendarDays, n: events.filter((e) => e.date && e.date >= today).length },
     { id: 'pool', label: 'pool', icon: Inbox, n: pool.length },
     { id: 'today', label: 'today', icon: Sun, n: todayAll.length - doneToday, dot: reminded.length > 0 },
     { id: 'quests', label: 'quests', icon: Swords, n: purposes.filter(isOpen).length },
@@ -1161,6 +1319,7 @@ export default function TodoApp() {
         {/* An open journey or topic has its own heading row (with the way back) above the bar. */}
         {tab === 'quests' && questHead}
         {tab === 'tags' && topicHead}
+        {tab === 'events' && eventHead}
         {/* The same game bar on every tab: on Today it counts the day's list, elsewhere the level's XP. */}
         <Hud home={<HomeLink />} mode={tab === 'today' ? 'day' : 'xp'} onLevel={() => setLevelsOpen(true)} stats={stats} done={doneToday} total={todayAll.length} pal={pal} reduced={reduced} lang={lang} tt={tt} />
         {canAdd && (
@@ -1208,6 +1367,7 @@ export default function TodoApp() {
         {tab === 'pool' && poolView}
         {tab === 'quests' && questsView}
         {tab === 'tags' && tagsView}
+        {tab === 'events' && eventsView}
         {tab === 'done' && doneView}
       </div>
 
@@ -1246,6 +1406,7 @@ export default function TodoApp() {
         onAddChild={(r, title) => void create({ title, root_id: r.id })}
         onReorder={reorder}
         onMoved={(t, toToday) => toast(tt(toToday ? 'movedToToday' : 'movedToPool', { title: t.title || tt('untitled') }))}
+        events={events}
         onMoveUnder={moveUnder}
         onSetGoal={setGoal}
         onPlayQuest={(id) => {

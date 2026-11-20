@@ -715,6 +715,40 @@ create policy "todos own" on public.todos for all
   using (owner_id = auth.uid())
   with check (owner_id = auth.uid() and not coalesce((select suspended from public.profiles where id = auth.uid()), false));
 
+-- ───────────────────────── todo_events (the To-do app's events) ─────────────────────────
+-- An event (a trip, a wedding, a move): a date to sort by, its people, tips, and items that aren't tasks until
+-- promoted (then they're todos with event_id). Private to the owner, like todos. Mirrors todoEventFields() in
+-- util.ts and the owner checks in src/lib/api/local.ts.
+create table if not exists public.todo_events (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null default auth.uid() references public.profiles (id) on delete cascade,
+  title       text not null default '' check (length(title) <= 300),
+  description text not null default '' check (length(description) <= 4000),
+  date        date,
+  contacts    jsonb not null default '[]',
+  tips        jsonb not null default '[]',
+  items       jsonb not null default '[]',
+  position    double precision not null default (extract(epoch from clock_timestamp()) * 1000),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+alter table public.todo_events drop constraint if exists todo_events_json_check;
+alter table public.todo_events add constraint todo_events_json_check check (
+  jsonb_typeof(contacts) = 'array' and jsonb_typeof(tips) = 'array' and jsonb_typeof(items) = 'array'
+  and pg_column_size(contacts) + pg_column_size(tips) + pg_column_size(items) < 2000000);
+create index if not exists todo_events_owner_idx on public.todo_events (owner_id, date);
+drop trigger if exists todo_events_touch on public.todo_events;
+create trigger todo_events_touch before insert or update on public.todo_events
+  for each row execute function public.touch_todo();
+alter table public.todo_events enable row level security;
+drop policy if exists "todo events own" on public.todo_events;
+create policy "todo events own" on public.todo_events for all
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid() and not coalesce((select suspended from public.profiles where id = auth.uid()), false));
+-- The event a task is for; deleting the event keeps the task, without it.
+alter table public.todos add column if not exists event_id uuid references public.todo_events (id) on delete set null;
+create index if not exists todos_event_idx on public.todos (event_id);
+
 -- ───────────────────────── Storage (uploaded images / videos) ─────────────────────────
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('media', 'media', true, 52428800)

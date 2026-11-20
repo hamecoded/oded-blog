@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { Bell, CalendarClock, Clock, CornerDownRight, ExternalLink, Flag, Flame, Hourglass, ListTree, Lock } from 'lucide-react';
+import { Bell, CalendarClock, CalendarDays, Clock, CornerDownRight, ExternalLink, Flag, Flame, Hourglass, ListTree, Lock } from 'lucide-react';
 import type { Lang, Todo } from '../../lib/types';
 import { STATUS_ICON, tagHue, TYPE_ICON } from './look';
 import { blockers, childTier, dayLabel, depthOf, hostOf, isGoal, isOpen, SIZES, stepsOf, tierOf, xpFor } from './model';
@@ -26,6 +26,7 @@ export function TaskRow({
   action,
   hideRoot,
   hideTag,
+  eventName,
   className,
   rowStyle,
 }: {
@@ -44,6 +45,8 @@ export function TaskRow({
   hideRoot?: boolean;
   /** A tag not to show on the row: the topic it's listed under in the Tags tab. */
   hideTag?: string;
+  /** The name of the event it's for, shown as a chip (left out on that event's own page). */
+  eventName?: string;
   /** Extra class and style for the row (a row being dragged into a new place). */
   className?: string;
   rowStyle?: CSSProperties;
@@ -159,6 +162,14 @@ export function TaskRow({
       >
         <ListTree size={12} aria-hidden />
         {kidsDone}/{kids.length}
+      </span>,
+    );
+  }
+  if (eventName) {
+    meta.push(
+      <span key="ev" className="todo-m event" dir="auto" data-tip={tt('tipEvent', { e: eventName })}>
+        <CalendarDays size={11} aria-hidden />
+        {eventName}
       </span>,
     );
   }

@@ -22,6 +22,8 @@ function Layout() {
   const bare = loc.pathname.endsWith('/print');
   /** Inside an app (/apps/<app>) the blog's tags and search links are noise: the app has its own. */
   const inApp = /^\/apps\/[^/]+/.test(loc.pathname);
+  /** In the to-do app, "Tags" stays in the bar and opens the app's own Tags tab (its topics). */
+  const inTodo = /^\/apps\/todo(?:\/|$)/.test(loc.pathname);
   // Printing the blog is for the manager; apps print the user's own data, so they may print.
   usePrintLock(can.export(user) || (!!user && loc.pathname.startsWith('/apps/')));
   return (
@@ -35,6 +37,11 @@ function Layout() {
             {t('siteName')}
           </Link>
           <nav>
+            {inTodo && (
+              <Link to="/apps/todo" state={{ todoTab: 'tags' }}>
+                {t('tags')}
+              </Link>
+            )}
             {!inApp && (
               <>
                 <Link to="/tags">{t('tags')}</Link>

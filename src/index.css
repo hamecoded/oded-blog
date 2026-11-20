@@ -8431,3 +8431,470 @@ body:has(.err-screen) .fab {
 .todo-assign {
   margin: 0 0 10px;
 }
+
+/* ───── To-do events (Events.tsx) ───── */
+/* An event card: a calendar leaf with its date, the name, when it is, and counts; a bar for its tasks' progress. */
+.todo .todo-newquest.todo-ev-new input.todo-ev-date-in:not([type='checkbox']) {
+  flex: 0 0 auto;
+  width: 9.6em;
+  min-width: 0;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+}
+/* On a phone: the name on its own line, the date and the button under it. */
+@media (max-width: 480px) {
+  .todo-newquest.todo-ev-new {
+    flex-wrap: wrap;
+  }
+  .todo .todo-newquest.todo-ev-new input[name='title']:not([type='checkbox']) {
+    flex: 1 1 calc(100% - 34px);
+  }
+  .todo .todo-newquest.todo-ev-new input.todo-ev-date-in:not([type='checkbox']) {
+    flex: 1 1 auto;
+    width: auto;
+  }
+}
+.todo-ev-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+@media (min-width: 700px) {
+  .todo-ev-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.todo-ev-card {
+  --c: #0ea5e9;
+  --p: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  border-bottom: 4px solid color-mix(in srgb, var(--c) 55%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 12%, var(--surface)), var(--surface) 60%);
+  color: var(--text);
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+.todo-ev-card.is-near {
+  --c: var(--tg-gold);
+}
+.todo-ev-card.is-past {
+  --c: var(--muted);
+  opacity: 0.75;
+}
+.todo-ev-leaf {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  width: 50px;
+  height: 54px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--c, #0ea5e9) 45%, var(--border));
+  box-shadow: 0 3px 0 color-mix(in srgb, var(--c, #0ea5e9) 40%, transparent);
+  text-align: center;
+  line-height: 1;
+}
+.todo-ev-leaf .m {
+  padding: 3px 0;
+  background: var(--c, #0ea5e9);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+.todo-ev-leaf .d {
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+.todo-ev-leaf.is-none {
+  display: grid;
+  place-items: center;
+  grid-template-rows: none;
+  color: var(--muted);
+  box-shadow: none;
+}
+.todo-ev-txt {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.todo-ev-txt strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.02rem;
+}
+.todo-ev-when {
+  color: color-mix(in srgb, var(--c) 70%, var(--text));
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.todo-ev-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.todo-ev-counts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.todo-ev-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(to var(--fwd, right), var(--c) calc(var(--p) * 100%), var(--tg-track) 0);
+}
+[dir='rtl'] .todo-ev-bar {
+  --fwd: left;
+}
+/* An open event: its heading row above the game bar, then its sections as cards. */
+.todo-ev-head .todo-ev-leaf {
+  --c: #0ea5e9;
+  width: 42px;
+  height: 46px;
+}
+.todo-ev-head .todo-ev-leaf .d {
+  font-size: 1.1rem;
+}
+.todo-ev-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.todo-ev-page .todo-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+.todo-ev-page .todo-sec h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 1rem;
+}
+.todo-ev-page .todo-sec > .muted.small {
+  margin: -4px 0 0;
+}
+.todo .todo-ev-title-in {
+  width: 100%;
+  padding: 4px 2px;
+  border: 0;
+  border-bottom: 2px solid var(--border);
+  border-radius: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+.todo-ev-date-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.todo-ev-date-row input {
+  margin-inline-start: auto;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+.todo-ev-details textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.todo-ev-items,
+.todo-ev-tips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.todo-ev-items li,
+.todo-ev-tips li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 4px 4px 8px;
+  padding-inline: 8px 4px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.todo-ev-items li > span,
+.todo-ev-tips li > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.todo-ev-items li.is-done > span {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.todo-ev-items input[type='checkbox'] {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+/* Insights and tips: each with its kind (tip: gold bulb, insight: violet sparkle), switched by tapping it. */
+.todo-ev-kind,
+.todo-ev-kinds button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: color-mix(in srgb, var(--k) 14%, transparent);
+  color: color-mix(in srgb, var(--k) 75%, var(--text));
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.todo-ev-tips li.is-tip,
+.todo-ev-kinds .is-tip {
+  --k: var(--tg-gold);
+}
+.todo-ev-tips li.is-insight,
+.todo-ev-kinds .is-insight {
+  --k: #8b5cf6;
+}
+.todo-ev-tips li {
+  border-inline-start: 3px solid var(--k);
+}
+.todo-ev-kinds {
+  display: inline-flex;
+  gap: 3px;
+}
+.todo-ev-kinds button:not(.on) {
+  background: none;
+  border-color: var(--border);
+  color: var(--muted);
+}
+.todo-ev-kinds button.on {
+  border-color: color-mix(in srgb, var(--k) 50%, transparent);
+}
+.todo-ev-items .icon-btn.sm,
+.todo-ev-tips .icon-btn.sm {
+  margin: 0;
+  color: var(--muted);
+}
+.todo-ev-promote {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.todo-ev-addline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.todo .todo-ev-addline input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+}
+.todo-ev-addline .icon-btn.sm {
+  margin: 0;
+  color: var(--accent);
+}
+.todo-ev-newtask {
+  align-self: flex-start;
+}
+.todo-ev-delete {
+  align-self: center;
+  margin-top: 4px;
+}
+.todo-ev-delete.is-sure {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+/* The event a task is for, as a chip on its row. */
+.todo-m.event {
+  color: #0ea5e9;
+}
+/* A contact: first and last name share the top row with call / mail / remove; the phone-contacts button below. */
+.todo-contact-top input {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.todo-contact-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  /* clear of the note field above it */
+  margin-top: 6px;
+}
+.todo-contact-store {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.todo-contact-store:disabled {
+  cursor: default;
+}
+/* A saved contact: a card with initials, name, phone and email (tappable), the note, and call / mail / phone-contacts /
+   edit icons. Edit opens the same fields as a new contact. */
+.todo-contact.is-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.todo-contact-av {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent-2) 70%, var(--accent)));
+  color: #fff;
+  font-weight: 900;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+.todo-contact-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.3;
+}
+.todo-contact-info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.todo-contact-info a {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+.todo-contact-info .muted {
+  overflow-wrap: anywhere;
+}
+.todo-contact-icons {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(2, auto);
+  gap: 4px;
+}
+.todo .todo-contact-ic {
+  margin: 0;
+  width: 34px;
+  height: 34px;
+  color: var(--accent);
+  background: var(--surface);
+}
+.todo .todo-contact-ic.is-edit {
+  color: var(--text);
+}
+.todo .todo-contact-ic.is-done {
+  color: #16a34a;
+}
+/* Unsaved changes: the Save button lights up. */
+.todo-contact-store.is-dirty {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.todo-contact-store.is-done {
+  border-color: #16a34a;
+  color: #16a34a;
+}
+.todo-contact-save {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.todo-contact-save.is-done {
+  border-color: #16a34a;
+  background: color-mix(in srgb, #16a34a 12%, var(--surface));
+  color: #16a34a;
+}

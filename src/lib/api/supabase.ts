@@ -11,6 +11,7 @@ import type {
   RoleRequest,
   TagGroup,
   Todo,
+  TodoEvent,
 } from '../types';
 import {
   emptyTagGroupConfig,
@@ -23,6 +24,7 @@ import {
   RESERVED_SLUGS,
   sha256Hex,
   slugify,
+  todoEventFields,
   todoFields,
   uid,
   USERNAME_RE,
@@ -501,15 +503,44 @@ export function createSupabaseApi(url: string, key: string): Api {
     },
 
     async saveTodo(t) {
+      // `event_id` is sent only when the change sets it, so saving keeps working on a database that doesn't have
+      // the column yet (schema.sql not run since events came).
+      const fields = (f: ReturnType<typeof todoFields>) => {
+        const out: Partial<typeof f> = { ...f };
+        if (!('event_id' in t)) delete out.event_id;
+        return out;
+      };
       if (t.id) {
         const current = check(await sb.from('todos').select('*').eq('id', t.id).single()) as Todo;
-        return check(await sb.from('todos').update(todoFields(t, current)).eq('id', t.id).select().single()) as Todo;
+        return check(await sb.from('todos').update(fields(todoFields(t, current))).eq('id', t.id).select().single()) as Todo;
       }
-      return check(await sb.from('todos').insert(todoFields(t)).select().single()) as Todo;
+      return check(await sb.from('todos').insert(fields(todoFields(t))).select().single()) as Todo;
     },
 
     async deleteTodos(ids) {
       if (ids.length) check(await sb.from('todos').delete().in('id', ids));
+    },
+
+    // To-do events: row-level security ("todo events own") limits every query to the signed-in user's rows.
+    async listTodoEvents() {
+      const res = await sb.from('todo_events').select('*').order('position');
+      if (res.error && /todo_events|schema cache|PGRST20[45]|42P01|42703/i.test(`${res.error.code ?? ''} ${res.error.message}`)) {
+        throw new Error('events/missing');
+      }
+      return (check(res) as TodoEvent[]).map((x) => ({ ...x, ...todoEventFields(x, x) }));
+    },
+
+    async saveTodoEvent(e) {
+      if (e.id) {
+        const current = check(await sb.from('todo_events').select('*').eq('id', e.id).single()) as TodoEvent;
+        return check(await sb.from('todo_events').update(todoEventFields(e, current)).eq('id', e.id).select().single()) as TodoEvent;
+      }
+      return check(await sb.from('todo_events').insert(todoEventFields(e)).select().single()) as TodoEvent;
+    },
+
+    async deleteTodoEvents(ids) {
+      // todos.event_id is "on delete set null": the tasks stay, without the event.
+      if (ids.length) check(await sb.from('todo_events').delete().in('id', ids));
     },
   };
   return api;
