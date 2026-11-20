@@ -8708,6 +8708,13 @@ body:has(.err-screen) .fab {
   display: inline-flex;
   gap: 3px;
 }
+/* Insights and tips: the kind choice on its own line, the text box the full width under it. */
+.todo-ev-addline.is-tips {
+  flex-wrap: wrap;
+}
+.todo-ev-addline.is-tips > .todo-ev-kinds {
+  flex: 1 1 100%;
+}
 .todo-ev-kinds button:not(.on) {
   background: none;
   border-color: var(--border);
@@ -8866,6 +8873,37 @@ body:has(.err-screen) .fab {
 }
 .todo .todo-contact-ic.is-done {
   color: #16a34a;
+}
+.todo-contact-del {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 12px;
+  margin-inline-start: auto;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: none;
+  color: var(--danger);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+/* Save at the start and Delete at the end of the first line; the phone-contacts button on its own line below. */
+.todo-contact-acts > .todo-contact-save {
+  order: 3;
+}
+.todo-contact-acts > .todo-contact-del {
+  order: 2;
+}
+.todo-contact-acts > .todo-contact-store {
+  order: 1;
+}
+.todo-contact-del.is-sure {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
 }
 /* Unsaved changes: the Save button lights up. */
 .todo-contact-store.is-dirty {

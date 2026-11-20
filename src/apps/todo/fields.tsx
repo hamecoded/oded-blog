@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Check, Mail, Pencil, Phone, Plus, Save, Send, UserPlus, X } from 'lucide-react';
+import { Check, ChevronUp, Mail, Pencil, Phone, Plus, Save, Send, Trash2, UserPlus, X } from 'lucide-react';
 import type { Lang, TodoComment, TodoContact, TodoDatum, TodoLogEntry, TodoStatus, TodoType } from '../../lib/types';
 import { TODO_TYPES } from '../../lib/util';
 import { STATUS_ICON, TYPE_ICON } from './look';
@@ -253,6 +253,8 @@ export function ContactsField({
 }) {
   const tt = useTt();
   const [sent, setSent] = useState<number | null>(null);
+  /** The contact whose Delete was pressed once (a second press deletes it). */
+  const [doomed, setDoomed] = useState<number | null>(null);
   /** The contacts open for editing (by position); the rest show as cards. New and empty ones start open. */
   const [editing, setEditing] = useState<Set<number>>(() => new Set(rows.flatMap((c, i) => (c.name || c.phone || c.email ? [] : [i]))));
   const open = (i: number) => !onSave || editing.has(i);
@@ -272,6 +274,7 @@ export function ContactsField({
       }),
     );
   const remove = (i: number) => {
+    setDoomed(null);
     onChange(rows.filter((_, j) => j !== i));
     // The open ones after it move up one place.
     setEditing((e) => new Set([...e].filter((j) => j !== i).map((j) => (j > i ? j - 1 : j))));
@@ -300,9 +303,23 @@ export function ContactsField({
             <div className="todo-contact-top">
               <input value={c.first} onChange={(e) => set(i, 'first', e.target.value)} placeholder={tt('firstName')} aria-label={tt('firstName')} dir="auto" autoComplete="off" />
               <input value={c.last} onChange={(e) => set(i, 'last', e.target.value)} placeholder={tt('lastName')} aria-label={tt('lastName')} dir="auto" autoComplete="off" />
-              <button type="button" className="icon-btn sm" onClick={() => remove(i)} aria-label={tt('delete')} data-tip={tt('delete')}>
-                <X size={16} />
-              </button>
+              {/* Close: back to the card, keeping what was typed (saved, like leaving the fields does). An empty new
+                  contact has nothing to keep, so closing it drops it. */}
+              {onSave && (
+                <button
+                  type="button"
+                  className="icon-btn sm"
+                  onClick={() => {
+                    if (!(c.name || c.phone || c.email)) return remove(i);
+                    if (dirty) onSave();
+                    setOpen(i, false);
+                  }}
+                  aria-label={tt('contactClose')}
+                  data-tip={tt('contactClose')}
+                >
+                  <ChevronUp size={18} />
+                </button>
+              )}
             </div>
             <div className="todo-contact-row">
               <input type="tel" value={c.phone} onChange={(e) => set(i, 'phone', e.target.value)} placeholder={tt('phone')} aria-label={tt('phone')} dir="ltr" />
@@ -324,6 +341,14 @@ export function ContactsField({
                 </button>
               )}
               {toPhone(c, i, false)}
+              <button
+                type="button"
+                className={`todo-contact-del${doomed === i ? ' is-sure' : ''}`}
+                onClick={() => (doomed === i ? remove(i) : setDoomed(i))}
+                onBlur={() => setDoomed((d) => (d === i ? null : d))}
+              >
+                <Trash2 size={15} aria-hidden /> {doomed === i ? tt('contactDeleteSure') : tt('contactDelete')}
+              </button>
             </div>
           </div>
         ) : (

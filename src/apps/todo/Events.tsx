@@ -320,7 +320,7 @@ export function EventPage({
             ))}
           </ul>
         )}
-        <form className="todo-ev-addline" onSubmit={(e) => addLine(e, 'tips')}>
+        <form className="todo-ev-addline is-tips" onSubmit={(e) => addLine(e, 'tips')}>
           <span className="todo-ev-kinds" role="radiogroup" aria-label={tt('eventTips')}>
             {(['tip', 'insight'] as const).map((k) => (
               <button key={k} type="button" role="radio" aria-checked={newKind === k} className={`is-${k}${newKind === k ? ' on' : ''}`} onClick={() => setNewKind(k)}>

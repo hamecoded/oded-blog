@@ -125,10 +125,13 @@ export default function TodoApp() {
   const loc = useLocation();
   const askedTab = (loc.state as { todoTab?: Tab } | null)?.todoTab;
   const [tab, setTabState] = useState<Tab>(() => {
+    // The address keeps the tab (?tab=pool), so a refresh comes back to it even where the browser keeps no storage.
+    // It comes first: a browser keeps a link's state through a refresh, so an old "open Tags" would win otherwise.
+    const inUrl = new URLSearchParams(window.location.search).get('tab');
+    if (inUrl && TABS.includes(inUrl as Tab)) return inUrl as Tab;
     if (askedTab && TABS.includes(askedTab)) return askedTab;
-    const v = recall('tab');
-    if (v === 'lists') return 'tags'; // the Lists tab became the Tags tab
-    return v && TABS.includes(v as Tab) ? (v as Tab) : 'today';
+    // A plain /apps/todo (opening the app) always starts on Today.
+    return 'today';
   });
   const [sort, setSortState] = useState<SortKey>(() => (recall('sort') as SortKey | null) ?? 'smart');
   const [group, setGroupState] = useState<GroupKey>(() => {
@@ -150,16 +153,29 @@ export default function TodoApp() {
   const [questId, setQuestId] = useState<string | null>(null);
   /** The tag open in the Tags tab (a topic); null shows every topic. */
   const [topic, setTopic] = useState<string | null>(null);
-  useEffect(() => remember('tab', tab), [tab]);
+  useEffect(() => {
+    // Written into the address in place (no new history entry, and the router isn't told: nothing to re-render).
+    const u = new URL(window.location.href);
+    // The router keeps a link's state under `usr`; the "open this tab" in it is used up once the tab is open.
+    const state = window.history.state as { usr?: { todoTab?: string } } | null;
+    const used = !!state?.usr?.todoTab;
+    if (u.searchParams.get('tab') !== tab || used) {
+      u.searchParams.set('tab', tab);
+      window.history.replaceState(used ? { ...state, usr: { ...state!.usr, todoTab: undefined } } : state, '', u);
+    }
+  }, [tab]);
   // Following that link while the app is already open: a new navigation (its own key) switches the tab, to its start.
   const [seenNav, setSeenNav] = useState(loc.key);
   if (loc.key !== seenNav) {
     setSeenNav(loc.key);
-    if (askedTab && TABS.includes(askedTab)) {
-      setTabState(askedTab);
-      if (askedTab === 'tags') setTopic(null);
-      if (askedTab === 'quests') setQuestId(null);
-      if (askedTab === 'events') setEventId(null);
+    // A link asking for a tab, or (back / forward) the tab the address says.
+    const inUrl = new URLSearchParams(loc.search).get('tab') as Tab | null;
+    const next = askedTab && TABS.includes(askedTab) ? askedTab : inUrl && TABS.includes(inUrl) ? inUrl : null;
+    if (next && (next !== tab || askedTab)) {
+      setTabState(next);
+      if (next === 'tags') setTopic(null);
+      if (next === 'quests') setQuestId(null);
+      if (next === 'events') setEventId(null);
     }
   }
   /** null: the review opens by itself once a day when there are leftovers. */
@@ -292,7 +308,6 @@ export default function TodoApp() {
 
   const setTab = (v: Tab) => {
     setTabState(v);
-    remember('tab', v);
     // The Journeys tab always opens on the list of journeys (a journey is picked from there).
     if (v === 'quests') setQuestId(null);
     if (v === 'tags') setTopic(null); // likewise the Tags tab opens on the topics

@@ -148,7 +148,9 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   first task: the form just opens it (`setTopic`), and `placeOf()` tags what's added there.
   "Add an existing task" (`SelectMenu`, `assignToTopic`) adds the tag to an open task not yet in the topic.
   Inside an app the top bar drops Tags and Search, except that in the to-do app "Tags" stays and links to
-  `/apps/todo` with `state.todoTab = 'tags'`; the app follows a new navigation's `loc.key` (render-time compare).
+  `/apps/todo` with `state.todoTab = 'tags'`; the app follows a new navigation's `loc.key` (render-time compare). The open tab is
+  mirrored into the address (`?tab=`, `history.replaceState`) and read back first on load; a plain `/apps/todo`
+  opens on Today.
   Journeys list (2026-11-20): `questsShown` filters by `goalStage()` and tag and sorts by `QuestSort` (remembered);
   in 'mine' (by `position`) a third `useOutlineDrag()` reorders it, one column, a drop setting `positionBetween()`.
   **Events (2026-11-20, `Events.tsx`):** table `todo_events` ("todo events own" RLS) holds title, `date`, description and

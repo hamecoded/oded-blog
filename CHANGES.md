@@ -7,6 +7,14 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
+## 2026-11-20 11:15
+
+- Changed: To-do app: opening /apps/todo always starts on Today (no longer the tab used last); a refresh keeps the tab in the address (?tab=…)
+- Fixed: To-do app: a refresh after using the top bar's "Tags" link no longer always opens Tags (the link's request outlived the refresh); the address's tab comes first and the request is cleared once used
+- Fixed: To-do app: a refresh comes back to the same tab: the tab is kept in the address (?tab=pool) as well as in the browser's storage, which a phone may not keep
+- Changed: To-do event insights and tips: the tip / insight choice sits on its own line so the text box takes the full width
+- Fixed: To-do contacts: closing a contact's editing no longer deletes it (the button beside the name now closes and keeps it); deleting is its own "Delete contact" button, pressed twice to confirm
+
 ## 2026-11-20 10:45
 
 - Fixed: To-do "Save to phone contacts" on iPhone and iPad opens the contact card (Safari's "Create New Contact") instead of the share sheet, which had no way to add it to Contacts
