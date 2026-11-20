@@ -17,14 +17,34 @@ export function vCard(c: TodoContact, title?: string): string {
   return `${lines.join('\r\n')}\r\n`;
 }
 
+/** iPhone or iPad (an iPad's Safari says it's a Mac, but has a touch screen). */
+const isIOS = () => /iP(hone|od|ad)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 /**
- * Hands the contact to the phone's Contacts app. On phones that can share files (iPhone, Android) the share sheet
- * opens with the card, which offers to add it to Contacts; elsewhere the .vcf file downloads, and opening it does
- * the same. Returns false when the user closed the share sheet.
+ * Hands the contact to the phone's Contacts app.
+ * - iPhone / iPad: the share sheet has no "add to Contacts" for a card from a web page, but Safari opening a
+ *   text/vcard file shows the contact with "Create New Contact" / "Add to Existing Contact". So the card is opened
+ *   (in a new tab, so the app stays where it was).
+ * - Other phones that share files (Android): the share sheet, where Contacts takes the card.
+ * - Elsewhere: the .vcf downloads, and opening it does the same.
+ * Returns false when the user closed the share sheet.
  */
 export async function saveToContacts(c: TodoContact, title?: string): Promise<boolean> {
   const name = (c.name || c.phone || 'contact').replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'contact';
-  const file = new File([vCard(c, title)], `${name}.vcf`, { type: 'text/vcard' });
+  const card = vCard(c, title);
+  if (isIOS()) {
+    const url = URL.createObjectURL(new Blob([card], { type: 'text/vcard;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return true;
+  }
+  const file = new File([card], `${name}.vcf`, { type: 'text/vcard' });
   const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
   if (nav.share && nav.canShare?.({ files: [file] })) {
     try {

@@ -158,8 +158,9 @@ not move. Use /admin → **Backup (JSON)** there, then **Restore backup** here (
   field; supabase `saveTodo` sends `event_id` only when the change sets it, so saving works before the migration. A
   missing table shows `eventsNotSetUp` in the tab only ('events/missing'). The bottom bar has Events where Tags was;
   Tags opens from the blog's top bar. Contacts (`TodoContact`) have `first`/`last` (+ `name`, the two joined;
-  `cleanContact()` splits older names); `vcard.ts` builds a vCard 3.0 (event name as TITLE) and shares it (iPhone:
-  share sheet → Contacts) or downloads `contact.vcf`.
+  `cleanContact()` splits older names); `vcard.ts` builds a vCard 3.0 (event name as TITLE). iOS: opened as a text/vcard
+  blob in a new tab (Safari shows "Create New Contact"; the share sheet has no Contacts target); Android: the share
+  sheet; else it downloads `contact.vcf`.
 - **Error page (2026-11-20):** `components/ErrorScreen.tsx` is the router's `errorElement` (on a pathless route inside
   `Layout`, so the blog's frame stays; also on the root and `/:site` routes) and `AppErrorBoundary` wraps everything in
   main.tsx. `lib/errorReport.ts` sorts a crash into a plain-words kind (`readError()`: update / offline / notFound /

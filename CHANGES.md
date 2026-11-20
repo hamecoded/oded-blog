@@ -7,8 +7,9 @@ becomes the commit subject ("Add …; fix …"), and the whole line goes in the 
 
 ## Unreleased
 
-## 2026-11-20 10:41
+## 2026-11-20 10:45
 
+- Fixed: To-do "Save to phone contacts" on iPhone and iPad opens the contact card (Safari's "Create New Contact") instead of the share sheet, which had no way to add it to Contacts
 - Fixed: To-do contact editing: space above the Save / phone-contacts buttons row
 - Changed: To-do saved contacts show as a card (initials, name, tappable phone and email, note, call / mail / phone-contacts icons) with an edit button that opens the editing fields again; Save there turns it back into a card
 - Added: To-do contacts have a Save button that lights up while there are unsaved changes (on an event it saves the event's contacts; on an open task it saves the task without closing it), then says "Saved"
